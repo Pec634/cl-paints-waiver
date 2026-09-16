@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}
+Archived Waivers | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+
+    <aside>
+        <div class="brand light">
+            CL <span>Paints</span>
+        </div>
+
+        <nav>
+            <a href="/">Dashboard</a>
+            <a class="active" href="/admin/waivers">Waivers</a>
+            <a>Participants</a>
+            <a>Bookings</a>
+            <a>Events</a>
+            <a>Reports</a>
+            <a>Activity</a>
+            <a>Settings</a>
+        </nav>
+    </aside>
+
+    <main>
+
+        <div class="top">
+            <div>
+                <small>CL PAINTS MANAGEMENT SYSTEM</small>
+                <h1>Archived Waivers</h1>
+                <p>Preserved waiver records removed from the normal Waiver Management list.</p>
+            </div>
+
+            <a class="btn" href="/admin/waivers">
+                Back to Waiver Management
+            </a>
+        </div>
+
+
+        <section class="panel">
+
+            <div>
+                <small>ARCHIVE</small>
+                <h2>Archived Waiver Records</h2>
+                <p>
+                    These records are retained for historical and administrative purposes.
+                </p>
+            </div>
+
+            <div class="table-wrap">
+
+                <table class="waiver-table">
+
+                    <thead>
+                        <tr>
+                            <th>Waiver ID</th>
+                            <th>Responsible Adult</th>
+                            <th>Participants</th>
+                            <th>Event</th>
+                            <th>Signed</th>
+                            <th>Expiry</th>
+                            <th>Archived</th>
+                            <th>Archived By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for waiver in waivers %}
+
+                        <tr>
+
+                            <td>
+                                <strong>{{ waiver.waiver_reference }}</strong>
+                            </td>
+
+                            <td>
+                                {{ waiver.responsible_first_name }}
+                                {{ waiver.responsible_last_name }}
+                            </td>
+
+                            <td>
+                                {{ waiver.participants|length }}
+
+                                {% if waiver.participants|length == 1 %}
+                                    person
+                                {% else %}
+                                    people
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {{ waiver.event_name }}
+                            </td>
+
+                            <td>
+                                {{ waiver.signed_date.strftime('%d/%m/%Y') }}
+                            </td>
+
+                            <td>
+                                {{ waiver.expiry_date.strftime('%d/%m/%Y') }}
+                            </td>
+
+                            <td>
+                                {% if waiver.archived_at %}
+                                    {{ waiver.archived_at.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {{ waiver.archived_by or "—" }}
+                            </td>
+
+                            <td>
+                                <a
+                                    class="btn small"
+                                    href="/admin/waivers/{{ waiver.id }}"
+                                >
+                                    View
+                                </a>
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td colspan="9">
+                                No archived waivers found.
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Waiver Details | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+
+    <aside>
+        <div class="brand light">
+            CL <span>Paints</span>
+        </div>
+
+        <nav>
+            <a href="/">Dashboard</a>
+            <a class="active" href="/admin/waivers">Waivers</a>
+            <a>Participants</a>
+            <a>Bookings</a>
+            <a>Events</a>
+            <a>Reports</a>
+            <a>Activity</a>
+            <a>Settings</a>
+        </nav>
+    </aside>
+
+    <main>
+
+        <div class="top">
+    <div>
+        <small>CL PAINTS MANAGEMENT SYSTEM</small>
+        <h1>Waiver Details</h1>
+
+        <p>
+            <strong>{{ waiver.waiver_reference }}</strong>
+        </p>
+
+        <p>
+            <span class="status-badge valid">
+                {{ waiver.status }}
+            </span>
+        </p>
+    </div>
+
+    <a class="btn" href="/admin/waivers">
+        ← Back to Waivers
+    </a>
+
+</div>
+
+        <section class="panel">
+
+            <h2>Responsible Adult</h2>
+
+            <p>
+                <strong>Name:</strong>
+                {{ waiver.responsible_first_name }}
+                {{ waiver.responsible_last_name }}
+            </p>
+
+            <p>
+                <strong>Email:</strong>
+                {{ waiver.responsible_email }}
+            </p>
+
+            <p>
+                <strong>Status:</strong>
+                {{ waiver.status }}
+            </p>
+
+            <p>
+                <strong>Event:</strong>
+                {{ waiver.event_name }}
+            </p>
+
+            <p>
+                <strong>Signed:</strong>
+                {{ waiver.signed_date.strftime('%d/%m/%Y %H:%M') }}
+            </p>
+
+            <p>
+                <strong>Expiry:</strong>
+                {{ waiver.expiry_date.strftime('%d/%m/%Y') }}
+            </p>
+
+        </section>
+
+        <section class="panel">
+
+    <h2>Participants</h2>
+
+    {% for participant in waiver.participants %}
+
+        <div class="participant-card">
+
+            <p>
+                <strong>
+                    {{ participant.first_name }}
+                    {{ participant.last_name }}
+                </strong>
+            </p>
+
+            <p>
+                <strong>Age:</strong>
+                {{ participant.age }}
+            </p>
+
+            <p>
+                <strong>Gender:</strong>
+                {{ participant.gender }}
+            </p>
+
+        </div>
+
+    {% else %}
+
+        <p>No participants recorded.</p>
+
+    {% endfor %}
+
+</section>
+
+        <section class="panel">
+
+    <h2>Consent & Declaration</h2>
+
+    <p>
+        <strong>Liability Statement Acknowledged:</strong>
+
+        {% if waiver.liability_acknowledged %}
+            <span class="status-badge valid">Yes</span>
+        {% else %}
+            <span class="status-badge expired">No</span>
+        {% endif %}
+    </p>
+
+    <p>
+        <strong>Responsible Adult Authority Confirmed:</strong>
+
+        {% if waiver.responsible_authority %}
+            <span class="status-badge valid">Yes</span>
+        {% else %}
+            <span class="status-badge expired">No</span>
+        {% endif %}
+    </p>
+
+    <p>
+        <strong>Information Accuracy Confirmed:</strong>
+
+        {% if waiver.responsible_accuracy %}
+            <span class="status-badge valid">Yes</span>
+        {% else %}
+            <span class="status-badge expired">No</span>
+        {% endif %}
+    </p>
+
+    <p>
+        <strong>Marketing Consent:</strong>
+
+        {% if waiver.marketing_consent %}
+            <span class="status-badge valid">Yes</span>
+        {% else %}
+            <span class="status-badge expired">No</span>
+        {% endif %}
+    </p>
+
+</section>
+
+        <section class="panel">
+
+            <h2>Signature</h2>
+
+            <p>
+                {{ waiver.signature_text }}
+            </p>
+
+        </section>
+
+       <section class="panel">
+
+    <h2>Terms Record</h2>
+
+    <p>
+        <strong>Terms Version:</strong>
+        {{ waiver.terms_version }}
+    </p>
+
+    <p>
+        <strong>Stored Terms &amp; Conditions:</strong>
+    </p>
+
+    <div class="terms-snapshot">
+        {{ waiver.terms_snapshot | safe }}
+    </div>
+
+</section>
+
+    </main>
+
+</div>
+
+{% endblock %}

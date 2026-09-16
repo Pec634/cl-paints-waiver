@@ -1,0 +1,256 @@
+{% extends 'base.html' %}{% block title %}Public Event Waiver | CL Paints{% endblock %}{% block body %}
+<div class="waiver" id="waiverApp"><header><div class="brand">CL <span>Paints</span></div><small>Bringing colour to life, one face at a time!</small></header><main class="card">
+
+</section><section class="step" data-step="1">
+    <b>Step 1 of 4</b>
+
+    <h1>Welcome to CL Paints</h1>
+
+<p>
+    Please complete this waiver before receiving face painting at today's event.
+    It only takes a few minutes and is simple to complete.
+</p>
+
+<div class="event">
+    <strong>Public Event Waiver</strong>
+
+    {% if current_event and current_event.status == "Open" %}
+        <span class="open">Event is Open</span>
+
+    {% elif current_event and current_event.status == "Closing Soon" %}
+        <span class="closing-soon">Closing Soon</span>
+
+        <p class="event-warning">
+            Face painting is nearing the end of today's event.
+            Completing this waiver does not guarantee that you will be painted.
+        </p>
+
+    {% else %}
+        <span class="closed">Event is Closed</span>
+
+        <p class="event-warning">
+            New waiver submissions are currently closed.
+        </p>
+    {% endif %}
+</div>
+
+<hr class="section-divider">
+
+{% include "terms_and_liability.html" %}
+
+</ol><label class="check">
+    <input id="liability" type="checkbox">
+    I confirm that I have read and understood the Terms &amp; Conditions and Liability Statement above.
+</label>
+{% if current_event and current_event.status == "Closed" %}
+<div class="nav">
+    <button class="btn primary" disabled>
+        Face Painting is Closed
+    </button>
+</div>
+{% else %}
+<div class="nav">
+    <button class="btn primary next" data-requires="liability">Continue →</button>
+</div>
+{% endif %}
+</section>
+
+<section class="step" data-step="2">
+    <b>Step 2 of 4</b>
+
+    <h1>Our Face Painting Designs</h1>
+
+    <p>
+        Have a look at some of the designs available today while you wait.
+    </p>
+
+    <div class="notice">
+        You don't need to choose a design now — simply show or tell us
+        what you'd like when it's your turn.
+    </div>
+
+    <!-- LARGE / FULL FACE DESIGNS -->
+    <div class="design-group">
+        <div class="design-group-header">
+            <h2>Large / Full Face Designs</h2>
+            <span class="design-price">£5</span>
+        </div>
+
+        <div class="design-gallery" id="largeDesignGallery">
+            <div class="design-placeholder">
+                <span>Photos coming soon</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SMALL / HALF FACE DESIGNS -->
+    <div class="design-group">
+        <div class="design-group-header">
+            <h2>Small / Half Face Designs</h2>
+            <span class="design-price">£3.50</span>
+        </div>
+
+        <div class="design-gallery" id="smallDesignGallery">
+            <div class="design-placeholder">
+                <span>Photos coming soon</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav">
+        <button class="back link">← Back</button>
+        <button class="btn primary next">Continue →</button>
+    </div>
+</section>
+<section class="step" data-step="3">
+    <b>Step 3 of 4</b>
+
+    <h1>How many people need a waiver?</h1>
+
+    <p>
+        Select the number of people you are completing this waiver for.
+    </p>
+
+    <div class="choices">
+        <button type="button" data-count="1">1 person</button>
+        <button type="button" data-count="2">2 people</button>
+        <button type="button" data-count="3">3 people</button>
+        <button type="button" data-count="4">4 people</button>
+    </div>
+
+    <hr class="section-divider">
+
+    <h1>People's Details</h1>
+
+    <p class="small-note">
+        Please enter the details of everyone being painted.
+    </p>
+
+    <div id="participantPanels"></div>
+
+    <hr class="section-divider">
+
+    <h1>Responsible Adult</h1>
+
+    <p>Please enter the details of the adult responsible for this waiver.</p>
+
+    <div class="person">
+        <label>
+            First name
+            <input id="responsibleFirstName" type="text">
+        </label>
+
+        <label>
+            Last name
+            <input id="responsibleLastName" type="text">
+        </label>
+
+        <label>
+            Email address
+            <input id="responsibleEmail" type="email">
+        </label>
+    </div>
+
+<h2>Consent &amp; Acknowledgements</h2>
+
+<label class="check">
+    <input id="responsibleAuthority" type="checkbox">
+    I am at least 18 years old OR the legal parent/guardian of the minor participant(s).
+</label>
+
+<label class="check">
+    <input id="responsibleAccuracy" type="checkbox">
+    The information provided is accurate to the best of my knowledge.
+</label>
+
+    <hr class="section-divider">
+
+    <h2>Keep in touch with CL Paints</h2>
+
+    <p>
+        We'd love to keep you updated with occasional news, offers,
+        promotions and updates from CL Paints.
+    </p>
+
+    <label class="check">
+        <input id="marketingConsent" type="checkbox">
+        Yes, I'd like to receive occasional news, offers, promotions and
+        updates from CL Paints by email.
+    </label>
+
+    <p class="muted">
+        Optional — you can unsubscribe at any time.
+    </p>
+
+    <hr class="section-divider">
+
+    <h2>Signature</h2>
+
+    <p>
+        Please sign below to confirm the information provided and submit this waiver.
+    </p>
+
+    <label>
+        Typed signature
+        <input id="waiverSignature" type="text" placeholder="Full name">
+    </label>
+
+    <div class="nav">
+        <button class="back link">← Back</button>
+        <button class="btn primary next">Submit Waiver</button>
+    </div>
+</section>
+
+<section class="step" data-step="4">
+    <b>Step 4 of 4</b>
+    <div class="waiver-valid">
+        <div class="tick">✓</div>
+        <h1>WAIVER VALID</h1>
+        <p>Face painting waiver successfully completed.</p>
+    </div>
+
+    <div class="waiver-summary">
+        <h2>Waiver Overview</h2>
+
+        <div class="summary-row">
+    <span>Waiver Reference</span>
+    <strong id="summaryReference">Pending</strong>
+    </div>
+
+        <div class="summary-row">
+            <span>Responsible Adult</span>
+            <strong id="summaryResponsibleAdult">—</strong>
+        </div>
+
+        <div class="summary-row">
+            <span>Email</span>
+            <strong id="summaryEmail">—</strong>
+        </div>
+
+        <div class="summary-row">
+            <span>People Covered</span>
+            <strong id="summaryPeopleCount">—</strong>
+        </div>
+
+        <div id="summaryParticipants"></div>
+
+        <div class="summary-row">
+            <span>Date Completed</span>
+            <strong id="summaryCompletedDate">—</strong>
+        </div>
+
+        <div class="summary-row">
+            <span>Valid Until</span>
+            <strong id="summaryExpiryDate">—</strong>
+        </div>
+    </div>
+
+    <div class="notice">
+        <strong>Please show this screen to a member of CL Paints staff before face painting.</strong>
+    </div>
+
+    <p class="muted center">
+        This waiver is valid for 12 months from the date completed, subject to the CL Paints Terms &amp; Conditions.
+    </p>
+</section></main></div>
+{% endblock %}

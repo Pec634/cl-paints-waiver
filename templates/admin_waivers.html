@@ -1,0 +1,390 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Waiver Management | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+
+    <aside>
+        <div class="brand light">
+            CL <span>Paints</span>
+        </div>
+
+        <nav>
+            <a href="/">Dashboard</a>
+            <a class="active" href="/admin/waivers">Waivers</a>
+            <a>Participants</a>
+            <a>Bookings</a>
+            <a>Events</a>
+            <a>Reports</a>
+            <a>Activity</a>
+            <a>Settings</a>
+            <a href="/admin/logout">Logout</a>
+        </nav>
+    </aside>
+
+    <main>
+
+        <div class="top">
+            <div>
+                <small>CL PAINTS MANAGEMENT SYSTEM</small>
+                <h1>Waiver Management</h1>
+                <p>Prototype only — no live data is changed.</p>
+            </div>
+
+            <a class="btn" href="/waiver">
+                View Public Waiver
+            </a>
+        </div>
+
+        <!-- CURRENT PUBLIC EVENT -->
+        <section class="panel event-admin">
+
+            <div>
+                <small>CURRENT PUBLIC EVENT</small>
+                <h2>{{ current_event.name if current_event else "No Current Event" }}</h2>
+            </div>
+
+            <div class="states">
+               <button
+                    class="state {% if current_event and current_event.status == 'Open' %}active{% endif %}"
+                    data-state="Open">
+                    Open
+                </button>
+
+                <button
+                    class="state {% if current_event and current_event.status == 'Closing Soon' %}active{% endif %}"
+                    data-state="Closing Soon">
+                    Closing Soon
+                </button>
+
+                <button
+                    class="state {% if current_event and current_event.status == 'Closed' %}active{% endif %}"
+                    data-state="Closed">
+                    Closed
+                </button>
+            </div>
+
+            <p id="stateMessage">
+                New waivers can be submitted.
+            </p>
+
+        </section>
+
+        <!-- WAIVER STATISTICS -->
+        <section class="stats">
+            <article>
+                <span>Valid</span>
+                <strong>{{ valid_count }}</strong>
+            </article>
+
+            <article>
+                <span>Expiring Soon</span>
+                <strong>{{ expiring_soon_count }}</strong>
+            </article>
+
+            <article>
+                <span>Expired</span>
+                <strong>{{ expired_count }}</strong>
+            </article>
+        </section>
+
+        <!-- WAIVER RECORDS -->
+        <section class="panel">
+    <div class="panel-heading">
+        <div>
+            <h2>Waiver Records</h2>
+            <p>Search, review and manage submitted waivers.</p>
+        </div>
+    </div>
+
+    <div class="waiver-tools">
+        <input
+            type="search"
+            id="waiverSearch"
+            placeholder="Search waiver ID, name or email"
+        >
+
+        <select id="waiverStatusFilter">
+            <option value="">All statuses</option>
+            <option value="Valid">Valid</option>
+            <option value="Expiring Soon">Expiring Soon</option>
+            <option value="Expired">Expired</option>
+        </select>
+    </div>
+
+    <div class="table-wrap">
+        <table class="waiver-table">
+            <thead>
+                <tr>
+                    <th>Waiver ID</th>
+                    <th>Responsible Adult</th>
+                    <th>Participants</th>
+                    <th>Event</th>
+                    <th>Signed</th>
+                    <th>Expiry</th>
+                    <th>Status</th>
+                    <th>Marketing</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody id="waiverTableBody">
+
+    {% for waiver in waivers %}
+<tr>
+    <td>
+        <strong>{{ waiver.waiver_reference }}</strong>
+    </td>
+
+    <td>
+        {{ waiver.responsible_first_name }}
+        {{ waiver.responsible_last_name }}
+    </td>
+
+    <td>
+        {{ waiver.participants|length }}
+        {% if waiver.participants|length == 1 %}
+            person
+        {% else %}
+            people
+        {% endif %}
+    </td>
+
+    <td>
+        {{ waiver.event_name }}
+    </td>
+
+    <td>
+        {{ waiver.signed_date.strftime('%d/%m/%Y') }}
+    </td>
+
+    <td>
+        {{ waiver.expiry_date.strftime('%d/%m/%Y') }}
+    </td>
+
+    <td>
+        <span class="status-badge valid">
+            {{ waiver.status }}
+        </span>
+    </td>
+
+    <td>
+        {% if waiver.marketing_consent %}
+            <span class="status-badge valid">Yes</span>
+        {% else %}
+            <span class="status-badge expired">No</span>
+        {% endif %}
+    </td>
+
+    <td>
+    <a
+        class="btn small"
+        href="/admin/waivers/{{ waiver.id }}"
+    >
+        View
+    </a>
+
+   <button
+    type="button"
+    class="btn small archive-btn"
+    data-waiver-id="{{ waiver.id }}"
+    data-waiver-reference="{{ waiver.waiver_reference }}"
+>
+    Archive
+</button>
+</td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="9">
+        No waivers found.
+    </td>
+</tr>
+{% endfor %}
+
+</tbody>
+        </table>
+    </div>
+</section>
+
+        <!-- RECENT ACTIVITY -->
+        <section class="panel">
+
+            <h2>Recent Waiver Activity</h2>
+
+            <p>
+                • Waiver module prototype created
+            </p>
+
+            <p>
+                • Open / Closing Soon / Closed control ready
+                for database wiring
+            </p>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const searchInput =
+        document.getElementById("waiverSearch");
+
+    const statusFilter =
+        document.getElementById("waiverStatusFilter");
+
+    const rows =
+        document.querySelectorAll("#waiverTableBody tr");
+
+    function filterWaivers() {
+        const searchValue =
+            searchInput.value.trim().toLowerCase();
+
+        const statusValue =
+            statusFilter.value.trim().toLowerCase();
+
+        rows.forEach((row) => {
+            const rowText =
+                row.textContent.toLowerCase();
+
+            const statusCell =
+                row.querySelector("td:nth-child(7)");
+
+            const rowStatus =
+                statusCell
+                    ? statusCell.textContent.trim().toLowerCase()
+                    : "";
+
+            const matchesSearch =
+                rowText.includes(searchValue);
+
+            const matchesStatus =
+                !statusValue ||
+                rowStatus === statusValue;
+
+            row.style.display =
+                matchesSearch && matchesStatus
+                    ? ""
+                    : "none";
+        });
+    }
+
+    searchInput.addEventListener(
+        "input",
+        filterWaivers
+    );
+
+    statusFilter.addEventListener(
+        "change",
+        filterWaivers
+    );
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const stateButtons =
+        document.querySelectorAll("[data-state]");
+
+    const stateMessage =
+        document.getElementById("stateMessage");
+
+    stateButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const newStatus = button.dataset.state;
+
+            try {
+                const response = await fetch(
+                    "/admin/events/current/status",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            status: newStatus
+                        })
+                    }
+                );
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        result.error || "Unable to update event status."
+                    );
+                }
+
+                stateButtons.forEach((item) => {
+                    item.classList.remove("active");
+                });
+
+                button.classList.add("active");
+
+                if (stateMessage) {
+                    if (result.status === "Open") {
+                        stateMessage.textContent =
+                            "New waivers can be submitted.";
+                    } else if (result.status === "Closing Soon") {
+                        stateMessage.textContent =
+                            "Face painting is nearing the end of today's event.";
+                    } else {
+                        stateMessage.textContent =
+                            "New waiver submissions are closed.";
+                    }
+                }
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+    });
+});
+</script>
+
+<script>
+document.querySelectorAll(".archive-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+        const waiverId = button.dataset.waiverId;
+        const waiverReference = button.dataset.waiverReference;
+
+        const confirmed = window.confirm(
+            `Archive waiver ${waiverReference}?\n\n` +
+            "This will remove it from the normal Waiver Management list, " +
+            "but the record will be preserved."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `/admin/waivers/${waiverId}/archive`,
+                {
+                    method: "POST"
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                alert(result.error || "Unable to archive waiver.");
+                return;
+            }
+
+            window.location.reload();
+        } catch (error) {
+            console.error("Archive waiver failed:", error);
+            alert("Unable to archive waiver. Please try again.");
+        }
+    });
+});
+</script>
+
+{% endblock %}

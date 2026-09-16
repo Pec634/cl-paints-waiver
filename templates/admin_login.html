@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}
+Admin Login | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+    <main style="width:100%;">
+
+        <section class="panel" style="max-width:480px; margin:60px auto;">
+            <div style="text-align:center; margin-bottom:24px;">
+                <small>CL PAINTS MANAGEMENT SYSTEM</small>
+                <h1>Admin Login</h1>
+                <p>Enter your administrator password to continue.</p>
+            </div>
+
+            {% if error %}
+                <div style="
+                    padding:12px;
+                    margin-bottom:18px;
+                    border-radius:8px;
+                    background:#fff0f0;
+                    border:1px solid #e0a0a0;
+                ">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="POST">
+
+                <label for="password">
+                    <strong>Password</strong>
+                </label>
+
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    autocomplete="current-password"
+                    autofocus
+                    style="
+                        width:100%;
+                        box-sizing:border-box;
+                        margin-top:8px;
+                        margin-bottom:20px;
+                        padding:12px;
+                    "
+                >
+
+                <button
+                    type="submit"
+                    class="btn"
+                    style="width:100%;"
+                >
+                    Sign In
+                </button>
+
+            </form>
+        </section>
+
+    </main>
+</div>
+
+{% endblock %}
