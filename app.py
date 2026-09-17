@@ -640,6 +640,95 @@ def archive_waiver(waiver_id):
         "message": "Waiver archived successfully."
     })
 
+@app.get("/admin/events")
+@admin_required
+def admin_events():
+    events = Event.query.order_by(Event.id.desc()).all()
+
+    current_event = Event.query.filter_by(
+        is_current=True
+    ).first()
+
+    return render_template(
+        "admin_events.html",
+        events=events,
+        current_event=current_event
+    )
+
+
+@app.post("/admin/events/create")
+@admin_required
+def admin_create_event():
+    name = request.form.get("name", "").strip()
+
+    if name:
+        event = Event(
+            name=name,
+            status="Closed",
+            is_current=False
+        )
+        db.session.add(event)
+        db.session.commit()
+
+    return redirect(url_for("admin_events"))
+
+
+@app.post("/admin/events/<int:event_id>/rename")
+@admin_required
+def admin_rename_event(event_id):
+    event = db.session.get(Event, event_id)
+
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    new_name = request.form.get("name", "").strip()
+
+    if new_name:
+        event.name = new_name
+        db.session.commit()
+
+    return redirect(url_for("admin_events"))
+
+
+@app.post("/admin/events/<int:event_id>/status")
+@admin_required
+def admin_set_event_status(event_id):
+    event = db.session.get(Event, event_id)
+
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    new_status = request.form.get("status", "")
+
+    if new_status in ["Open", "Closing Soon", "Closed"]:
+        event.status = new_status
+        db.session.commit()
+
+    return redirect(url_for("admin_events"))
+
+
+@app.post("/admin/events/<int:event_id>/make-current")
+@admin_required
+def admin_make_event_current(event_id):
+    event = db.session.get(Event, event_id)
+
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    previous_current = Event.query.filter_by(
+        is_current=True
+    ).first()
+
+    if previous_current and previous_current.id != event.id:
+        previous_current.is_current = False
+        previous_current.status = "Closed"
+
+    event.is_current = True
+
+    db.session.commit()
+
+    return redirect(url_for("admin_events"))
+
 @app.post("/admin/events/current/status")
 @admin_required
 def update_current_event_status():

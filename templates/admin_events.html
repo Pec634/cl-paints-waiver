@@ -1,0 +1,265 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Event Management | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+
+    <aside>
+        <div class="brand light">
+            CL <span>Paints</span>
+        </div>
+
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/admin/waivers">Waivers</a>
+            <a>Participants</a>
+            <a>Bookings</a>
+            <a class="active" href="/admin/events">Events</a>
+            <a>Reports</a>
+            <a>Activity</a>
+            <a>Settings</a>
+            <a href="/admin/logout">Logout</a>
+        </nav>
+    </aside>
+
+    <main>
+
+        <div class="top">
+            <div>
+                <small>CL PAINTS MANAGEMENT SYSTEM</small>
+                <h1>Event Management</h1>
+                <p>Create and manage public waiver events.</p>
+            </div>
+
+            <a class="btn" href="/waiver">
+                View Public Waiver
+            </a>
+        </div>
+
+        <section class="panel">
+
+            <div class="panel-heading">
+                <div>
+                    <h2>Create Event</h2>
+                    <p>New events are created closed for safety.</p>
+                </div>
+            </div>
+
+            <form
+                method="post"
+                action="/admin/events/create"
+                class="event-create-form"
+            >
+                <input
+                    type="text"
+                    name="name"
+                    maxlength="200"
+                    required
+                    placeholder="Event name"
+                >
+
+                <button class="btn" type="submit">
+                    Create Event
+                </button>
+            </form>
+
+        </section>
+
+        <section class="panel">
+
+            <div class="panel-heading">
+                <div>
+                    <h2>Events</h2>
+                    <p>
+                        Choose the public event and control whether
+                        waiver submissions are open.
+                    </p>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+
+                <table class="waiver-table">
+
+                    <thead>
+                        <tr>
+                            <th>Event</th>
+                            <th>Status</th>
+                            <th>Current</th>
+                            <th>Rename</th>
+                            <th>Change Status</th>
+                            <th>Public Event</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                    {% for event in events %}
+
+                        <tr>
+
+                            <td>
+                                <strong>{{ event.name }}</strong>
+                            </td>
+
+                            <td>
+                                {{ event.status }}
+                            </td>
+
+                            <td>
+                                {% if event.is_current %}
+                                    <strong>Yes</strong>
+                                {% else %}
+                                    No
+                                {% endif %}
+                            </td>
+
+                            <td>
+
+                                <form
+                                    method="post"
+                                    action="/admin/events/{{ event.id }}/rename"
+                                >
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        value="{{ event.name }}"
+                                        maxlength="200"
+                                        required
+                                    >
+
+                                    <button
+                                        class="btn small"
+                                        type="submit"
+                                    >
+                                        Save
+                                    </button>
+                                </form>
+
+                            </td>
+
+                            <td>
+
+                                <form
+                                    method="post"
+                                    action="/admin/events/{{ event.id }}/status"
+                                >
+
+                                    <select name="status">
+
+                                        <option
+                                            value="Open"
+                                            {% if event.status == "Open" %}
+                                            selected
+                                            {% endif %}
+                                        >
+                                            Open
+                                        </option>
+
+                                        <option
+                                            value="Closing Soon"
+                                            {% if event.status == "Closing Soon" %}
+                                            selected
+                                            {% endif %}
+                                        >
+                                            Closing Soon
+                                        </option>
+
+                                        <option
+                                            value="Closed"
+                                            {% if event.status == "Closed" %}
+                                            selected
+                                            {% endif %}
+                                        >
+                                            Closed
+                                        </option>
+
+                                    </select>
+
+                                    <button
+                                        class="btn small"
+                                        type="submit"
+                                    >
+                                        Update
+                                    </button>
+
+                                </form>
+
+                            </td>
+
+                            <td>
+
+                                {% if event.is_current %}
+
+                                    <strong>Current Public Event</strong>
+
+                                {% else %}
+
+                                    <form
+                                        method="post"
+                                        action="/admin/events/{{ event.id }}/make-current"
+                                    >
+                                        <button
+                                            class="btn small"
+                                            type="submit"
+                                        >
+                                            Make Current
+                                        </button>
+                                    </form>
+
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+                    {% else %}
+
+                        <tr>
+                            <td colspan="6">
+                                No events have been created.
+                            </td>
+                        </tr>
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<style>
+.event-create-form {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.event-create-form input {
+    flex: 1;
+}
+
+.waiver-table form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.waiver-table input,
+.waiver-table select {
+    min-width: 140px;
+}
+</style>
+
+{% endblock %}
