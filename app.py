@@ -615,6 +615,7 @@ def admin_archived_waivers():
     )
 
 @app.post("/admin/waivers/<int:waiver_id>/archive")
+@admin_required
 def archive_waiver(waiver_id):
     waiver = db.session.get(Waiver, waiver_id)
 
@@ -640,6 +641,7 @@ def archive_waiver(waiver_id):
     })
 
 @app.post("/admin/events/current/status")
+@admin_required
 def update_current_event_status():
     current_event = Event.query.filter_by(
         is_current=True
