@@ -209,6 +209,17 @@ class Customer(db.Model):
 with app.app_context():
     db.create_all()
 
+    if Event.query.count() == 0:
+        first_event = Event(
+            name="CL Paints Public Event",
+            status="Open",
+            is_current=True
+        )
+        db.session.add(first_event)
+        db.session.commit()
+
+
+
 def generate_customer_number():
     while True:
         number = secrets.randbelow(1000000)
