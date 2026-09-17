@@ -206,6 +206,9 @@ class Customer(db.Model):
         onupdate=datetime.now
     )
 
+with app.app_context():
+    db.create_all()
+
 def generate_customer_number():
     while True:
         number = secrets.randbelow(1000000)
