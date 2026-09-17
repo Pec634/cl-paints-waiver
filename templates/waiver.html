@@ -33,25 +33,25 @@
         </p>
     {% endif %}
 </div>
+{% if current_event and current_event.status in ["Open", "Closing Soon"] %}
 
 <hr class="section-divider">
 
 {% include "terms_and_liability.html" %}
 
-</ol><label class="check">
+</ol>
+
+<label class="check">
     <input id="liability" type="checkbox">
     I confirm that I have read and understood the Terms &amp; Conditions and Liability Statement above.
 </label>
-{% if current_event and current_event.status == "Closed" %}
+
 <div class="nav">
-    <button class="btn primary" disabled>
-        Face Painting is Closed
+    <button class="btn primary next" data-requires="liability">
+        Continue →
     </button>
 </div>
-{% else %}
-<div class="nav">
-    <button class="btn primary next" data-requires="liability">Continue →</button>
-</div>
+
 {% endif %}
 </section>
 
