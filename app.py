@@ -35,7 +35,17 @@ app = Flask(__name__)
 
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cl_paints_waivers.db"
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    # Render/PostgreSQL production database
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+else:
+    # Local development database
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cl_paints_waivers.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
