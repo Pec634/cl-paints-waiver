@@ -323,7 +323,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const waiverData = buildWaiverData();
 
     try {
-        const response = await fetch("/api/waivers", {
+        const eventId = document.getElementById("waiverApp")?.dataset.eventId;
+
+        if (!eventId) {
+            alert("The event could not be identified. Please use the waiver link provided for your event.");
+            return;
+        }
+
+        const response = await fetch(`/api/waivers/event/${eventId}`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"

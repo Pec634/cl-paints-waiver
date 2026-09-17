@@ -390,3 +390,13 @@
     padding: 7px 12px;
     font-size: 12px;
 }
+
+.event-name {
+    font-weight: 700;
+    margin: 6px 0;
+}
+
+.confirmation-event {
+    margin: 10px 0 18px;
+    font-size: 1.05rem;
+}

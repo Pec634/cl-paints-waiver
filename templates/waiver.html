@@ -1,7 +1,16 @@
 {% extends 'base.html' %}{% block title %}Public Event Waiver | CL Paints{% endblock %}{% block body %}
-<div class="waiver" id="waiverApp"><header><div class="brand">CL <span>Paints</span></div><small>Bringing colour to life, one face at a time!</small></header><main class="card">
+<div
+    class="waiver"
+    id="waiverApp"
+    data-event-id="{{ current_event.id }}">
+    <header>
+        <div class="brand">CL <span>Paints</span></div>
+        <small>Bringing colour to life, one face at a time!</small>
+    </header>
+    <main class="card">
+</section>
 
-</section><section class="step" data-step="1">
+<section class="step" data-step="1">
     <b>Step 1 of 4</b>
 
     <h1>Welcome to CL Paints</h1>
@@ -12,7 +21,11 @@
 </p>
 
 <div class="event">
-    <strong>Public Event Waiver</strong>
+    <strong>
+        Public Event Waiver for - {{ current_event.name }}
+    </strong>
+
+
 
     {% if current_event and current_event.status == "Open" %}
         <span class="open">Event is Open</span>
@@ -211,6 +224,9 @@
 
     <div class="waiver-summary">
         <h2>Waiver Overview</h2>
+        <p class="confirmation-event">
+        Event: <strong>{{ current_event.name }}</strong>
+        </p>
 
         <div class="summary-row">
     <span>Waiver Reference</span>

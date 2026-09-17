@@ -89,10 +89,10 @@ Event Management | CL Paints
                         <tr>
                             <th>Event</th>
                             <th>Status</th>
-                            <th>Current</th>
                             <th>Rename</th>
                             <th>Change Status</th>
-                            <th>Public Event</th>
+                            <th>Waiver Link</th>
+                            <th>Delete</th>
                         </tr>
                     </thead>
 
@@ -108,14 +108,6 @@ Event Management | CL Paints
 
                             <td>
                                 {{ event.status }}
-                            </td>
-
-                            <td>
-                                {% if event.is_current %}
-                                    <strong>Yes</strong>
-                                {% else %}
-                                    No
-                                {% endif %}
                             </td>
 
                             <td>
@@ -190,31 +182,43 @@ Event Management | CL Paints
                                 </form>
 
                             </td>
-
                             <td>
+                                <a
+                                    class="btn small"
+                                    href="/waiver/event/{{ event.id }}"
+                                    target="_blank"
+                                >
+                                    View Waiver
+                                </a>
 
-                                {% if event.is_current %}
-
-                                    <strong>Current Public Event</strong>
-
-                                {% else %}
-
-                                    <form
-                                        method="post"
-                                        action="/admin/events/{{ event.id }}/make-current"
-                                    >
-                                        <button
-                                            class="btn small"
-                                            type="submit"
-                                        >
-                                            Make Current
-                                        </button>
-                                    </form>
-
-                                {% endif %}
-
+                                <button
+                                    class="btn small"
+                                    type="button"
+                                    onclick="
+                                        navigator.clipboard.writeText(
+                                            window.location.origin + '/waiver/event/{{ event.id }}'
+                                        );
+                                        this.textContent='Copied!';
+                                        setTimeout(() => this.textContent='Copy Link', 1500);
+                                    "
+                                >
+                                    Copy Link
+                                </button>
                             </td>
-
+                            <td>
+                                <form
+                                    method="post"
+                                    action="/admin/events/{{ event.id }}/delete"
+                                    onsubmit="return confirm('Delete this event? Existing waiver records will remain in the database, but this event and its public waiver link will be removed.');"
+                                >
+                                    <button
+                                        class="btn small"
+                                        type="submit"
+                                    >
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
 
                     {% else %}

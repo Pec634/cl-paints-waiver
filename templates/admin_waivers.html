@@ -40,40 +40,6 @@ Waiver Management | CL Paints
             </a>
         </div>
 
-        <!-- CURRENT PUBLIC EVENT -->
-        <section class="panel event-admin">
-
-            <div>
-                <small>CURRENT PUBLIC EVENT</small>
-                <h2>{{ current_event.name if current_event else "No Current Event" }}</h2>
-            </div>
-
-            <div class="states">
-               <button
-                    class="state {% if current_event and current_event.status == 'Open' %}active{% endif %}"
-                    data-state="Open">
-                    Open
-                </button>
-
-                <button
-                    class="state {% if current_event and current_event.status == 'Closing Soon' %}active{% endif %}"
-                    data-state="Closing Soon">
-                    Closing Soon
-                </button>
-
-                <button
-                    class="state {% if current_event and current_event.status == 'Closed' %}active{% endif %}"
-                    data-state="Closed">
-                    Closed
-                </button>
-            </div>
-
-            <p id="stateMessage">
-                New waivers can be submitted.
-            </p>
-
-        </section>
-
         <!-- WAIVER STATISTICS -->
         <section class="stats">
             <article>

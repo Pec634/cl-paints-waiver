@@ -209,17 +209,6 @@ class Customer(db.Model):
 with app.app_context():
     db.create_all()
 
-    if Event.query.count() == 0:
-        first_event = Event(
-            name="CL Paints Public Event",
-            status="Open",
-            is_current=True
-        )
-        db.session.add(first_event)
-        db.session.commit()
-
-
-
 def generate_customer_number():
     while True:
         number = secrets.randbelow(1000000)
@@ -234,20 +223,41 @@ def generate_customer_number():
 
 @app.get("/waiver")
 def waiver():
-    current_event = Event.query.filter_by(
-        is_current=True
-    ).first()
+    return """
+    <!doctype html>
+    <html>
+    <head>
+        <title>CL Paints Waiver</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; text-align:center; padding:60px 20px;">
+        <h1>CL Paints</h1>
+        <p>Please use the waiver link or QR code provided for your event.</p>
+    </body>
+    </html>
+    """
+
+
+@app.get("/waiver/event/<int:event_id>")
+def waiver_event(event_id):
+    event = db.session.get(Event, event_id)
+
+    if event is None:
+        return "Event not found.", 404
 
     return render_template(
         "waiver.html",
-        current_event=current_event
+        current_event=event
     )
 
-@app.post("/api/waivers")
-def create_waiver():
-    current_event = Event.query.filter_by(
-        is_current=True
-    ).first()
+@app.post("/api/waivers/event/<int:event_id>")
+def create_waiver(event_id):
+    current_event = db.session.get(Event, event_id)
+
+    if current_event is None:
+        return jsonify({
+            "success": False,
+            "error": "Event not found."
+        }), 404
 
     if not current_event or current_event.status == "Closed":
         return jsonify({
@@ -706,65 +716,18 @@ def admin_set_event_status(event_id):
 
     return redirect(url_for("admin_events"))
 
-
-@app.post("/admin/events/<int:event_id>/make-current")
+@app.post("/admin/events/<int:event_id>/delete")
 @admin_required
-def admin_make_event_current(event_id):
+def admin_delete_event(event_id):
     event = db.session.get(Event, event_id)
 
     if event is None:
         return redirect(url_for("admin_events"))
 
-    previous_current = Event.query.filter_by(
-        is_current=True
-    ).first()
-
-    if previous_current and previous_current.id != event.id:
-        previous_current.is_current = False
-        previous_current.status = "Closed"
-
-    event.is_current = True
-
+    db.session.delete(event)
     db.session.commit()
 
     return redirect(url_for("admin_events"))
-
-@app.post("/admin/events/current/status")
-@admin_required
-def update_current_event_status():
-    current_event = Event.query.filter_by(
-        is_current=True
-    ).first()
-
-    if not current_event:
-        return jsonify({
-            "success": False,
-            "error": "No current event found."
-        }), 404
-
-    data = request.get_json()
-
-    new_status = data.get("status")
-
-    allowed_statuses = [
-        "Open",
-        "Closing Soon",
-        "Closed"
-    ]
-
-    if new_status not in allowed_statuses:
-        return jsonify({
-            "success": False,
-            "error": "Invalid event status."
-        }), 400
-
-    current_event.status = new_status
-    db.session.commit()
-
-    return jsonify({
-        "success": True,
-        "status": current_event.status
-    })
 
 @app.get("/admin/waivers/<int:waiver_id>")
 @admin_required
