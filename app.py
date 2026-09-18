@@ -1,5 +1,3 @@
-from turtle import title
-
 from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
@@ -254,9 +252,6 @@ class MoodboardImage(db.Model):
         nullable=False,
         default=datetime.now
     )
-
-
-
 
 class EventMoodboardImage(db.Model):
     __tablename__ = "event_moodboard_image"
