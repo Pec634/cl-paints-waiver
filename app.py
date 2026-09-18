@@ -1,3 +1,5 @@
+from turtle import title
+
 from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
@@ -8,9 +10,18 @@ from dateutil.relativedelta import relativedelta
 import secrets
 import resend
 import os
+import cloudinary
+import cloudinary.uploader
 from dotenv import load_dotenv
 
 load_dotenv()
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    secure=True
+)
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
@@ -206,6 +217,82 @@ class Customer(db.Model):
         onupdate=datetime.now
     )
 
+class MoodboardImage(db.Model):
+    __tablename__ = "moodboard_image"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    title = db.Column(
+        db.String(200),
+        nullable=False
+    )
+
+    image_url = db.Column(
+        db.String(500),
+        nullable=False
+    )
+
+    storage_id = db.Column(
+        db.String(300),
+        nullable=True
+    )
+
+    active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True
+    )
+
+    design_type = db.Column(
+    db.String(20),
+    nullable=False,
+    default="large"
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.now
+    )
+
+
+
+
+class EventMoodboardImage(db.Model):
+    __tablename__ = "event_moodboard_image"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    event_id = db.Column(
+        db.Integer,
+        db.ForeignKey("event.id"),
+        nullable=False
+    )
+
+    image_id = db.Column(
+        db.Integer,
+        db.ForeignKey("moodboard_image.id"),
+        nullable=False
+    )
+
+    sort_order = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+
+    event = db.relationship("Event")
+
+    image = db.relationship("MoodboardImage")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "event_id",
+            "image_id",
+            name="uq_event_moodboard_image"
+        ),
+    )
+
 with app.app_context():
     db.create_all()
 
@@ -244,9 +331,225 @@ def waiver_event(event_id):
     if event is None:
         return "Event not found.", 404
 
+    moodboard_rows = EventMoodboardImage.query.filter_by(
+        event_id=event.id
+    ).order_by(
+        EventMoodboardImage.sort_order.asc()
+    ).all()
+
+    moodboard_images = [
+        row.image
+        for row in moodboard_rows
+        if row.image is not None and row.image.active
+    ]
+
+    large_moodboard_images = [
+    image
+    for image in moodboard_images
+    if image.design_type == "large"
+    ]
+
+    small_moodboard_images = [
+    image
+    for image in moodboard_images
+    if image.design_type == "small"
+    ]
+
+    for image in moodboard_images:
+        print("IMAGE:", image.id, image.title, image.image_url)
+
     return render_template(
-        "waiver.html",
-        current_event=event
+    "waiver.html",
+    current_event=event,
+    moodboard_images=moodboard_images,
+    large_moodboard_images=large_moodboard_images,
+    small_moodboard_images=small_moodboard_images
+    )
+
+@app.post("/admin/moodboard/upload")
+@admin_required
+def admin_moodboard_upload():
+    files = request.files.getlist("images")
+
+    design_type = request.form.get("design_type", "large").strip().lower()
+
+    if design_type not in ("large", "small"):
+        design_type = "large"
+
+    allowed_extensions = {"jpg", "jpeg", "png", "webp"}
+
+    uploaded_count = 0
+
+    for file in files:
+        if not file or not file.filename:
+            continue
+
+        extension = (
+            file.filename.rsplit(".", 1)[1].lower()
+            if "." in file.filename
+            else ""
+        )
+
+        if extension not in allowed_extensions:
+            continue
+
+        result = cloudinary.uploader.upload(
+            file,
+            folder="cl-paints/moodboard",
+            resource_type="image"
+        )
+
+        title = os.path.splitext(file.filename)[0]
+        title = title.replace("_", " ").replace("-", " ").strip()
+
+        image = MoodboardImage(
+            title=title or "Moodboard Image",
+            image_url=result["secure_url"],
+            storage_id=result["public_id"],
+            active=True,
+            design_type=design_type
+
+        )
+
+        db.session.add(image)
+        uploaded_count += 1
+
+    if uploaded_count:
+        db.session.commit()
+
+    return redirect(url_for("admin_moodboard"))
+
+@app.post("/admin/moodboard/<int:image_id>/rename")
+@admin_required
+def admin_moodboard_rename(image_id):
+    image = db.session.get(MoodboardImage, image_id)
+
+    if image is None:
+        return redirect(url_for("admin_moodboard"))
+
+    title = request.form.get("title", "").strip()
+    design_type = request.form.get("design_type", "").strip().lower()
+
+    if title:
+        image.title = title
+
+    if design_type in ("large", "small"):
+        image.design_type = design_type
+
+    db.session.commit()
+
+    return redirect(url_for("admin_moodboard"))
+
+
+@app.post("/admin/moodboard/<int:image_id>/delete")
+@admin_required
+def admin_moodboard_delete(image_id):
+    image = db.session.get(MoodboardImage, image_id)
+
+    if image is None:
+        return redirect(url_for("admin_moodboard"))
+
+    # Remove this image from any events first
+    EventMoodboardImage.query.filter_by(
+        image_id=image.id
+    ).delete()
+
+    # Remove the actual image from Cloudinary
+    if image.storage_id:
+        cloudinary.uploader.destroy(
+            image.storage_id,
+            resource_type="image"
+        )
+
+    db.session.delete(image)
+    db.session.commit()
+
+    return redirect(url_for("admin_moodboard"))
+
+@app.get("/admin/moodboard")
+@admin_required
+def admin_moodboard():
+    images = MoodboardImage.query.order_by(
+        MoodboardImage.created_at.desc()
+    ).all()
+
+    return render_template(
+        "admin_moodboard.html",
+        images=images
+    )
+
+@app.get("/admin/events/<int:event_id>/moodboard")
+@admin_required
+def admin_event_moodboard(event_id):
+    event = db.session.get(Event, event_id)
+
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    images = MoodboardImage.query.filter_by(
+        active=True
+    ).order_by(
+        MoodboardImage.created_at.desc()
+    ).all()
+
+    selected_rows = EventMoodboardImage.query.filter_by(
+        event_id=event.id
+    ).all()
+
+    selected_image_ids = {
+        row.image_id for row in selected_rows
+    }
+
+    return render_template(
+        "admin_event_moodboard.html",
+        event=event,
+        images=images,
+        selected_image_ids=selected_image_ids
+    )
+
+@app.post("/admin/events/<int:event_id>/moodboard")
+@admin_required
+def admin_event_moodboard_save(event_id):
+    event = db.session.get(Event, event_id)
+
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    selected_ids = request.form.getlist("image_ids")
+
+    # Remove the event's existing selections
+    EventMoodboardImage.query.filter_by(
+        event_id=event.id
+    ).delete()
+
+    # Save the newly selected images
+    for sort_order, image_id in enumerate(selected_ids):
+
+        try:
+            image_id = int(image_id)
+        except ValueError:
+            continue
+
+        image = db.session.get(MoodboardImage, image_id)
+
+        if image is None or not image.active:
+            continue
+
+        assignment = EventMoodboardImage(
+            event_id=event.id,
+            image_id=image.id,
+            sort_order=sort_order
+        )
+
+        db.session.add(assignment)
+
+    db.session.commit()
+
+    return redirect(
+        url_for(
+            "admin_event_moodboard",
+            event_id=event.id
+        )
     )
 
 @app.post("/api/waivers/event/<int:event_id>")

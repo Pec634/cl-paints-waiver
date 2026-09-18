@@ -400,3 +400,31 @@
     margin: 10px 0 18px;
     font-size: 1.05rem;
 }
+
+/* Waiver moodboard design cards */
+
+.design-gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.design-card {
+    min-width: 0;
+}
+
+.design-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.design-title {
+    margin-top: 5px;
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: center;
+    overflow-wrap: anywhere;
+}

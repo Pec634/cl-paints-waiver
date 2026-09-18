@@ -19,6 +19,7 @@ Event Management | CL Paints
             <a>Participants</a>
             <a>Bookings</a>
             <a class="active" href="/admin/events">Events</a>
+            <a href="/admin/moodboard">Moodboard</a>
             <a>Reports</a>
             <a>Activity</a>
             <a>Settings</a>
@@ -32,12 +33,9 @@ Event Management | CL Paints
             <div>
                 <small>CL PAINTS MANAGEMENT SYSTEM</small>
                 <h1>Event Management</h1>
-                <p>Create and manage public waiver events.</p>
+                <p>Create and manage public events.</p>
             </div>
 
-            <a class="btn" href="/waiver">
-                View Public Waiver
-            </a>
         </div>
 
         <section class="panel">
@@ -92,6 +90,7 @@ Event Management | CL Paints
                             <th>Rename</th>
                             <th>Change Status</th>
                             <th>Waiver Link</th>
+                            <th>Moodboard</th>
                             <th>Delete</th>
                         </tr>
                     </thead>
@@ -205,6 +204,16 @@ Event Management | CL Paints
                                     Copy Link
                                 </button>
                             </td>
+
+                            <td>
+                                <a
+                                    class="btn small"
+                                    href="/admin/events/{{ event.id }}/moodboard"
+                                >
+                                    Manage Moodboard
+                                </a>
+                            </td>
+
                             <td>
                                 <form
                                     method="post"
@@ -224,7 +233,7 @@ Event Management | CL Paints
                     {% else %}
 
                         <tr>
-                            <td colspan="6">
+                            <td colspan="7">
                                 No events have been created.
                             </td>
                         </tr>

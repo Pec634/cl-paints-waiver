@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}
+Moodboard Library | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+
+    <aside>
+        <div class="brand light">
+            CL <span>Paints</span>
+        </div>
+
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/admin/waivers">Waivers</a>
+            <a>Participants</a>
+            <a>Bookings</a>
+            <a href="/admin/events">Events</a>
+            <a class="active" href="/admin/moodboard">Moodboard</a>
+            <a>Reports</a>
+            <a>Activity</a>
+            <a>Settings</a>
+            <a href="/admin/logout">Logout</a>
+        </nav>
+    </aside>
+
+    <main>
+
+        <div class="top">
+            <div>
+                <small>CL PAINTS MANAGEMENT SYSTEM</small>
+                <h1>Moodboard Library</h1>
+                <p>
+                    Upload face-painting designs once and use them
+                    across multiple events.
+                </p>
+            </div>
+        </div>
+
+        <section class="panel">
+
+            <div class="panel-heading">
+                <div>
+                    <h2>Image Library</h2>
+                    <p>
+                        Images stored here can later be assigned
+                        to individual events.
+                    </p>
+                </div>
+
+                <form
+                    method="post"
+                    action="/admin/moodboard/upload"
+                    enctype="multipart/form-data"
+                >
+                    <input
+                        type="file"
+                        name="images"
+                        id="moodboardImages"
+                        accept=".jpg,.jpeg,.png,.webp"
+                        multiple
+                        required
+                    >
+
+                    <div class="moodboard-type-field">
+                        <label for="designType">
+                            Design Category
+                        </label>
+
+                        <select
+                            name="design_type"
+                            id="designType"
+                            required
+                        >
+                            <option value="large">
+                                Large / Full Face — £5
+                            </option>
+
+                            <option value="small">
+                                Small / Half Face — £3.50
+                            </option>
+                        </select>
+                    </div>
+
+                    <button class="btn" type="submit">
+                        Upload Images
+                    </button>
+                </form>
+            </div>
+
+            {% if images %}
+
+    <div class="moodboard-admin-grid">
+
+        {% for image in images %}
+
+            <article class="moodboard-admin-card">
+
+                <img
+                    src="{{ image.image_url }}"
+                    alt="{{ image.title }}"
+                >
+
+                <form
+                    method="post"
+                    action="/admin/moodboard/{{ image.id }}/rename"
+                >
+                    <input
+                        type="text"
+                        name="title"
+                        value="{{ image.title }}"
+                        maxlength="200"
+                        required
+                    >
+                    <select
+                        name="design_type"
+                        required
+                    >
+                        <option
+                            value="large"
+                            {% if image.design_type == "large" %}selected{% endif %}
+                        >
+                            Large / Full Face — £5
+                        </option>
+
+                        <option
+                            value="small"
+                            {% if image.design_type == "small" %}selected{% endif %}
+                        >
+                            Small / Half Face — £3.50
+                        </option>
+                    </select>
+                    <button
+                        class="btn small"
+                        type="submit"
+                    >
+                        Save Changes
+                    </button>
+                </form>
+
+                <form
+                    method="post"
+                    action="/admin/moodboard/{{ image.id }}/delete"
+                    onsubmit="return confirm('Delete this image from the Moodboard Library? It will also be removed from any events using it.');"
+                >
+                    <button
+                        class="btn small"
+                        type="submit"
+                    >
+                        Delete
+                    </button>
+                </form>
+
+            </article>
+
+        {% endfor %}
+
+    </div>
+
+{% else %}
+
+    <div class="empty-state">
+        <h3>No moodboard images yet</h3>
+        <p>
+            Your uploaded face-painting designs
+            will appear here.
+        </p>
+    </div>
+
+{% endif %}
+
+
+        </section>
+
+    </main>
+
+</div>
+
+{% endblock %}

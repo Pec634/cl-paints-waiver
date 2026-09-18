@@ -83,31 +83,73 @@
     </div>
 
     <!-- LARGE / FULL FACE DESIGNS -->
-    <div class="design-group">
-        <div class="design-group-header">
-            <h2>Large / Full Face Designs</h2>
-            <span class="design-price">£5</span>
-        </div>
+    <!-- EVENT MOODBOARD -->
+     
+    <div class="design-group-header">
+        <h2>Large / Full Face Designs</h2>
+        <span class="design-price">£5</span>
+    </div>
 
-        <div class="design-gallery" id="largeDesignGallery">
+
+    <div class="design-gallery" id="largeDesignGallery">
+
+        {% if large_moodboard_images %}
+
+            {% for image in large_moodboard_images %}
+
+                <div class="design-card">
+
+                    <img
+                        src="{{ image.image_url }}"
+                        alt="{{ image.title }}"
+                        loading="lazy"
+                    >
+
+                </div>
+
+            {% endfor %}
+
+        {% else %}
+
             <div class="design-placeholder">
                 <span>Photos coming soon</span>
             </div>
-        </div>
+
+        {% endif %}
+
     </div>
 
     <!-- SMALL / HALF FACE DESIGNS -->
-    <div class="design-group">
-        <div class="design-group-header">
-            <h2>Small / Half Face Designs</h2>
-            <span class="design-price">£3.50</span>
+    <div class="design-group-header">
+        <h2>Small / Half Face Designs</h2>
+        <span class="design-price">£3.50</span>
+    </div>
+    <div class="design-gallery" id="smallDesignGallery">
+
+    {% if small_moodboard_images %}
+
+        {% for image in small_moodboard_images %}
+
+            <div class="design-card">
+
+                <img
+                    src="{{ image.image_url }}"
+                    alt="{{ image.title }}"
+                    loading="lazy"
+                >
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="design-placeholder">
+            <span>Photos coming soon</span>
         </div>
 
-        <div class="design-gallery" id="smallDesignGallery">
-            <div class="design-placeholder">
-                <span>Photos coming soon</span>
-            </div>
-        </div>
+    {% endif %}
+
     </div>
 
     <div class="nav">

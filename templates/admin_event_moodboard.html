@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Event Moodboard | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+
+    <aside>
+
+        <div class="brand light">
+            CL <span>Paints</span>
+        </div>
+
+            <nav>
+                <a href="/">Dashboard</a>
+                <a href="/admin/waivers">Waivers</a>
+                <a>Participants</a>
+                <a>Bookings</a>
+                <a class="active" href="/admin/events">Events</a>
+                <a class="active" href="/admin/moodboard">Moodboard</a>
+                <a>Reports</a>
+                <a>Activity</a>
+                <a>Settings</a>
+                <a href="/admin/logout">Logout</a>
+            </nav>
+
+    </aside>
+
+    <main>
+
+        <div class="top">
+
+            <div>
+                <small>CL PAINTS MANAGEMENT SYSTEM</small>
+                <h1>{{ event.name }} Moodboard</h1>
+                <p>
+                    Choose which face-painting designs
+                    are available at this event.
+                </p>
+            </div>
+
+            <a class="btn" href="/admin/events">
+                Back to Events
+            </a>
+
+        </div>
+
+        <section class="panel">
+
+            <div class="panel-heading">
+                <div>
+                    <h2>Select Designs</h2>
+                    <p>
+                        Images are taken from your central
+                        Moodboard Library.
+                    </p>
+                </div>
+            </div>
+
+            {% if images %}
+
+                <form
+                    method="post"
+                    action="/admin/events/{{ event.id }}/moodboard"
+                >
+
+                    <div class="moodboard-admin-grid">
+
+                        {% for image in images %}
+
+                            <label class="moodboard-admin-card">
+
+                                <img
+                                    src="{{ image.image_url }}"
+                                    alt="{{ image.title }}"
+                                >
+
+                                <div>
+                                    <input
+                                        type="checkbox"
+                                        name="image_ids"
+                                        value="{{ image.id }}"
+                                        {% if image.id in selected_image_ids %}
+                                        checked
+                                        {% endif %}
+                                    >
+
+                                    <strong>
+                                        {{ image.title }}
+                                    </strong>
+                                </div>
+
+                            </label>
+
+                        {% endfor %}
+
+                    </div>
+
+                    <div style="margin-top: 20px;">
+
+                        <button
+                            class="btn"
+                            type="submit"
+                        >
+                            Save Moodboard
+                        </button>
+
+                    </div>
+
+                </form>
+
+            {% else %}
+
+                <div class="empty-state">
+
+                    <h3>No Moodboard images available</h3>
+
+                    <p>
+                        Upload images to the Moodboard Library
+                        before assigning them to an event.
+                    </p>
+
+                    <a
+                        class="btn"
+                        href="/admin/moodboard"
+                    >
+                        Open Moodboard Library
+                    </a>
+
+                </div>
+
+            {% endif %}
+
+        </section>
+
+    </main>
+
+</div>
+
+{% endblock %}
