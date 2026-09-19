@@ -843,7 +843,7 @@ def admin_login():
     return render_template("admin_login.html", error=error)
 
 
-@app.post("/admin/logout")
+@app.get("/admin/logout")
 def admin_logout():
     session.clear()
     return redirect(url_for("admin_login"))
