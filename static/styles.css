@@ -428,3 +428,49 @@
     text-align: center;
     overflow-wrap: anywhere;
 }
+
+/* =========================
+   KIOSK STAFF RESET
+   ========================= */
+
+.staff-reset-area {
+    margin-top: 28px;
+    padding: 20px;
+    text-align: center;
+    border-top: 1px solid #e5e7eb;
+}
+
+.staff-reset-label {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #6b7280;
+}
+
+.staff-reset-button {
+    width: 100%;
+    max-width: 420px;
+    min-height: 58px;
+    padding: 14px 20px;
+    border: 0;
+    border-radius: 12px;
+    background: #172033;
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+}
+
+.staff-reset-button:active {
+    transform: scale(0.98);
+}
+
+.staff-reset-status {
+    margin: 9px 0 0;
+    font-size: 13px;
+    color: #6b7280;
+}

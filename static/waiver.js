@@ -985,3 +985,59 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 });
+
+// =========================
+// KIOSK STAFF RESET
+// =========================
+
+const staffResetButton = document.getElementById("staffResetButton");
+const staffResetStatus = document.getElementById("staffResetStatus");
+
+if (staffResetButton && staffResetStatus) {
+    let resetTimer = null;
+    let resetCompleted = false;
+
+    function startStaffReset(event) {
+        event.preventDefault();
+
+        resetCompleted = false;
+        staffResetStatus.textContent = "Keep holding...";
+        staffResetButton.textContent = "Keep holding to reset...";
+
+        resetTimer = setTimeout(() => {
+            resetCompleted = true;
+
+            staffResetStatus.textContent = "Resetting for next customer...";
+            staffResetButton.textContent = "Resetting...";
+
+            // Reload the same event waiver from the server.
+            // replace() prevents the completed customer's page
+            // being added to the browser's back-button history.
+            const freshWaiverUrl =
+                window.location.pathname + "?kiosk=" + Date.now();
+
+            window.location.replace(freshWaiverUrl);
+        }, 1000);
+    }
+
+    function cancelStaffReset(event) {
+        if (event) {
+            event.preventDefault();
+        }
+
+        if (resetTimer) {
+            clearTimeout(resetTimer);
+            resetTimer = null;
+        }
+
+        if (!resetCompleted) {
+            staffResetStatus.textContent = "Press and hold for 1 second";
+            staffResetButton.textContent = "Hold to reset for next customer";
+        }
+    }
+
+    staffResetButton.addEventListener("pointerdown", startStaffReset);
+    staffResetButton.addEventListener("pointerup", cancelStaffReset);
+    staffResetButton.addEventListener("pointerleave", cancelStaffReset);
+    staffResetButton.addEventListener("pointercancel", cancelStaffReset);
+}
