@@ -852,6 +852,11 @@ def admin_logout():
 @admin_required
 
 def admin_waivers():
+    return redirect(url_for("admin_participants"))
+
+@app.get("/admin/participants")
+@admin_required
+def admin_participants():
     now = datetime.now()
     expiring_soon_date = now + relativedelta(days=30)
 
@@ -892,19 +897,23 @@ def admin_waivers():
         Waiver.is_archived.is_(False)
     ).count()
 
-
-
-    current_event = Event.query.filter_by(
-        is_current=True
-    ).first()
+    participants = (
+        Participant.query
+        .join(Waiver)
+        .filter(Waiver.is_archived.is_(False))
+        .order_by(
+            Waiver.signed_date.desc(),
+            Participant.last_name.asc()
+        )
+        .all()
+    )
 
     return render_template(
-        "admin_waivers.html",
-        waivers=waivers,
+        "admin_participants.html",
+        participants=participants,
         valid_count=valid_count,
         expiring_soon_count=expiring_soon_count,
         expired_count=expired_count,
-        current_event=current_event
     )
 
 @app.get("/admin/waivers/archived")

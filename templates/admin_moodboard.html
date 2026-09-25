@@ -15,8 +15,7 @@ Moodboard Library | CL Paints
 
         <nav>
             <a href="/">Dashboard</a>
-            <a href="/admin/waivers">Waivers</a>
-            <a>Participants</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
             <a>Bookings</a>
             <a href="/admin/events">Events</a>
             <a class="active" href="/admin/moodboard">Moodboard</a>
@@ -52,6 +51,7 @@ Moodboard Library | CL Paints
                 </div>
 
                 <form
+                    class="moodboard-upload-form"
                     method="post"
                     action="/admin/moodboard/upload"
                     enctype="multipart/form-data"

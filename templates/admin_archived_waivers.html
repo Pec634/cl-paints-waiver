@@ -15,8 +15,7 @@ Archived Waivers | CL Paints
 
         <nav>
             <a href="/">Dashboard</a>
-            <a class="active" href="/admin/waivers">Waivers</a>
-            <a>Participants</a>
+            <a class="active" href="{{ url_for('admin_participants') }}">Participants</a>
             <a>Bookings</a>
             <a>Events</a>
             <a href="/admin/moodboard">Moodboard</a>
@@ -32,11 +31,11 @@ Archived Waivers | CL Paints
             <div>
                 <small>CL PAINTS MANAGEMENT SYSTEM</small>
                 <h1>Archived Waivers</h1>
-                <p>Preserved waiver records removed from the normal Waiver Management list.</p>
+                <p>Preserved waiver records removed from the active Participants list.</p>
             </div>
 
-            <a class="btn" href="/admin/waivers">
-                Back to Waiver Management
+           <a class="btn" href="{{ url_for('admin_participants') }}">
+                Back to Participants
             </a>
         </div>
 

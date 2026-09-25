@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Participants | CL Paints
+{% endblock %}
+
+{% block body %}
+
+<div class="admin">
+
+    <aside>
+        <div class="brand light">
+            CL <span>Paints</span>
+        </div>
+
+        <nav>
+            <a href="/">Dashboard</a>
+            <a class="active" href="{{ url_for('admin_participants') }}">Participants</a>
+            <a>Bookings</a>
+            <a href="/admin/events">Events</a>
+            <a href="/admin/moodboard">Moodboard</a>
+            <a>Reports</a>
+            <a>Activity</a>
+            <a>Settings</a>
+            <a href="/admin/logout">Logout</a>
+        </nav>
+    </aside>
+
+    <main>
+
+    <div class="top">
+        <div>
+            <small>CL PAINTS MANAGEMENT SYSTEM</small>
+            <h1>Participants</h1>
+            <p>View participants recorded through CL Paints waivers.</p>
+        </div>
+
+        <a class="btn" href="{{ url_for('admin_archived_waivers') }}">
+            Archived Waivers
+        </a>
+    </div>
+            <!-- WAIVER STATISTICS -->
+    <section class="stats">
+        <article>
+            <span>Valid Waivers</span>
+            <strong>{{ valid_count }}</strong>
+        </article>
+
+        <article>
+            <span>Expiring Soon</span>
+            <strong>{{ expiring_soon_count }}</strong>
+        </article>
+
+        <article>
+            <span>Expired</span>
+            <strong>{{ expired_count }}</strong>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Participant Records</h2>
+                <p>Participants recorded on active waiver records.</p>
+            </div>
+
+            <a class="btn small" href="{{ url_for('admin_archived_waivers') }}">
+                Archived Waivers
+            </a>
+        </div>
+
+        <div class="waiver-tools">
+
+            <select id="participantSearchType">
+                <option value="name">Name</option>
+                <option value="event">Event</option>
+                <option value="reference">Waiver Reference</option>
+            </select>
+
+            <input
+                type="search"
+                id="participantSearch"
+                placeholder="Search participants"
+                autocomplete="off"
+            >
+
+        </div>
+
+        <div class="table-wrap">
+            <table class="waiver-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Age</th>
+                        <th>Event</th>
+                        <th>Waiver Reference</th>
+                        <th>Waiver Date</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody id="participantTableBody">
+                    {% if participants %}
+                        {% for participant in participants %}
+                        <tr>
+                            <td>
+                                <strong>
+                                    {{ participant.first_name }}
+                                    {{ participant.last_name }}
+                                </strong>
+                            </td>
+
+                            <td>{{ participant.age }}</td>
+
+                            <td>{{ participant.waiver.event_name }}</td>
+
+                            <td>
+                                {{ participant.waiver.waiver_reference }}
+                            </td>
+
+                            <td>
+                                {{ participant.waiver.signed_date.strftime("%d/%m/%Y") }}
+                            </td>
+
+                            <td>
+                                {{ participant.waiver.status }}
+                            </td>
+
+                            <td>
+                                <a
+                                    class="btn small"
+                                    href="{{ url_for('admin_waiver_detail', waiver_id=participant.waiver.id) }}"
+                                >
+                                    View Waiver
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7">No participants have been recorded yet.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</main>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const searchInput =
+        document.getElementById("participantSearch");
+
+    const searchType =
+        document.getElementById("participantSearchType");
+
+    const rows =
+        document.querySelectorAll("#participantTableBody tr");
+
+    if (!searchInput || !searchType) {
+        return;
+    }
+
+    function filterParticipants() {
+        const searchValue =
+            searchInput.value.trim().toLowerCase();
+
+        const selectedType =
+            searchType.value;
+
+        rows.forEach((row) => {
+            const cells = row.querySelectorAll("td");
+
+            if (cells.length < 4) {
+                return;
+            }
+
+            let textToSearch = "";
+
+            if (selectedType === "name") {
+                textToSearch =
+                    cells[0].textContent.toLowerCase();
+            }
+
+            if (selectedType === "event") {
+                textToSearch =
+                    cells[2].textContent.toLowerCase();
+            }
+
+            if (selectedType === "reference") {
+                textToSearch =
+                    cells[3].textContent.toLowerCase();
+            }
+
+            row.style.display =
+                textToSearch.includes(searchValue)
+                    ? ""
+                    : "none";
+        });
+    }
+
+    searchInput.addEventListener(
+        "input",
+        filterParticipants
+    );
+
+    searchType.addEventListener(
+        "change",
+        filterParticipants
+    );
+});
+</script>
+
+{% endblock %}

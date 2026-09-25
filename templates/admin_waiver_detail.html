@@ -15,7 +15,6 @@ Waiver Details | CL Paints
 
         <nav>
             <a href="/">Dashboard</a>
-            <a class="active" href="/admin/waivers">Waivers</a>
             <a>Participants</a>
             <a>Bookings</a>
             <a>Events</a>
@@ -44,11 +43,20 @@ Waiver Details | CL Paints
         </p>
     </div>
 
-    <a class="btn" href="/admin/waivers">
-        ← Back to Waivers
-    </a>
+        <a class="btn" href="{{ url_for('admin_participants') }}">
+            ← Back to Participants
+        </a>
 
-</div>
+        <button
+            type="button"
+            class="btn small archive-btn"
+            data-waiver-id="{{ waiver.id }}"
+            data-waiver-reference="{{ waiver.waiver_reference }}"
+        >
+            Archive Waiver
+        </button>
+
+    </div>
 
         <section class="panel">
 
@@ -63,6 +71,15 @@ Waiver Details | CL Paints
             <p>
                 <strong>Email:</strong>
                 {{ waiver.responsible_email }}
+            </p>
+
+            <p>
+                <strong>Marketing Consent:</strong>
+                {% if waiver.marketing_consent %}
+                    Yes
+                {% else %}
+                    No
+                {% endif %}
             </p>
 
             <p>
@@ -200,5 +217,47 @@ Waiver Details | CL Paints
     </main>
 
 </div>
+
+<script>
+document.querySelectorAll(".archive-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+        const waiverId = button.dataset.waiverId;
+        const waiverReference = button.dataset.waiverReference;
+
+        const confirmed = window.confirm(
+            `Archive waiver ${waiverReference}?\n\n` +
+            "This will remove the waiver and its participants from the active Participants list, " +
+            "but the waiver record will be preserved in Archived Waivers."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `/admin/waivers/${waiverId}/archive`,
+                {
+                    method: "POST"
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                alert(result.error || "Unable to archive waiver.");
+                return;
+            }
+
+            window.location.href =
+                "{{ url_for('admin_participants') }}";
+
+        } catch (error) {
+            console.error("Archive waiver failed:", error);
+            alert("Unable to archive waiver. Please try again.");
+        }
+    });
+});
+</script>
 
 {% endblock %}
