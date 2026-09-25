@@ -49,7 +49,17 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     # Render/PostgreSQL production database
     if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        DATABASE_URL = DATABASE_URL.replace(
+            "postgres://",
+            "postgresql+psycopg2://",
+            1
+        )
+    elif DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace(
+            "postgresql://",
+            "postgresql+psycopg2://",
+            1
+        )
 
     app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 else:
