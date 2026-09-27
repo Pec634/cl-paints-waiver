@@ -897,6 +897,11 @@ def admin_participants():
         Waiver.is_archived.is_(False)
     ).count()
 
+    participant_count = Participant.query.join(Waiver).filter(
+    Waiver.is_archived.is_(False),
+    Waiver.status != "Superseded"
+    ).count()
+
     expiring_soon_count = Waiver.query.filter(
         Waiver.status == "Expiring Soon",
         Waiver.is_archived.is_(False)
@@ -924,6 +929,7 @@ def admin_participants():
     return render_template(
         "admin_participants.html",
         participants=participants,
+        participant_count=participant_count,
         valid_count=valid_count,
         expiring_soon_count=expiring_soon_count,
         expired_count=expired_count,
