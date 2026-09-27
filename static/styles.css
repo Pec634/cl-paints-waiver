@@ -552,3 +552,18 @@
         height: 110px;
     }
 }
+
+.participant-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    min-width: 130px;
+}
+
+.participant-actions .btn {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

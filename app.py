@@ -910,7 +910,10 @@ def admin_participants():
     participants = (
         Participant.query
         .join(Waiver)
-        .filter(Waiver.is_archived.is_(False))
+        .filter(
+            Waiver.is_archived.is_(False),
+            Waiver.status != "Superseded"
+        )
         .order_by(
             Waiver.signed_date.desc(),
             Participant.last_name.asc()
@@ -965,6 +968,33 @@ def archive_waiver(waiver_id):
     return jsonify({
         "success": True,
         "message": "Waiver archived successfully."
+    })
+
+@app.post("/admin/waivers/<int:waiver_id>/delete")
+@admin_required
+def delete_waiver(waiver_id):
+    waiver = db.session.get(Waiver, waiver_id)
+
+    if waiver is None:
+        return jsonify({"error": "Waiver not found."}), 404
+
+    try:
+        Participant.query.filter_by(
+            waiver_id=waiver.id
+        ).delete(synchronize_session=False)
+
+        db.session.delete(waiver)
+        db.session.commit()
+
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify(
+            {"error": "Unable to delete waiver."}
+        ), 500
+
+    return jsonify({
+        "success": True,
+        "message": "Waiver permanently deleted."
     })
 
 @app.get("/admin/events")

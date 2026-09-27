@@ -63,10 +63,6 @@ Participants | CL Paints
                 <h2>Participant Records</h2>
                 <p>Participants recorded on active waiver records.</p>
             </div>
-
-            <a class="btn small" href="{{ url_for('admin_archived_waivers') }}">
-                Archived Waivers
-            </a>
         </div>
 
         <div class="waiver-tools">
@@ -128,12 +124,34 @@ Participants | CL Paints
                             </td>
 
                             <td>
-                                <a
-                                    class="btn small"
-                                    href="{{ url_for('admin_waiver_detail', waiver_id=participant.waiver.id) }}"
-                                >
-                                    View Waiver
-                                </a>
+                                <div 
+                                    class="participant-actions">
+                                
+                                    <a
+                                        class="btn small"
+                                        href="{{ url_for('admin_waiver_detail', waiver_id=participant.waiver.id) }}"
+                                    >
+                                        View Waiver
+                                    </a>
+
+                                    <button
+                                        type="button"
+                                        class="btn small archive-btn"
+                                        data-waiver-id="{{ participant.waiver.id }}"
+                                        data-waiver-reference="{{ participant.waiver.waiver_reference }}"
+                                    >
+                                        Archive Waiver
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="btn small delete-waiver-btn"
+                                        data-waiver-id="{{ participant.waiver.id }}"
+                                        data-waiver-reference="{{ participant.waiver.waiver_reference }}"
+                                    >
+                                        Delete Waiver
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -211,6 +229,75 @@ document.addEventListener("DOMContentLoaded", () => {
         "change",
         filterParticipants
     );
+});
+</script>
+
+<script>
+document.querySelectorAll(".archive-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+        const waiverId = button.dataset.waiverId;
+        const waiverReference = button.dataset.waiverReference;
+
+        const confirmed = confirm(
+            `Archive waiver ${waiverReference}?\n\n` +
+            "This will remove the waiver and its participants from the active Participants list. " +
+            "The record will remain available in Archived Waivers."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/admin/waivers/${waiverId}/archive`, {
+                method: "POST"
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || "Unable to archive waiver.");
+            }
+
+            window.location.reload();
+        } catch (error) {
+            alert(error.message);
+        }
+    });
+});
+
+document.querySelectorAll(".delete-waiver-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+        const waiverId = button.dataset.waiverId;
+        const waiverReference = button.dataset.waiverReference;
+
+        const confirmation = prompt(
+            `PERMANENTLY DELETE waiver ${waiverReference}?\n\n` +
+            "This will permanently delete the waiver and all participants attached to it.\n\n" +
+            "This cannot be undone.\n\n" +
+            "Type DELETE to continue."
+        );
+
+        if (confirmation !== "DELETE") {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/admin/waivers/${waiverId}/delete`, {
+                method: "POST"
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || "Unable to delete waiver.");
+            }
+
+            window.location.reload();
+        } catch (error) {
+            alert(error.message);
+        }
+    });
 });
 </script>
 
