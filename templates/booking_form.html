@@ -1,0 +1,859 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Client Booking Request | CL Paints
+{% endblock %}
+
+{% block body %}
+<main class="booking-public">
+    <header class="booking-public-header">
+        <a class="brand" href="/">CL <span>Paints</span></a>
+        <small>CLIENT BOOKING REQUEST</small>
+        <h1>Let's plan your event.</h1>
+        <p>Send us your details and we will review availability and costs with you.</p>
+    </header>
+
+    {% if submitted %}
+    <section class="booking-success" role="status">
+        <p class="booking-eyebrow">REQUEST RECEIVED</p>
+        <h2>Thank you, your request is with us.</h2>
+        <p>Booking reference <strong>#{{ submitted }}</strong>. Your request status is <strong>Under Review</strong>. We will review the details and contact you using the information provided.</p>
+        {% if request.args.get('email_sent') == 'yes' %}
+        <p>A complete copy of your request has been sent to your email address.</p>
+        {% else %}
+        <p>Your request is saved, but we could not send the email copy. Please contact CL Paints to confirm receipt.</p>
+        {% endif %}
+        <a class="btn primary" href="{{ url_for('booking_request') }}">Submit another request</a>
+    </section>
+    {% else %}
+    {% if error %}
+    <div class="booking-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form class="booking-form" method="post" action="{{ url_for('booking_request') }}">
+        <section class="booking-section">
+            <div class="booking-section-heading">
+                <span>01</span>
+                <div>
+                    <h2>Your request</h2>
+                    <p>Tell us whether you are checking a date or ready to book.</p>
+                </div>
+            </div>
+
+            <fieldset class="booking-fieldset">
+                <legend>What would you like to do?</legend>
+                <div class="booking-choice-grid">
+                    <label class="booking-choice">
+                        <input type="radio" name="request_type" value="availability" required {% if form_data.get('request_type') == 'availability' %}checked{% endif %}>
+                        <span>Check availability</span>
+                    </label>
+                    <label class="booking-choice">
+                        <input type="radio" name="request_type" value="booking" required {% if form_data.get('request_type') == 'booking' %}checked{% endif %}>
+                        <span>Make a booking</span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <div class="availability-check-panel" id="availabilityCheckPanel" hidden>
+                <h3>Quick availability check</h3>
+                <p>Enter the event details only. We will check accepted bookings for an overlap.</p>
+                <div class="booking-fields">
+                    <label class="booking-field">
+                        <span>Event date</span>
+                        <input type="date" name="availability_date" required>
+                    </label>
+                    <label class="booking-field">
+                        <span>Event type</span>
+                        <input name="availability_event_type" required placeholder="Birthday, festival, school fair...">
+                    </label>
+                    <label class="booking-field">
+                        <span>Start time</span>
+                        <input type="time" name="availability_start_time" required>
+                    </label>
+                    <label class="booking-field">
+                        <span>Finish time</span>
+                        <input type="time" name="availability_finish_time" required>
+                    </label>
+                    <label class="booking-field booking-field-wide">
+                        <span>Event address</span>
+                        <input class="address-autocomplete" name="availability_address" autocomplete="street-address" required>
+                        <small>{% if google_maps_api_key %}Google Maps address suggestions are enabled.{% else %}Enter the address manually; suggestions need a Google Maps API key.{% endif %}</small>
+                    </label>
+                </div>
+                <button class="btn primary" type="button" id="availabilityCheckButton">Check availability</button>
+                <p id="availabilityCheckResult" class="availability-check-result" role="status" aria-live="polite"></p>
+            </div>
+
+            <div class="booking-rate-note" data-full-booking>
+                <strong>Pricing options</strong>
+                <ul>
+                    <li>£45 per hour, charged to the client.</li>
+                    <li>Customers pay directly; no charge to the client.</li>
+                    <li>CL Paints pays a pitch or stall fee.</li>
+                    <li>Revenue sharing by separate agreement.</li>
+                </ul>
+                <p>All bookings require a minimum of two hours. Travel costs are confirmed during review.</p>
+            </div>
+        </section>
+
+        <section class="booking-section" data-full-booking>
+            <div class="booking-section-heading">
+                <span>02</span>
+                <div>
+                    <h2>Client details</h2>
+                    <p>We use these details to respond to your request.</p>
+                </div>
+            </div>
+
+            <div class="booking-fields">
+                <label class="booking-field">
+                    <span>Client type</span>
+                    <select name="client_type" required>
+                        <option value="">Choose one</option>
+                        <option value="individual" {% if form_data.get('client_type') == 'individual' %}selected{% endif %}>Private individual</option>
+                        <option value="business" {% if form_data.get('client_type') == 'business' %}selected{% endif %}>Business</option>
+                    </select>
+                </label>
+                <label class="booking-field" id="businessJobTitleField" hidden>
+                    <span>Job title</span>
+                    <input name="job_title" maxlength="120" value="{{ form_data.get('job_title', '') }}">
+                </label>
+                <label class="booking-field">
+                    <span>Title <small>Optional</small></span>
+                    <select name="title">
+                        <option value="">Select</option>
+                        {% for title in ['Mr', 'Mrs', 'Miss', 'Ms', 'Mx', 'Dr', 'Other'] %}
+                        <option value="{{ title }}" {% if form_data.get('title') == title %}selected{% endif %}>{{ title }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="booking-field">
+                    <span>First name</span>
+                    <input name="first_name" autocomplete="given-name" maxlength="100" required value="{{ form_data.get('first_name', '') }}">
+                </label>
+                <label class="booking-field">
+                    <span>Last name</span>
+                    <input name="last_name" autocomplete="family-name" maxlength="100" required value="{{ form_data.get('last_name', '') }}">
+                </label>
+                <label class="booking-field">
+                    <span>Date of birth</span>
+                    <input type="date" name="date_of_birth" required value="{{ form_data.get('date_of_birth', '') }}">
+                </label>
+                <fieldset class="booking-fieldset booking-field">
+                    <legend>I confirm I am aged 18 or over.</legend>
+                    <div class="booking-inline-choices">
+                        <label><input type="radio" name="is_over_18" value="yes" required {% if form_data.get('is_over_18') == 'yes' %}checked{% endif %}> Yes</label>
+                        <label><input type="radio" name="is_over_18" value="no" required {% if form_data.get('is_over_18') == 'no' %}checked{% endif %}> No</label>
+                    </div>
+                </fieldset>
+                <label class="booking-field">
+                    <span>Ethnic group</span>
+                    <select name="ethnicity" id="ethnicityGroup" required>
+                        <option value="">Choose one</option>
+                        {% for choice in ['Asian or Asian British', 'Black, Black British, Caribbean or African', 'Mixed or multiple ethnic groups', 'White', 'Other ethnic group', 'Prefer not to say'] %}
+                        <option value="{{ choice }}" {% if form_data.get('ethnicity') == choice %}selected{% endif %}>{{ choice }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="booking-field" id="ethnicityDetailField">
+                    <span>Ethnic background</span>
+                    <select name="ethnicity_detail" id="ethnicityDetail" data-initial-value="{{ form_data.get('ethnicity_detail', '') }}" required>
+                        <option value="">Choose an ethnic group first</option>
+                    </select>
+                </label>
+                <label class="booking-field">
+                    <span>Religion</span>
+                    <select name="religion" required>
+                        <option value="">Choose one</option>
+                        {% for choice in ['Christian', 'Muslim', 'Hindu', 'Sikh', 'Buddhist', 'Jewish', 'Other', 'No Religion', 'Prefer not to say'] %}
+                        <option value="{{ choice }}" {% if form_data.get('religion') == choice %}selected{% endif %}>{{ choice }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="booking-field booking-field-wide">
+                    <span>Home or business address</span>
+                    <input class="address-autocomplete" name="client_address" autocomplete="street-address" required value="{{ form_data.get('client_address', '') }}">
+                    <small>{% if google_maps_api_key %}Google Maps address suggestions are enabled.{% else %}Enter the address manually; suggestions need a Google Maps API key.{% endif %}</small>
+                </label>
+                <label class="booking-field">
+                    <span>Phone</span>
+                    <input type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="For example, +44 7700 900000" maxlength="50" required value="{{ form_data.get('phone', '') }}">
+                </label>
+                <label class="booking-field">
+                    <span>Email</span>
+                    <input type="email" name="email" autocomplete="email" maxlength="255" required value="{{ form_data.get('email', '') }}">
+                </label>
+            </div>
+        </section>
+
+        <section class="booking-section" data-full-booking>
+            <div class="booking-section-heading">
+                <span>03</span>
+                <div>
+                    <h2>Event details</h2>
+                    <p>Bookings require at least two hours.</p>
+                </div>
+            </div>
+
+            <fieldset class="booking-fieldset">
+                <legend>Is this a single-date booking?</legend>
+                <div class="booking-inline-choices">
+                    <label><input type="radio" name="single_date" value="yes" required {% if form_data.get('single_date', 'yes') == 'yes' %}checked{% endif %}> Yes, one date</label>
+                    <label><input type="radio" name="single_date" value="no" required {% if form_data.get('single_date') == 'no' %}checked{% endif %}> No, multiple dates</label>
+                </div>
+            </fieldset>
+
+            <label class="booking-field date-count-field" id="dateCountField" hidden>
+                <span>How many event dates?</span>
+                <input type="number" id="eventDateCount" min="2" max="10" value="2">
+            </label>
+
+            <label class="booking-same-details" id="sameDetailsField" hidden>
+                <input type="checkbox" id="sameEventDetails" name="same_event_details" value="yes">
+                <span>All dates have the same times, venue and event details</span>
+            </label>
+
+            <div class="event-day-list" id="eventDayList"></div>
+            <template id="eventDayTemplate">
+                <article class="event-day-card" data-event-day>
+                    <header><span data-day-number></span><h3>Event date</h3></header>
+                    <div class="booking-fields">
+                        <label class="booking-field">
+                            <span>Event date</span>
+                            <input type="date" data-event-field="date" required>
+                        </label>
+                    </div>
+                    <div data-day-details class="booking-fields event-day-details">
+                        <label class="booking-field">
+                            <span>Start time</span>
+                            <input type="time" data-event-field="start_time" required>
+                        </label>
+                        <label class="booking-field">
+                            <span>Finish time</span>
+                            <input type="time" data-event-field="finish_time" required>
+                        </label>
+                        <p class="event-day-duration booking-field-wide" data-duration-display>Duration: enter start and finish times</p>
+                        <label class="booking-field booking-field-wide">
+                            <span>Event address</span>
+                            <input class="address-autocomplete" data-event-field="event_address" autocomplete="street-address" required>
+                            <small>{% if google_maps_api_key %}Google Maps address suggestions are enabled.{% else %}Enter the address manually; suggestions need a Google Maps API key.{% endif %}</small>
+                        </label>
+                        <label class="booking-field">
+                            <span>Event type</span>
+                            <input data-event-field="event_type" maxlength="150" required placeholder="Birthday, festival, school fair...">
+                        </label>
+                        <label class="booking-field">
+                            <span>Theme</span>
+                            <input data-event-field="theme" maxlength="200" required placeholder="Enter a theme or N/A">
+                        </label>
+                        <label class="booking-field">
+                            <span>Does CL Paints pay a pitch fee for this date?</span>
+                            <select data-event-field="pitch_fee_required" required>
+                                <option value="">Choose one</option>
+                                <option value="no">No</option>
+                                <option value="yes">Yes, pitch fee applies</option>
+                            </select>
+                        </label>
+                        <label class="booking-field">
+                            <span>Expected attendees <small>Optional</small></span>
+                            <input type="number" min="0" data-event-field="expected_attendees">
+                        </label>
+                        <label class="booking-field">
+                            <span>Event setting</span>
+                            <select data-event-field="publicity_type" required>
+                                <option value="">Choose one</option>
+                                <option value="Public">Public</option>
+                                <option value="Private">Private</option>
+                            </select>
+                        </label>
+                        <label class="booking-field">
+                            <span>Painting location</span>
+                            <select data-event-field="location_type" required>
+                                <option value="">Choose one</option>
+                                <option value="Indoors">Indoors</option>
+                                <option value="Outdoors">Outdoors</option>
+                            </select>
+                        </label>
+                        <label class="booking-field">
+                            <span>Who pays for face painting?</span>
+                            <select data-event-field="charge_type" required>
+                                <option value="">Choose one</option>
+                                <option value="Client">Client</option>
+                                <option value="Customers">Customers</option>
+                            </select>
+                        </label>
+                        <label class="booking-field">
+                            <span>Do attendees celebrate Christmas and Easter?</span>
+                            <select data-event-field="celebrates_christmas_easter">
+                                <option value="">Choose one</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </label>
+                        <label class="booking-field booking-field-wide">
+                            <span>Additional information <small>Optional</small></span>
+                            <textarea rows="3" data-event-field="additional_info" placeholder="For a birthday, include the name, gender and age; or any gate or door access codes."></textarea>
+                        </label>
+                    </div>
+                    <p class="event-day-same-note" data-same-day-note hidden>Using the same event details as the first date.</p>
+                </article>
+            </template>
+            <input type="hidden" name="event_schedule" id="eventScheduleInput" value="{{ form_data.get('event_schedule', '') }}">
+
+        </section>
+
+        <section class="booking-section" data-full-booking>
+            <div class="booking-section-heading">
+                <span>04</span>
+                <div>
+                    <h2>Terms and payment preference</h2>
+                    <p>Review the event estimate and choose a payment preference. No payment is taken here.</p>
+                </div>
+            </div>
+
+            <div class="booking-price-preview" aria-live="polite">
+                <div><span>Total booked hours</span><strong id="totalBookedHours">0 hours</strong></div>
+                <div><span>Estimated event cost</span><strong id="estimatedEventCost">£0.00</strong></div>
+                <p>£45 per hour, excluding dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
+                <p id="paymentEstimate">Choose a payment arrangement to see the estimated amount.</p>
+            </div>
+
+            <label class="booking-field booking-payment-field">
+                <span>Preferred payment arrangement</span>
+                <select name="payment_preference" required>
+                    <option value="">Choose one</option>
+                    <option value="Full payment" {% if form_data.get('payment_preference') == 'Full payment' %}selected{% endif %}>Pay in full at booking</option>
+                    <option value="50% deposit" {% if form_data.get('payment_preference') == '50% deposit' %}selected{% endif %}>Pay a 50% deposit, balance on event date</option>
+                </select>
+            </label>
+
+            <div class="booking-referral-entry">
+                <label class="booking-field booking-payment-field">
+                    <span>Referral code <small>Optional</small></span>
+                    <input name="promo_code" id="referralCodeInput" maxlength="100" autocomplete="off" value="{{ form_data.get('promo_code', '') }}">
+                </label>
+                <button class="btn" type="button" id="verifyReferralButton">Verify code</button>
+                <p id="referralVerification" role="status" aria-live="polite"></p>
+            </div>
+
+            <details class="booking-legal">
+                <summary>Read the liability statement</summary>
+                <div class="booking-legal-copy">
+                    <h3>1. Product &amp; Safety Disclosure</h3>
+                    <p>CL Paints uses professional, cosmetic-grade, water-based, hypoallergenic face paints and cosmetic glitters intended for skin use. Products comply with applicable FDA (U.S.) and/or EU cosmetic safety regulations.</p>
+                    <p>All reasonable hygiene and sanitation procedures are followed, including cleaning and sanitizing tools between participants.</p>
+                    <p>However, cosmetic products may cause allergic reactions or skin irritation in rare cases.</p>
+                    <h3>2. Allergy &amp; Patch Test Notice</h3>
+                    <p>Participants with sensitive skin, known cosmetic allergies, or those being painted for the first time are strongly encouraged to request a patch test prior to full application.</p>
+                    <p>Patch tests are available upon request but do not guarantee that a reaction will not occur.</p>
+                    <p>By choosing to proceed without a patch test, you voluntarily accept all associated risks.</p>
+                    <h3>3. Health &amp; Contagious Conditions Policy</h3>
+                    <p>For health and safety reasons, CL Paints will NOT paint any individual with:</p>
+                    <ul>
+                        <li>Open wounds or broken skin</li>
+                        <li>Cold sores</li>
+                        <li>Runny noses</li>
+                        <li>Conjunctivitis (pink eye)</li>
+                        <li>Rashes, eczema flare-ups, dermatitis, or visible skin irritation</li>
+                        <li>Any contagious illness or infection</li>
+                    </ul>
+                    <p>CL Paints reserves the right to refuse service for health, hygiene, or safety reasons.</p>
+                    <h3>4. Age Restriction</h3>
+                    <p>CL Paints does not paint children under 3 (0-2) years of age due to skin sensitivity and safety concerns.</p>
+                    <p>A simple hand design may be offered at the artist's discretion as an alternative.</p>
+                    <p>Age verification may be requested.</p>
+                    <h3>5. Supervision Requirement</h3>
+                    <p>A parent or legal guardian must be present and actively supervising minors at all times. (18+)</p>
+                    <p>CL Paints does not provide childcare or supervision services.</p>
+                    <p>CL Paints is not responsible for injuries resulting from a child's movement during or after application.</p>
+                    <h3>6. Removal Instructions</h3>
+                    <p>All face paint should be removed before bedtime using mild soap and warm water.</p>
+                    <p>Avoid harsh scrubbing, baby wipes, alcohol, or abrasive cleansers.</p>
+                    <p>Some pigments (especially reds, blues, and greens) may temporarily tint the skin but will fade naturally.</p>
+                    <p>Failure to follow removal instructions may increase the risk of irritation. CL Paints is not responsible for issues resulting from improper removal.</p>
+                    <h3>7. Assumption of Risk</h3>
+                    <p>By agreeing below, I acknowledge:</p>
+                    <ul>
+                        <li>Cosmetic face painting involves inherent risks, including but not limited to allergic reactions, skin irritation, rash, swelling, staining, or delayed skin sensitivity.</li>
+                        <li>Participation is voluntary.</li>
+                        <li>I knowingly and voluntarily assume all risks, whether known or unknown.</li>
+                    </ul>
+                    <h3>8. Waiver &amp; Release of Liability</h3>
+                    <p>In consideration for receiving face painting services from CL Paints, I hereby:</p>
+                    <ul>
+                        <li>Release, waive, and discharge CL Paints, its owner(s), employees, contractors, and representatives from any and all claims, liabilities, damages, or causes of action arising from participation.</li>
+                        <li>Agree that CL Paints shall not be liable for allergic reactions, skin irritation, injuries, or other adverse effects.</li>
+                        <li>Agree to indemnify and hold harmless CL Paints from any claims brought on behalf of the participant.</li>
+                    </ul>
+                </div>
+            </details>
+
+            <details class="booking-legal">
+                <summary>Read CL Paints booking terms and conditions</summary>
+                <div class="booking-legal-copy">
+                    <h3>1. Booking eligibility</h3>
+                    <p>1.1 The person making the booking must be aged 18 or over.</p>
+                    <p>1.2 If CL Paints reasonably believes that a booking has been made by a person under the age of 18, we reserve the right to request suitable evidence of age and may refuse to provide the service where the booking requirements have not been met.</p>
+                    <p>1.3 The minimum age for a participant to receive face painting at a private event is 3 years old.</p>
+                    <h3>2. Booking information and attendance</h3>
+                    <p>2.1 The client is responsible for providing accurate information when making a booking, including the date, venue, times and a reasonable estimate of the number of people expected to attend.</p>
+                    <p>2.2 The estimated attendance provided by the client is used by CL Paints to assess the requirements and suitability of the booking.</p>
+                    <p>2.3 If the expected attendance changes significantly after the booking has been made, the client should inform CL Paints as soon as reasonably possible. We may recommend additional booking time where appropriate.</p>
+                    <p>2.4 The number of attendees stated on the booking form does not represent a guarantee that every attendee will receive face painting.</p>
+                    <p>2.5 CL Paints is booked to provide its service for the agreed period of time, rather than to complete a guaranteed number of face paints.</p>
+                    <p>2.6 The number of participants who can be painted during the booking will vary according to factors including the designs requested, participant cooperation and reasonable operational circumstances.</p>
+                    <h3>3. Booking duration</h3>
+                    <p>3.1 CL Paints will provide face-painting services between the agreed start and finish times stated on the confirmed booking.</p>
+                    <p>3.2 We will paint as many participants as reasonably possible during the agreed booking period.</p>
+                    <p>3.3 The presence of participants still waiting to be painted at the agreed finish time does not automatically extend the booking.</p>
+                    <p>3.4 Face painting will stop at the agreed booking finish time, regardless of whether participants remain waiting.</p>
+                    <p>3.5 Clients should therefore consider their expected attendance when deciding how much face-painting time to book.</p>
+                    <h3>4. Additional time and extensions</h3>
+                    <p>4.1 If additional face-painting time is required, the client may ask CL Paints to extend the booking.</p>
+                    <p>4.2 Additional time is entirely subject to availability. CL Paints is under no obligation to extend a booking beyond its agreed finish time.</p>
+                    <p>4.3 Additional time is available in 15-minute increments and will be charged at the applicable additional-time rate advised to the client.</p>
+                    <p>4.4 At the original agreed finish time, face painting will stop before any extension is discussed, confirmed or commenced.</p>
+                    <p>4.5 Before additional time begins, the client must confirm the amount of additional time requested, agree to the additional charge, and make the required payment.</p>
+                    <p>4.6 Face painting will only resume once the extension has been confirmed by CL Paints and payment has been received.</p>
+                    <p>4.7 Once confirmed, the agreed additional time will be added to the booking and a new finish time will apply.</p>
+                    <p>4.8 Purchasing additional time does not guarantee that every participant remaining in the queue will be painted.</p>
+                    <p>4.9 CL Paints may refuse an extension where another booking, travel requirements, staff availability, venue requirements or other reasonable operational circumstances prevent us from remaining at the event.</p>
+                    <h3>5. Arrival and set-up</h3>
+                    <p>5.1 CL Paints may arrive at the venue up to one hour before the agreed start time to allow adequate time for set-up.</p>
+                    <p>5.2 Reasonable set-up time before the agreed booking start time is not chargeable to the client.</p>
+                    <p>5.3 The client should ensure that CL Paints has reasonable access to the venue and the agreed working area in sufficient time to set up.</p>
+                    <h3>6. Deposits and payment</h3>
+                    <p>6.1 A deposit of 50% of the total booking price is required to secure the booking.</p>
+                    <p>6.2 The deposit will be requested using a payment link sent to the email address provided by the client.</p>
+                    <p>6.3 Unless otherwise agreed in writing, any outstanding booking balance is due on the event date.</p>
+                    <p>6.4 Accepted payment methods may include cash, card or bank transfer. Relevant payment information will be provided to the client.</p>
+                    <p>6.5 Additional time purchased during an event is payable before the additional service begins, in accordance with Section 4.</p>
+                    <p>6.6 Where an amount properly due remains unpaid, CL Paints reserves the right to take reasonable steps to recover the outstanding amount. This may include using an appropriate debt-recovery process where necessary.</p>
+                    <h3>7. Travel</h3>
+                    <p>7.1 Travel within the first 10 miles from CL Paints' trading address is included.</p>
+                    <p>7.2 For bookings located more than 10 miles from our trading address, a travel charge of £1.00 per one-way mile beyond the included 10 miles will apply, calculated using the shortest recommended driving route. For example, a venue 15 miles from our trading address would attract a £5 travel charge.</p>
+                    <p>7.3 The maximum travel charge is £50.</p>
+                    <p>7.4 Any applicable travel charge will be advised to and agreed with the client before the booking is confirmed or payment is taken.</p>
+                    <p>7.5 CL Paints reserves the right to decline bookings outside our normal operating area.</p>
+                    <h3>8. Cancellation by the client</h3>
+                    <p>8.1 If the client wishes to cancel a booking, a minimum of 48 hours' notice before the event is required.</p>
+                    <p>8.2 Cancellation should be provided to CL Paints by email.</p>
+                    <p>8.3 Where less than 48 hours' notice is provided, CL Paints reserves the right to retain the deposit, subject to the client's applicable statutory rights.</p>
+                    <h3>9. Cancellation by CL Paints</h3>
+                    <p>9.1 In the unlikely event that CL Paints has to cancel the booking and cannot provide the contracted service, any deposit paid for that service will be refunded.</p>
+                    <p>9.2 Nothing within these Terms &amp; Conditions affects any statutory rights available to the client.</p>
+                    <h3>10. Safety, allergies and health</h3>
+                    <p>10.1 Face painting involves the use of cosmetic products and, although CL Paints takes reasonable precautions, reactions or other incidents may still occur.</p>
+                    <p>10.2 Participants, parents or guardians are responsible for informing CL Paints before painting begins of any relevant allergies, skin sensitivities, illnesses or other circumstances which may affect whether face painting is suitable.</p>
+                    <p>10.3 CL Paints reserves the right to refuse to paint a participant where we reasonably consider that proceeding would present a health, hygiene or safety concern.</p>
+                    <p>10.4 Where appropriate following an accident or injury involving our service or equipment, CL Paints may record the incident and seek appropriate medical assistance where required.</p>
+                    <h3>11. Participant conduct</h3>
+                    <p>11.1 Participants must follow reasonable instructions provided by CL Paints relating to the safe delivery of the service.</p>
+                    <p>11.2 CL Paints operates a zero-tolerance policy towards abusive, threatening or inappropriate behaviour towards our staff, customers or property.</p>
+                    <p>11.3 CL Paints reserves the right to refuse service to an individual or, where reasonably necessary, cease providing services where abusive, threatening or unsafe behaviour occurs.</p>
+                    <p>11.4 Serious incidents may be reported to the venue, event organiser, police or other appropriate authorities where necessary.</p>
+                    <h3>12. Equipment and personal property</h3>
+                    <p>12.1 Equipment supplied and used by CL Paints remains the property of CL Paints.</p>
+                    <p>12.2 Participants and guests should not interfere with or use CL Paints equipment without permission.</p>
+                    <p>12.3 Where CL Paints equipment is deliberately or negligently damaged by a participant or guest, CL Paints may seek reasonable costs arising from that damage from the person responsible, where legally recoverable.</p>
+                    <p>12.4 Clients and participants remain responsible for looking after their own personal possessions. CL Paints will not be responsible for loss of or damage to personal property except where liability cannot lawfully be excluded.</p>
+                    <h3>13. Photography and video</h3>
+                    <p>13.1 CL Paints may offer clients and/or participants the opportunity to consent to photographs or video being taken for purposes such as our website, portfolio, social media or marketing.</p>
+                    <p>13.2 Photography and marketing consent is optional and is not a condition of receiving face-painting services.</p>
+                    <p>13.3 Where a child is involved, appropriate consent must be obtained from their parent or legal guardian before identifiable photographs or video are used by CL Paints for promotional purposes.</p>
+                    <h3>14. CCTV</h3>
+                    <p>14.1 Where CL Paints operates CCTV at an event, it may be used for legitimate purposes including security, crime prevention, incident investigation and safeguarding.</p>
+                    <p>14.2 CCTV footage will normally be retained for up to 28 days, unless it is reasonably necessary to retain particular footage for longer in connection with an incident, legal obligation or other legitimate requirement.</p>
+                    <p>14.3 Further information about the handling of personal information should be provided through CL Paints' applicable privacy information.</p>
+                    <h3>15. Weather and circumstances affecting the event</h3>
+                    <p>15.1 Where circumstances outside the reasonable control of CL Paints make it unsafe or impractical to continue providing the service, we may need to temporarily suspend or end face painting.</p>
+                    <p>15.2 This may include severe or unsuitable weather conditions affecting an outdoor event or other circumstances which create an unreasonable health or safety risk.</p>
+                    <p>15.3 Where the service has to end early in such circumstances, any adjustment to the amount payable will be considered according to the circumstances and the service already provided.</p>
+                    <h3>16. Revenue sharing</h3>
+                    <p>16.1 Where CL Paints and the client have expressly agreed a revenue-sharing arrangement for an event, the applicable arrangement will be agreed separately as part of the booking.</p>
+                    <p>16.2 Any amount due to the client under an agreed revenue-sharing arrangement will be calculated and paid using the agreed method following the relevant booking period.</p>
+                    <h3>17. Complaints</h3>
+                    <p>17.1 If a client wishes to make a complaint, they should contact CL Paints at info@clpaints.com or use the relevant contact/information form provided by CL Paints.</p>
+                    <p>17.2 Complaints will be handled professionally and personal information relating to a complaint will be handled appropriately and in accordance with applicable data-protection requirements.</p>
+                    <h3>18. General</h3>
+                    <p>18.1 These Terms &amp; Conditions form part of the agreement between CL Paints and the client for the provision of the booked services.</p>
+                    <p>18.2 Nothing in these Terms &amp; Conditions is intended to exclude or restrict any liability or consumer right which cannot legally be excluded or restricted.</p>
+                    <p>18.3 Where any provision of these Terms &amp; Conditions is found to be unenforceable, this will not necessarily affect the remaining provisions.</p>
+                </div>
+            </details>
+
+            <div class="booking-consents">
+                <label><input type="checkbox" name="liability_acknowledged" value="yes" required {% if form_data.get('liability_acknowledged') == 'yes' %}checked{% endif %}> I have read and acknowledge the liability statement.</label>
+                <label><input type="checkbox" name="terms_accepted" value="yes" required {% if form_data.get('terms_accepted') == 'yes' %}checked{% endif %}> I agree to the CL Paints booking terms and conditions.</label>
+            </div>
+
+            <label class="booking-field booking-signature">
+                <span>Type your full name as your signature</span>
+                <input name="signature" maxlength="200" required value="{{ form_data.get('signature', '') }}">
+            </label>
+
+            <p class="booking-payment-note">This form records your preferred payment arrangement only. It does not take payment or confirm a booking. CL Paints will calculate travel costs and contact you to confirm availability, final costs and payment.</p>
+            <button class="btn primary booking-submit" type="submit">Send booking request</button>
+        </section>
+    </form>
+    {% endif %}
+</main>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.querySelector(".booking-form");
+    if (!form) return;
+
+    const requestTypeInputs = form.querySelectorAll('[name="request_type"]');
+    const fullBookingSections = form.querySelectorAll("[data-full-booking]");
+    const availabilityPanel = document.getElementById("availabilityCheckPanel");
+    const availabilityButton = document.getElementById("availabilityCheckButton");
+    const availabilityResult = document.getElementById("availabilityCheckResult");
+    const businessType = form.querySelector('[name="client_type"]');
+    const jobTitleField = document.getElementById("businessJobTitleField");
+    const jobTitleInput = form.querySelector('[name="job_title"]');
+    const ethnicityGroup = document.getElementById("ethnicityGroup");
+    const ethnicityDetailField = document.getElementById("ethnicityDetailField");
+    const ethnicityDetail = document.getElementById("ethnicityDetail");
+    const singleDateInputs = form.querySelectorAll('[name="single_date"]');
+    const dateCountField = document.getElementById("dateCountField");
+    const dateCountInput = document.getElementById("eventDateCount");
+    const sameDetailsField = document.getElementById("sameDetailsField");
+    const sameDetailsInput = document.getElementById("sameEventDetails");
+    const dayList = document.getElementById("eventDayList");
+    const dayTemplate = document.getElementById("eventDayTemplate");
+    const scheduleInput = document.getElementById("eventScheduleInput");
+    let savedSchedule = { events: [] };
+    try {
+        savedSchedule = JSON.parse(scheduleInput.value || "{}");
+    } catch (error) {
+        savedSchedule = { events: [] };
+    }
+    if (savedSchedule.events?.length) {
+        const multipleDates = savedSchedule.events.length > 1;
+        form.querySelector(`[name="single_date"][value="${multipleDates ? "no" : "yes"}"]`).checked = true;
+        dateCountInput.value = savedSchedule.events.length;
+        sameDetailsInput.checked = Boolean(savedSchedule.same_details);
+    }
+    const totalHoursOutput = document.getElementById("totalBookedHours");
+    const totalCostOutput = document.getElementById("estimatedEventCost");
+    const paymentEstimate = document.getElementById("paymentEstimate");
+    const paymentChoice = form.querySelector('[name="payment_preference"]');
+    const referralInput = document.getElementById("referralCodeInput");
+    const referralButton = document.getElementById("verifyReferralButton");
+    const referralResult = document.getElementById("referralVerification");
+
+    const ethnicityBreakdowns = {
+        "Asian or Asian British": ["Bangladeshi", "Chinese", "Indian", "Pakistani", "Other Asian background"],
+        "Black, Black British, Caribbean or African": ["African", "Caribbean", "Other Black background"],
+        "Mixed or multiple ethnic groups": ["White and Asian", "White and Black African", "White and Black Caribbean", "Other mixed or multiple ethnic background"],
+        "White": ["English, Welsh, Scottish, Northern Irish or British", "Irish", "Gypsy or Irish Traveller", "Roma", "Other White background"],
+        "Other ethnic group": ["Arab", "Any other ethnic group"]
+    };
+
+    function setRequiredWithin(element, enabled) {
+        element.querySelectorAll("input, select, textarea").forEach((control) => {
+            if (control.dataset.bookingRequired === "true") {
+                control.required = enabled;
+            } else if (control.required) {
+                control.dataset.bookingRequired = "true";
+                control.required = enabled;
+            }
+        });
+    }
+
+    function syncRequestMode() {
+        const requestType = form.querySelector('[name="request_type"]:checked')?.value;
+        const availabilityMode = requestType === "availability";
+        const bookingMode = requestType === "booking";
+        availabilityPanel.hidden = !availabilityMode;
+        fullBookingSections.forEach((section) => {
+            section.hidden = !bookingMode;
+            section.querySelectorAll("input, select, textarea").forEach((control) => {
+                control.disabled = !bookingMode;
+            });
+        });
+        setRequiredWithin(availabilityPanel, availabilityMode);
+        availabilityResult.textContent = "";
+    }
+
+    requestTypeInputs.forEach((input) => input.addEventListener("change", syncRequestMode));
+    syncRequestMode();
+
+    function syncBusinessType() {
+        const isBusiness = businessType.value === "business";
+        jobTitleField.hidden = !isBusiness;
+        jobTitleInput.required = isBusiness;
+    }
+
+    businessType.addEventListener("change", syncBusinessType);
+    syncBusinessType();
+
+    function syncEthnicityDetail() {
+        const group = ethnicityGroup.value;
+        ethnicityDetail.replaceChildren();
+        const prompt = document.createElement("option");
+        prompt.value = "";
+        prompt.textContent = group ? "Choose a background" : "Choose an ethnic group first";
+        ethnicityDetail.append(prompt);
+
+        if (group === "Prefer not to say") {
+            const option = document.createElement("option");
+            option.value = option.textContent = "Prefer not to say";
+            ethnicityDetail.append(option);
+            ethnicityDetail.value = "Prefer not to say";
+            ethnicityDetailField.hidden = true;
+            ethnicityDetail.required = false;
+            return;
+        }
+
+        ethnicityDetailField.hidden = false;
+        ethnicityDetail.required = true;
+        (ethnicityBreakdowns[group] || []).forEach((choice) => {
+            const option = document.createElement("option");
+            option.value = option.textContent = choice;
+            ethnicityDetail.append(option);
+        });
+    }
+
+    ethnicityGroup.addEventListener("change", syncEthnicityDetail);
+    syncEthnicityDetail();
+    if (ethnicityDetail.dataset.initialValue) {
+        ethnicityDetail.value = ethnicityDetail.dataset.initialValue;
+    }
+
+    function isSingleDate() {
+        return form.querySelector('[name="single_date"]:checked')?.value !== "no";
+    }
+
+    function currentDayValues(card) {
+        const values = {};
+        card?.querySelectorAll("[data-event-field]").forEach((field) => {
+            values[field.dataset.eventField] = field.value;
+        });
+        return values;
+    }
+
+    function readSchedule() {
+        const cards = Array.from(dayList.querySelectorAll("[data-event-day]"));
+        const sameDetails = sameDetailsInput.checked;
+        const firstDay = currentDayValues(cards[0]);
+        return cards.map((card, index) => {
+            const values = currentDayValues(card);
+            const repeatedValues = sameDetails && index > 0 ? firstDay : values;
+            return {
+                date: values.date || "",
+                start_time: repeatedValues.start_time || "",
+                finish_time: repeatedValues.finish_time || "",
+                event_address: repeatedValues.event_address || "",
+                event_type: repeatedValues.event_type || "",
+                theme: repeatedValues.theme || "",
+                pitch_fee_required: repeatedValues.pitch_fee_required || "",
+                expected_attendees: repeatedValues.expected_attendees || "",
+                publicity_type: repeatedValues.publicity_type || "",
+                location_type: repeatedValues.location_type || "",
+                charge_type: repeatedValues.charge_type || "",
+                celebrates_christmas_easter: repeatedValues.celebrates_christmas_easter || "",
+                additional_info: repeatedValues.additional_info || ""
+            };
+        });
+    }
+
+    function updatePricing() {
+        const schedule = readSchedule();
+        let totalMinutes = 0;
+        let totalCost = 0;
+
+        schedule.forEach((eventDay) => {
+            const cards = dayList.querySelectorAll("[data-event-day]");
+            const card = cards[schedule.indexOf(eventDay)];
+            const durationDisplay = card?.querySelector("[data-duration-display]");
+            if (!eventDay.start_time || !eventDay.finish_time) {
+                if (durationDisplay) durationDisplay.textContent = "Duration: enter start and finish times";
+                return;
+            }
+            const [startHour, startMinute] = eventDay.start_time.split(":").map(Number);
+            const [finishHour, finishMinute] = eventDay.finish_time.split(":").map(Number);
+            const minutes = finishHour * 60 + finishMinute - startHour * 60 - startMinute;
+            if (minutes <= 0) {
+                if (durationDisplay) durationDisplay.textContent = "Duration: finish time must be later than start time";
+                return;
+            }
+            const dayHours = minutes / 60;
+            if (durationDisplay) {
+                durationDisplay.textContent = `Duration: ${Number.isInteger(dayHours) ? dayHours : dayHours.toFixed(2)} hours`;
+            }
+            totalMinutes += minutes;
+            if (eventDay.pitch_fee_required !== "yes") {
+                totalCost += (minutes / 60) * 45;
+            }
+        });
+
+        const hours = totalMinutes / 60;
+        totalHoursOutput.textContent = `${Number.isInteger(hours) ? hours : hours.toFixed(2)} hours`;
+        totalCostOutput.textContent = new Intl.NumberFormat("en-GB", {
+            style: "currency", currency: "GBP"
+        }).format(totalCost);
+
+        if (paymentChoice.value === "50% deposit") {
+            paymentEstimate.textContent = `Estimated 50% deposit: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(totalCost / 2)}. Travel will be added after review.`;
+        } else if (paymentChoice.value === "Full payment") {
+            paymentEstimate.textContent = `Estimated event total: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(totalCost)}. Travel will be added after review.`;
+        } else {
+            paymentEstimate.textContent = "Choose a payment arrangement to see the estimated amount.";
+        }
+    }
+
+    function renderEventDays() {
+        const previous = Array.from(dayList.querySelectorAll("[data-event-day]"), currentDayValues);
+        const dayCount = isSingleDate()
+            ? 1
+            : Math.max(2, Math.min(10, Number(dateCountInput.value) || 2));
+        dateCountField.hidden = isSingleDate();
+        sameDetailsField.hidden = isSingleDate() || dayCount < 2;
+        dayList.replaceChildren();
+
+        for (let index = 0; index < dayCount; index += 1) {
+            const card = dayTemplate.content.firstElementChild.cloneNode(true);
+            const dayValues = previous[index] || savedSchedule.events?.[index] || (sameDetailsInput.checked ? previous[0] || savedSchedule.events?.[0] : null) || {};
+            card.querySelector("[data-day-number]").textContent = `0${index + 1}`;
+            card.querySelector("h3").textContent = `Event day ${index + 1}`;
+            card.querySelectorAll("[data-event-field]").forEach((field) => {
+                const fieldName = field.dataset.eventField;
+                field.value = dayValues[fieldName] || "";
+                field.addEventListener("input", updatePricing);
+                field.addEventListener("change", updatePricing);
+            });
+            if (sameDetailsInput.checked && index > 0) {
+                const details = card.querySelector("[data-day-details]");
+                details.hidden = true;
+                details.querySelectorAll("input, select, textarea").forEach((field) => {
+                    field.disabled = true;
+                });
+                card.querySelector("[data-same-day-note]").hidden = false;
+            }
+            dayList.append(card);
+            if (window.initializeBookingAddressAutocomplete) {
+                window.initializeBookingAddressAutocomplete();
+            }
+        }
+
+        updatePricing();
+    }
+
+    singleDateInputs.forEach((input) => input.addEventListener("change", renderEventDays));
+    dateCountInput.addEventListener("input", renderEventDays);
+    sameDetailsInput.addEventListener("change", renderEventDays);
+    paymentChoice.addEventListener("change", updatePricing);
+    renderEventDays();
+
+    form.addEventListener("submit", (event) => {
+        if (form.querySelector('[name="request_type"]:checked')?.value === "availability") {
+            event.preventDefault();
+            checkAvailability();
+            return;
+        }
+        scheduleInput.value = JSON.stringify({
+            same_details: sameDetailsInput.checked,
+            events: readSchedule()
+        });
+    });
+
+    async function checkAvailability() {
+        if (!availabilityPanel.querySelector("input:invalid")) {
+            availabilityButton.disabled = true;
+            availabilityButton.textContent = "Checking...";
+            try {
+                const response = await fetch("/api/bookings/availability-check", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        date: form.elements.availability_date.value,
+                        start_time: form.elements.availability_start_time.value,
+                        finish_time: form.elements.availability_finish_time.value,
+                        address: form.elements.availability_address.value,
+                        event_type: form.elements.availability_event_type.value
+                    })
+                });
+                const result = await response.json();
+                availabilityResult.textContent = result.message || result.error;
+                availabilityResult.dataset.available = String(result.available ?? "");
+            } catch (error) {
+                availabilityResult.textContent = "We could not check availability right now. Please try again.";
+            } finally {
+                availabilityButton.disabled = false;
+                availabilityButton.textContent = "Check availability";
+            }
+        } else {
+            availabilityPanel.querySelector(":invalid")?.reportValidity();
+        }
+    }
+
+    availabilityButton.addEventListener("click", checkAvailability);
+
+    referralButton.addEventListener("click", async () => {
+        const code = referralInput.value.trim();
+        if (!code) {
+            referralResult.textContent = "Enter a referral code first.";
+            return;
+        }
+        referralButton.disabled = true;
+        referralResult.textContent = "Checking code...";
+        try {
+            const response = await fetch("/api/referrals/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code })
+            });
+            const result = await response.json();
+            referralResult.textContent = result.message;
+            referralResult.dataset.status = result.status;
+        } catch (error) {
+            referralResult.textContent = "Referral verification is unavailable. The code can be checked manually.";
+            referralResult.dataset.status = "not_configured";
+        } finally {
+            referralButton.disabled = false;
+        }
+    });
+
+    referralInput.addEventListener("input", () => {
+        referralResult.textContent = "";
+        delete referralResult.dataset.status;
+    });
+});
+
+window.initializeBookingAddressAutocomplete = function() {
+    if (!window.google?.maps?.importLibrary) return;
+
+    window.google.maps.importLibrary("places").then(({ PlaceAutocompleteElement }) => {
+        document.querySelectorAll(".address-autocomplete:not([data-autocomplete-attached])").forEach((input) => {
+            const autocomplete = new PlaceAutocompleteElement();
+            autocomplete.includedRegionCodes = ["gb"];
+            autocomplete.placeholder = "Search Google Maps for an address";
+            autocomplete.setAttribute("aria-label", "Search Google Maps address suggestions");
+            autocomplete.classList.add("booking-google-autocomplete");
+            input.parentNode.insertBefore(autocomplete, input);
+            input.placeholder = input.placeholder || "Selected address appears here; you can also type manually";
+
+            autocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
+                try {
+                    const place = placePrediction.toPlace();
+                    await place.fetchFields({ fields: ["formattedAddress"] });
+                    if (place.formattedAddress) {
+                        input.value = place.formattedAddress;
+                        input.dispatchEvent(new Event("input", { bubbles: true }));
+                        input.dispatchEvent(new Event("change", { bubbles: true }));
+                    }
+                } catch (error) {
+                    input.focus();
+                }
+            });
+            input.dataset.autocompleteAttached = "true";
+        });
+    }).catch(() => {});
+};
+</script>
+{% if google_maps_api_key %}
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initializeBookingAddressAutocomplete&amp;loading=async"></script>
+{% endif %}
+{% endblock %}

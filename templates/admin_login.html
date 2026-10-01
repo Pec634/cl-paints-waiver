@@ -6,62 +6,75 @@ Admin Login | CL Paints
 
 {% block body %}
 
-<div class="admin">
-    <main style="width:100%;">
-
-        <section class="panel" style="max-width:480px; margin:60px auto;">
-            <div style="text-align:center; margin-bottom:24px;">
-                <small>CL PAINTS MANAGEMENT SYSTEM</small>
-                <h1>Admin Login</h1>
-                <p>Enter your administrator password to continue.</p>
+<main class="login-screen">
+    <section class="login-panel">
+        <div class="login-heading">
+            <div class="brand login-brand">
+                CL <span>Paints</span>
             </div>
+            <small>CL PAINTS MANAGEMENT SYSTEM</small>
+            <h1>Admin Login</h1>
+            <p>Enter your administrator password to continue.</p>
+        </div>
 
-            {% if error %}
-                <div style="
-                    padding:12px;
-                    margin-bottom:18px;
-                    border-radius:8px;
-                    background:#fff0f0;
-                    border:1px solid #e0a0a0;
-                ">
-                    {{ error }}
-                </div>
-            {% endif %}
+        {% if error %}
+            <div class="login-error" role="alert">
+                {{ error }}
+            </div>
+        {% endif %}
+        {% if reset_success %}
+            <div class="login-notice" role="status">
+                Password reset successfully. Sign in with your new password.
+            </div>
+        {% endif %}
 
-            <form method="POST">
+        <form method="POST" class="login-form">
+            <label for="password">
+                <strong>Password</strong>
+            </label>
 
-                <label for="password">
-                    <strong>Password</strong>
-                </label>
+            <input
+                type="password"
+                id="password"
+                name="password"
+                required
+                autocomplete="current-password"
+                autofocus
+            >
 
-                <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    required
-                    autocomplete="current-password"
-                    autofocus
-                    style="
-                        width:100%;
-                        box-sizing:border-box;
-                        margin-top:8px;
-                        margin-bottom:20px;
-                        padding:12px;
-                    "
-                >
+            <button type="submit" class="btn login-submit">
+                Sign In
+            </button>
+        </form>
 
-                <button
-                    type="submit"
-                    class="btn"
-                    style="width:100%;"
-                >
-                    Sign In
-                </button>
+        <a class="login-recovery-link" href="{{ url_for('admin_password_reset_request') }}">Forgot password?</a>
+    </section>
+</main>
 
-            </form>
-        </section>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.querySelector(".login-form");
+    const screen = document.querySelector(".login-screen");
+    const submitButton = form.querySelector(".login-submit");
 
-    </main>
-</div>
+    form.addEventListener("submit", (event) => {
+        if (form.dataset.transitioning === "true") {
+            return;
+        }
+
+        event.preventDefault();
+        form.dataset.transitioning = "true";
+        screen.classList.add("is-submitting");
+        submitButton.disabled = true;
+        submitButton.textContent = "Signing In...";
+
+        const delay = window.matchMedia(
+            "(prefers-reduced-motion: reduce)"
+        ).matches ? 240 : 820;
+
+        window.setTimeout(() => form.submit(), delay);
+    });
+});
+</script>
 
 {% endblock %}

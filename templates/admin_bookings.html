@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Bookings | CL Paints
+{% endblock %}
+
+{% block body %}
+<div class="admin">
+    <aside>
+        <div class="brand light">CL <span>Paints</span></div>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
+            <a class="active" href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_events') }}">Events</a>
+            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
+            <a>Reports</a>
+            <a>Activity</a>
+            <a>Settings</a>
+            <a href="{{ url_for('admin_logout') }}">Logout</a>
+        </nav>
+    </aside>
+
+    <main>
+        <div class="top bookings-top">
+            <div>
+                <small>CL PAINTS MANAGEMENT SYSTEM</small>
+                <h1>Bookings</h1>
+                <p>Client requests submitted through the CL Paints booking form.</p>
+            </div>
+            <a class="btn primary" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form</a>
+        </div>
+
+        {% if request.args.get('updated') %}
+        <p class="booking-admin-notice" role="status">Booking updated.</p>
+        {% elif request.args.get('referral_added') %}
+        <p class="booking-admin-notice" role="status">Referral code {{ request.args.get('referral_added') }} is active.</p>
+        {% elif request.args.get('referral_imported') %}
+        <p class="booking-admin-notice" role="status">Imported {{ request.args.get('referral_imported') }} codes; skipped {{ request.args.get('referral_skipped', '0') }} rows.</p>
+        {% elif request.args.get('referral_error') %}
+        <p class="booking-admin-error" role="alert">The referral CSV could not be imported. Check that it is a UTF-8 CSV under 2 MB with a <code>code</code> or <code>referral_code</code> column.</p>
+        {% elif request.args.get('update_error') %}
+        <p class="booking-admin-error" role="alert">Check the mileage values or authorized CL Paints signature and try again.</p>
+        {% endif %}
+
+        <section class="stats">
+            <article>
+                <span>Total requests</span>
+                <strong>{{ booking_count }}</strong>
+            </article>
+            <article>
+                <span>Under review</span>
+                <strong>{{ new_booking_count }}</strong>
+            </article>
+            <article>
+                <span>Accepted</span>
+                <strong>{{ accepted_booking_count }}</strong>
+            </article>
+            <article>
+                <span>Declined</span>
+                <strong>{{ declined_booking_count }}</strong>
+            </article>
+        </section>
+
+        <section class="panel">
+            <details class="referral-code-manager">
+                <summary>Manage local referral codes</summary>
+                <p>Codes can be verified on booking requests after they are added here. Import existing codes from the referral system when that data is migrated.</p>
+                <form method="post" action="{{ url_for('admin_create_referral_code') }}" class="referral-code-form">
+                    <label class="booking-field">
+                        <span>Referral code</span>
+                        <input name="code" maxlength="100" required>
+                    </label>
+                    <label class="booking-field">
+                        <span>Expires on <small>Optional</small></span>
+                        <input type="date" name="expires_at">
+                    </label>
+                    <button class="btn" type="submit">Add or update code</button>
+                </form>
+                <form method="post" action="{{ url_for('admin_import_referral_codes') }}" enctype="multipart/form-data" class="referral-import-form">
+                    <label class="booking-field">
+                        <span>Import existing codes</span>
+                        <input type="file" name="referral_csv" accept=".csv,text/csv" required>
+                        <small>CSV headers: code, expires_at (optional), active (optional).</small>
+                    </label>
+                    <button class="btn" type="submit">Import CSV</button>
+                </form>
+                {% if referral_codes %}
+                <div class="table-wrap">
+                    <table class="waiver-table referral-code-table">
+                        <thead><tr><th>Code</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for code in referral_codes %}
+                            <tr>
+                                <td>{{ code.code }}</td>
+                                <td>{{ code.expires_at.strftime('%d/%m/%Y') if code.expires_at else 'No expiry' }}</td>
+                                <td>{{ 'Active' if code.active else 'Inactive' }}</td>
+                                <td>
+                                    {% if code.active %}
+                                    <form method="post" action="{{ url_for('admin_deactivate_referral_code', code_id=code.id) }}">
+                                        <button class="btn small" type="submit">Deactivate</button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </details>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <h2>Booking requests</h2>
+                    <p>Newest submissions appear first.</p>
+                </div>
+            </div>
+
+            <div class="waiver-tools">
+                <select id="bookingSearchType" aria-label="Search by">
+                    <option value="client">Client</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
+                    <option value="event">Event</option>
+                </select>
+                <input id="bookingSearch" type="search" placeholder="Search booking requests" autocomplete="off">
+            </div>
+
+            <div class="table-wrap">
+                <table class="waiver-table booking-table">
+                    <thead>
+                        <tr>
+                            <th>Date submitted</th>
+                            <th>Client</th>
+                            <th>Phone number</th>
+                            <th>Email</th>
+                            <th>Event address</th>
+                            <th>Event date</th>
+                            <th>Request</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in booking_rows %}
+                        {% set booking = row.booking %}
+                        <tr class="booking-row">
+                            <td>{{ booking.submitted_at.strftime("%d/%m/%Y %H:%M") }}</td>
+                            <td data-search-client>{{ booking.first_name }} {{ booking.last_name }}</td>
+                            <td data-search-phone>{{ booking.phone }}</td>
+                            <td data-search-email>{{ booking.email }}</td>
+                            <td data-search-event="{{ booking.event_type }} {{ booking.event_address }}">{{ booking.event_address }}</td>
+                            <td>{{ booking.event_date.strftime("%d/%m/%Y") }}</td>
+                            <td>{{ booking.status }}</td>
+                            <td>
+                                <details class="booking-detail">
+                                    <summary>View</summary>
+                                    <dl>
+                                        <dt>Request type</dt><dd>{{ "Availability" if booking.request_type == "availability" else "Booking" }}</dd>
+                                        <dt>Scheduled hours</dt><dd>{{ "%.2f"|format(row.total_hours) }} hours</dd>
+                                        {% for event in row.events %}
+                                        <dt>Day {{ loop.index }}</dt><dd>{{ event.date }} · {{ event.start_time }}–{{ event.finish_time }} · {{ event.event_address }}</dd>
+                                        <dt>Event</dt><dd>{{ event.event_type }}: {{ event.theme }}</dd>
+                                        <dt>Pitch fee</dt><dd>{{ "Yes" if event.pitch_fee_required else "No" }}</dd>
+                                        <dt>Attendees</dt><dd>{{ event.expected_attendees or "Not provided" }}</dd>
+                                        <dt>Setting</dt><dd>{{ event.publicity_type }}</dd>
+                                        <dt>Painting location</dt><dd>{{ event.location_type }}</dd>
+                                        <dt>Who pays</dt><dd>{{ event.charge_type }}</dd>
+                                        <dt>Christmas/Easter</dt><dd>{{ event.celebrates_christmas_easter or "Not provided" }}</dd>
+                                        <dt>Additional information</dt><dd>{{ event.additional_info or "None" }}</dd>
+                                        {% endfor %}
+                                        <dt>Same details each date</dt><dd>{{ "Yes" if row.same_details else "No" }}</dd>
+                                        <dt>Client type</dt><dd>{{ booking.client_type|title }}</dd>
+                                        <dt>Job title</dt><dd>{{ booking.job_title or "Not provided" }}</dd>
+                                        <dt>Client address</dt><dd>{{ booking.client_address }}</dd>
+                                        <dt>Event estimate</dt><dd>£{{ "%.2f"|format(booking.total_event_cost) }}</dd>
+                                        <dt>Travel charge</dt><dd>£{{ "%.2f"|format(booking.travel_charge) }}</dd>
+                                        <dt>Current total</dt><dd>£{{ "%.2f"|format(row.final_total) }}</dd>
+                                        <dt>Payment preference</dt><dd>{{ booking.payment_preference }}</dd>
+                                        <dt>Promo code</dt><dd>{{ booking.promo_code or "None" }}</dd>
+                                        <dt>Referral status</dt><dd>{{ "Verified" if booking.referral_verified else ("Pending migration" if booking.promo_code and booking.referral_verified is none else ("Invalid" if booking.promo_code else "Not provided")) }}</dd>
+                                        <dt>Ethnicity</dt><dd>{{ booking.ethnicity }}{% if booking.ethnicity_detail %} · {{ booking.ethnicity_detail }}{% endif %}</dd>
+                                        <dt>Religion</dt><dd>{{ booking.religion }}</dd>
+                                        <dt>Date of birth</dt><dd>{{ booking.date_of_birth.strftime("%d/%m/%Y") }}</dd>
+                                        <dt>Additional information</dt><dd>{{ booking.additional_info or "None" }}</dd>
+                                        <dt>Client signature</dt><dd>{{ booking.signature }}</dd>
+                                        <dt>CL Paints signature</dt><dd>{{ booking.company_signature or "Not signed" }}</dd>
+                                    </dl>
+                                </details>
+                                <details class="booking-detail booking-manage-detail">
+                                    <summary>Manage request</summary>
+                                    <form method="post" action="{{ url_for('admin_manage_booking', booking_id=booking.id) }}" class="booking-manage-form">
+                                        <label class="booking-field">
+                                            <span>Status</span>
+                                            <select name="status">
+                                                {% for status in ['Under Review', 'Accepted', 'Declined'] %}
+                                                <option value="{{ status }}" {% if booking.status == status %}selected{% endif %}>{{ status }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </label>
+                                        <fieldset class="travel-mileage-fields booking-field-wide">
+                                            <legend>Admin travel distance and charge</legend>
+                                            <p>Enter one-way road miles for each event day. First 10 miles per day are free; additional miles are £1 each, capped at £50 for the whole booking.</p>
+                                            {% for event in row.events %}
+                                            <label class="booking-field">
+                                                <span>Day {{ loop.index }} one-way miles</span>
+                                                <input type="number" name="travel_miles_{{ loop.index0 }}" min="0" max="10000" step="0.1" value="{{ event.travel_miles or '' }}">
+                                                <small>Charge: £{{ "%.2f"|format(event.travel_charge|float if event.travel_charge is defined else 0) }}</small>
+                                            </label>
+                                            {% endfor %}
+                                            <strong>Current capped travel total: £{{ "%.2f"|format(booking.travel_charge) }}</strong>
+                                        </fieldset>
+                                        <label class="booking-field booking-field-wide">
+                                            <span>Internal notes <small>Only visible to CL Paints</small></span>
+                                            <textarea name="internal_notes" rows="3">{{ booking.internal_notes or '' }}</textarea>
+                                        </label>
+                                        <label class="booking-field booking-field-wide">
+                                            <span>CL Paints signature <small>Client's signature above remains required and unchanged</small></span>
+                                            <input name="company_signature" maxlength="200" value="{{ booking.company_signature or '' }}">
+                                        </label>
+                                        <label class="booking-authority-check booking-field-wide">
+                                            <input type="checkbox" name="sign_on_behalf" value="yes">
+                                            <span>I am authorized to sign on behalf of CL Paints.</span>
+                                        </label>
+                                        <div class="booking-manage-actions">
+                                            <button class="btn small" type="submit" name="action" value="update">Update</button>
+                                            <button class="btn small primary" type="submit" name="action" value="accept">Accept</button>
+                                            <button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>
+                                        </div>
+                                    </form>
+                                </details>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td class="booking-empty" colspan="8">No booking requests have been submitted yet.</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const searchInput = document.getElementById("bookingSearch");
+    const searchType = document.getElementById("bookingSearchType");
+    const rows = document.querySelectorAll(".booking-row");
+    const selectors = {
+        client: "[data-search-client]",
+        email: "[data-search-email]",
+        phone: "[data-search-phone]",
+        event: "[data-search-event]"
+    };
+
+    function filterBookings() {
+        const query = searchInput.value.trim().toLowerCase();
+        const selector = selectors[searchType.value];
+
+        rows.forEach((row) => {
+            const text = row.querySelector(selector).textContent.toLowerCase();
+            row.hidden = !text.includes(query);
+        });
+    }
+
+    searchInput.addEventListener("input", filterBookings);
+    searchType.addEventListener("change", filterBookings);
+});
+</script>
+{% endblock %}

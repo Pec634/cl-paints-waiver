@@ -16,7 +16,7 @@ Event Management | CL Paints
         <nav>
             <a href="/">Dashboard</a>
             <a href="{{ url_for('admin_participants') }}">Participants</a>
-            <a>Bookings</a>
+            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
             <a class="active" href="/admin/events">Events</a>
             <a href="/admin/moodboard">Moodboard</a>
             <a>Reports</a>
@@ -59,6 +59,13 @@ Event Management | CL Paints
                     placeholder="Event name"
                 >
 
+                <input
+                    type="date"
+                    name="event_date"
+                    required
+                >
+
+
                 <button class="btn" type="submit">
                     Create Event
                 </button>
@@ -85,9 +92,9 @@ Event Management | CL Paints
                     <thead>
                         <tr>
                             <th>Event</th>
-                            <th>Status</th>
+                            <th>Event Date</th>
                             <th>Rename</th>
-                            <th>Change Status</th>
+                            <th>Waiver Status</th>
                             <th>Waiver Link</th>
                             <th>Moodboard</th>
                             <th>Delete</th>
@@ -103,11 +110,9 @@ Event Management | CL Paints
                             <td>
                                 <strong>{{ event.name }}</strong>
                             </td>
-
                             <td>
-                                {{ event.status }}
+                                {{ event.event_date.strftime("%d/%m/%Y") if event.event_date else "No date" }}
                             </td>
-
                             <td>
 
                                 <form

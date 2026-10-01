@@ -16,7 +16,7 @@ Participants | CL Paints
         <nav>
             <a href="/">Dashboard</a>
             <a class="active" href="{{ url_for('admin_participants') }}">Participants</a>
-            <a>Bookings</a>
+            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
             <a href="/admin/events">Events</a>
             <a href="/admin/moodboard">Moodboard</a>
             <a>Reports</a>
@@ -87,87 +87,84 @@ Participants | CL Paints
 
         </div>
 
-        <div class="table-wrap">
-            <table class="waiver-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Age</th>
-                        <th>Event</th>
-                        <th>Waiver Reference</th>
-                        <th>Waiver Date</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
+        {% if event_groups %}
+        <div class="participant-folders" id="participantFolders">
+            {% for event_id, group in event_groups.items() %}
+            <details class="participant-folder">
+                <summary>
+                    <span class="participant-folder-title">
+                        <strong>{{ group["event"] }}</strong>
+                        <span>{{ group["event_date"] or "Date not set" }}</span>
+                    </span>
+                    <span class="participant-folder-count">
+                        {{ group.participants|length }} participants
+                    </span>
+                </summary>
 
-                <tbody id="participantTableBody">
-                    {% if participants %}
-                        {% for participant in participants %}
-                        <tr>
-                            <td>
-                                <strong>
-                                    {{ participant.first_name }}
-                                    {{ participant.last_name }}
-                                </strong>
-                            </td>
-
-                            <td>{{ participant.age }}</td>
-
-                            <td>{{ participant.waiver.event_name }}</td>
-
-                            <td>
-                                {{ participant.waiver.waiver_reference }}
-                            </td>
-
-                            <td>
-                                {{ participant.waiver.signed_date.strftime("%d/%m/%Y") }}
-                            </td>
-
-                            <td>
-                                {{ participant.waiver.status }}
-                            </td>
-
-                            <td>
-                                <div 
-                                    class="participant-actions">
-                                
-                                    <a
-                                        class="btn small"
-                                        href="{{ url_for('admin_waiver_detail', waiver_id=participant.waiver.id) }}"
-                                    >
-                                        View Waiver
-                                    </a>
-
-                                    <button
-                                        type="button"
-                                        class="btn small archive-btn"
-                                        data-waiver-id="{{ participant.waiver.id }}"
-                                        data-waiver-reference="{{ participant.waiver.waiver_reference }}"
-                                    >
-                                        Archive Waiver
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        class="btn small delete-waiver-btn"
-                                        data-waiver-id="{{ participant.waiver.id }}"
-                                        data-waiver-reference="{{ participant.waiver.waiver_reference }}"
-                                    >
-                                        Delete Waiver
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="7">No participants have been recorded yet.</td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
+                <div class="table-wrap">
+                    <table class="waiver-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Age</th>
+                                <th>Event</th>
+                                <th>Waiver Reference</th>
+                                <th>Waiver Date</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for participant in group.participants %}
+                            <tr class="participant-row">
+                                <td>
+                                    <strong>
+                                        {{ participant.first_name }}
+                                        {{ participant.last_name }}
+                                    </strong>
+                                </td>
+                                <td>{{ participant.age }}</td>
+                                <td>{{ participant.waiver.event_name }}</td>
+                                <td>{{ participant.waiver.waiver_reference }}</td>
+                                <td>{{ participant.waiver.signed_date.strftime("%d/%m/%Y") }}</td>
+                                <td>{{ participant.waiver.status }}</td>
+                                <td>
+                                    <div class="participant-actions">
+                                        <a
+                                            class="btn small"
+                                            href="{{ url_for('admin_waiver_detail', waiver_id=participant.waiver.id) }}"
+                                        >
+                                            View Waiver
+                                        </a>
+                                        <button
+                                            type="button"
+                                            class="btn small archive-btn"
+                                            data-waiver-id="{{ participant.waiver.id }}"
+                                            data-waiver-reference="{{ participant.waiver.waiver_reference }}"
+                                        >
+                                            Archive Waiver
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn small delete-waiver-btn"
+                                            data-waiver-id="{{ participant.waiver.id }}"
+                                            data-waiver-reference="{{ participant.waiver.waiver_reference }}"
+                                        >
+                                            Delete Waiver
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {% endfor %}
         </div>
+        {% else %}
+        <p class="participant-empty">No participants have been recorded yet.</p>
+        {% endif %}
     </section>
 
 </main>
@@ -180,8 +177,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const searchType =
         document.getElementById("participantSearchType");
 
-    const rows =
-        document.querySelectorAll("#participantTableBody tr");
+    const folders =
+        document.querySelectorAll(".participant-folder");
 
     if (!searchInput || !searchType) {
         return;
@@ -194,34 +191,30 @@ document.addEventListener("DOMContentLoaded", () => {
         const selectedType =
             searchType.value;
 
-        rows.forEach((row) => {
-            const cells = row.querySelectorAll("td");
+        folders.forEach((folder) => {
+            const rows = folder.querySelectorAll(".participant-row");
+            let hasVisibleRows = false;
 
-            if (cells.length < 4) {
-                return;
+            rows.forEach((row) => {
+                const cells = row.querySelectorAll("td");
+                const columnIndex = {
+                    name: 0,
+                    event: 2,
+                    reference: 3
+                }[selectedType];
+                const textToSearch =
+                    cells[columnIndex].textContent.toLowerCase();
+                const matches = textToSearch.includes(searchValue);
+
+                row.hidden = !matches;
+                hasVisibleRows = hasVisibleRows || matches;
+            });
+
+            folder.hidden = !hasVisibleRows;
+
+            if (searchValue && hasVisibleRows) {
+                folder.open = true;
             }
-
-            let textToSearch = "";
-
-            if (selectedType === "name") {
-                textToSearch =
-                    cells[0].textContent.toLowerCase();
-            }
-
-            if (selectedType === "event") {
-                textToSearch =
-                    cells[2].textContent.toLowerCase();
-            }
-
-            if (selectedType === "reference") {
-                textToSearch =
-                    cells[3].textContent.toLowerCase();
-            }
-
-            row.style.display =
-                textToSearch.includes(searchValue)
-                    ? ""
-                    : "none";
         });
     }
 
