@@ -97,7 +97,7 @@ Participants | CL Paints
                         <span>{{ group["event_date"] or "Date not set" }}</span>
                     </span>
                     <span class="participant-folder-count">
-                        {{ group.participants|length }} participants
+                        {{ group["participants"]|length }} participants
                     </span>
                 </summary>
 
@@ -115,7 +115,7 @@ Participants | CL Paints
                             </tr>
                         </thead>
                         <tbody>
-                            {% for participant in group.participants %}
+                            {% for participant in group["participants"] %}
                             <tr class="participant-row">
                                 <td>
                                     <strong>

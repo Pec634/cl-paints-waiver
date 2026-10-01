@@ -192,6 +192,7 @@ class Participant(db.Model):
     )
 
 class Event(db.Model):
+    __tablename__ = "event"
     id = db.Column(db.Integer, primary_key=True)
     booking_id = db.Column(db.Integer, db.ForeignKey("booking.id"), nullable=True)
     booking_day_number = db.Column(db.Integer, nullable=True)
