@@ -52,6 +52,15 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     def context():
         return dict(client_account=current_account(), client_csrf=csrf())
 
+    @app.context_processor
+    def reward_link_context():
+        if request.endpoint != 'rewards.dashboard':
+            return {}
+        accounts = Account.query.order_by(Account.email).all()
+        by_id = {account.id: account for account in accounts}
+        return dict(reward_clients=accounts, reward_owners={owner.code: by_id.get(owner.client_id)
+                    for owner in Owner.query.all()}, client_csrf=csrf())
+
     @portal.route('/login', methods=['GET', 'POST'])
     @portal.route('/signup', methods=['GET', 'POST'], endpoint='signup')
     def login():
@@ -212,8 +221,19 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
             elif Enquiry.query.filter(Enquiry.client_id == account.id, Enquiry.created_at > datetime.now()-timedelta(minutes=1)).first():
                 error = 'Please wait a minute before sending another message.'
             else:
-                db.session.add(Enquiry(client_id=account.id, subject=subject, message=message))
+                enquiry = Enquiry(client_id=account.id, subject=subject, message=message)
+                db.session.add(enquiry)
                 db.session.commit()
+                notification = (
+                    f'New client enquiry #{enquiry.id}\n\n'
+                    f'From: {account.first_name} {account.last_name}\n'
+                    f'Email: {account.email}\nPhone: {account.phone or "Not provided"}\n'
+                    f'Subject: {subject}\n\n{message}\n\n'
+                    f'Review in the admin app: {url_for("admin_clients", _external=True)}#enquiry-{enquiry.id}\n'
+                    f'Reply to the client at {account.email}.'
+                )
+                if not send_email(settings()['contact_email'], f'CL Paints: new enquiry #{enquiry.id}', notification):
+                    app.logger.warning('Enquiry %s saved, but its email notification could not be sent.', enquiry.id)
                 flash('Your message has been saved for CL Paints to review.', 'success')
                 return redirect(url_for('client.contact'))
         return render_template('client/contact.html', error=error)
@@ -235,9 +255,14 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 else:
                     if owner is None:
                         db.session.add(Owner(code=code, client_id=account.id))
-                        db.session.commit()
+                        try:
+                            db.session.commit()
+                        except IntegrityError:
+                            db.session.rollback()
+                            flash('This code was linked by another request. Refresh and check its owner.', 'error')
+                            return redirect(url_for('rewards.dashboard' if request.form.get('return_to') == 'rewards' else 'admin_clients'))
                     flash('Referral code linked to the verified client account.', 'success')
-            return redirect(url_for('admin_clients'))
+            return redirect(url_for('rewards.dashboard' if request.form.get('return_to') == 'rewards' else 'admin_clients'))
         clients = Account.query.order_by(Account.first_name, Account.last_name).all()
         return render_template('admin_clients.html', clients=clients, enquiries=Enquiry.query.order_by(Enquiry.created_at.desc()).limit(50).all(),
                                accounts={a.id: a for a in clients}, owners=Owner.query.all(), client_csrf=csrf())

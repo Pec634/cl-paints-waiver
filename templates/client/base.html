@@ -3,6 +3,7 @@
 {% block body %}
 <div class="client-shell">
 <header class="client-header"><a class="client-brand" href="{{ url_for('client.dashboard') if client_account else url_for('client.login') }}"><img src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="" width="48" height="48"><strong>{{ business_settings.business_name }}</strong></a><small>YOUR CLIENT PORTAL</small>
+<p class="client-slogan">Bringing colour to life - One face at time</p>
 {% if client_account %}<nav aria-label="Client navigation">
 {% for endpoint, label in [('dashboard','Dashboard'),('bookings','Bookings'),('rewards','Rewards'),('contact','Contact us'),('account','My account')] %}<a {% if request.endpoint == 'client.' + endpoint %}class="active" aria-current="page"{% endif %} href="{{ url_for('client.' + endpoint) }}">{{ label }}</a>{% endfor %}
 <form method="post" action="{{ url_for('client.logout') }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button type="submit">Sign out</button></form>
@@ -11,6 +12,8 @@
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
 {% block content %}{% endblock %}
-</main><footer class="client-footer"><span>{{ business_settings.business_name }}</span><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a></footer>
+</main><footer class="client-footer"><div class="client-business-details"><strong>{{ business_settings.business_name }}</strong><span>Company number: 16615959</span><p>Business address: Suite 53c Abbey Road, London, England, NW10 7TR</p></div><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a></footer>
 </div>
+<script src="{{ url_for('static', filename='client-auth.js') }}" defer></script>
 {% endblock %}
+{% block brand_footer %}{% endblock %}

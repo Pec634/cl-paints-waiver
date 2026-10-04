@@ -27,7 +27,17 @@
     <div class="table-wrap rewards-table-wrap"><table class="waiver-table rewards-table">
         <thead><tr><th scope="col">Customer</th><th scope="col">Code</th><th scope="col">Booking usage</th><th scope="col">Event &amp; reward dates</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
         <tbody>{% for record in records %}
-            <tr><td data-label="Customer" class="rewards-customer">{{ record.customer_name }}</td><td data-label="Code"><strong class="rewards-code">{{ record.code }}</strong></td>
+            <tr><td data-label="Customer" class="rewards-customer">{{ record.customer_name }}
+                {% if reward_owners.get(record.code) %}<p>Linked email:<br>{{ reward_owners[record.code].email }}</p>
+                {% else %}<form class="client-form" method="post" action="{{ url_for('admin_clients') }}">
+                    <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+                    <input type="hidden" name="code" value="{{ record.code }}">
+                    <input type="hidden" name="return_to" value="rewards">
+                    <label>Client email<select name="client_id" required><option value="">Choose verified client</option>{% for client in reward_clients %}<option value="{{ client.id }}">{{ client.email }}</option>{% endfor %}</select></label>
+                    <button class="btn small" type="submit" {% if not reward_clients %}disabled{% endif %}>Link code</button>
+                    {% if not reward_clients %}<small>A client must sign up and verify their email first.</small>{% endif %}
+                </form>{% endif %}
+            </td><td data-label="Code"><strong class="rewards-code">{{ record.code }}</strong></td>
                 <td data-label="Booking usage">{% if record.booking_usage %}
                     <strong>Used in {{ record.booking_usage|length }} booking request{{ 's' if record.booking_usage|length != 1 }}</strong>
                     {% for booking in record.booking_usage %}

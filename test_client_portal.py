@@ -155,9 +155,26 @@ class ClientPortalTest(unittest.TestCase):
         self.client.post('/client/account', data={'csrf_token': self.csrf(), 'first_name': 'Test', 'last_name': 'Client',
             'phone': '01234', 'address': 'Test address'})
         self.assertEqual(main.ClientAccount.query.one().address, 'Test address')
-        self.client.post('/client/contact', data={'csrf_token': self.csrf(), 'subject': 'Booking help', 'message': 'Please help.'})
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            self.client.post('/client/contact', data={'csrf_token': self.csrf(), 'subject': 'Booking help', 'message': 'Please help.'})
+        self.assertEqual(send.call_args.args[0], main.get_business_settings()['contact_email'])
+        self.assertIn('client@example.com', send.call_args.args[2])
+        self.assertIn('Please help.', send.call_args.args[2])
+        self.assertIn('#enquiry-', send.call_args.args[2])
         self.assertEqual(main.ClientEnquiry.query.count(), 1)
         self.assertEqual(self.client.post('/client/logout', data={}).status_code, 400)
+
+    def test_enquiry_survives_notification_failure(self):
+        self.signup()
+        with patch.object(main, 'send_client_email', return_value=False) as send:
+            response = self.client.post('/client/contact', data={'csrf_token': self.csrf(),
+                'subject': 'Booking help', 'message': 'Please help.'})
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(main.ClientEnquiry.query.count(), 1)
+            send.assert_called_once()
+            self.client.post('/client/contact', data={'csrf_token': self.csrf(),
+                'subject': 'Duplicate', 'message': 'Please help.'})
+            send.assert_called_once()
 
 
 if __name__ == '__main__':

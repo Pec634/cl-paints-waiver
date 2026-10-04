@@ -2234,6 +2234,7 @@ label.moodboard-admin-card > div {
 .dashboard-main .top { margin-bottom: 24px; }
 .dashboard-date { color: var(--muted); font-size: .95rem; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 #dashboardClock { color: var(--navy); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dashboard-stats { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .dashboard-stats a { display: block; min-width: 0; }
 .dashboard-stats article { height: 100%; transition: border-color .15s; }
 .dashboard-stats a:hover article { border-color: var(--pink); }
@@ -2266,7 +2267,7 @@ label.moodboard-admin-card > div {
 @media (max-width: 1050px) { .dashboard-grid { grid-template-columns: minmax(0, 1fr); } .dashboard-upcoming { grid-column: auto; } }
 @media (max-width: 600px) {
     .dashboard-grid { gap: 16px; }
-    .dashboard-stats { gap: 10px; }
+    .dashboard-stats { gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dashboard-stats article { padding: 14px; }
     .dashboard-stats span { font-size: .85rem; }
     .dashboard-booking { flex-wrap: wrap; gap: 12px; }
@@ -2391,7 +2392,52 @@ label.moodboard-admin-card > div {
 .client-detail dd { margin: 0; font-weight: 700; }
 .client-message { white-space: pre-wrap; }
 .client-booking-banner { overflow-wrap: anywhere; margin-bottom: 20px; }
+.brand-slogan { padding: 20px; text-align: center; color: var(--muted); background: white; border-top: 3px solid var(--pink); font-size: .95rem; }
+.client-shell { background: radial-gradient(ellipse at 0% 15%, #ffe2ee 0, transparent 45%), radial-gradient(ellipse at 100% 60%, #eee3ff 0, transparent 45%), #fffaf6; }
+.client-header { background: linear-gradient(120deg, #10213f, #382154); border-bottom: 5px solid transparent; border-image: linear-gradient(90deg, #f52f83, #ffae47, #f9df67, #a379df) 1; }
+.client-brand img { width: 64px; height: 64px; box-shadow: 0 0 0 4px #ffffff24; }
+.client-slogan { width: 100%; margin: 0; color: #ffdfed; font-size: .95rem; line-height: 1.5; }
+.client-header nav a, .client-header nav button { border-radius: 100px; }
+.client-header nav a:hover, .client-header nav button:hover { background: #ffffff20; }
+.client-header nav .active { background: var(--pink); box-shadow: 0 4px 16px #f52f8338; }
+.client-main .panel { box-shadow: 0 8px 28px #56254d08; border-color: #eee1eb; }
+.client-main .btn { border-radius: 100px; transition: transform .18s, box-shadow .18s; }
+.client-main .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px #56254d18; }
+.client-welcome { position: relative; display: flex; gap: 32px; align-items: center; padding: clamp(24px, 4vw, 48px); border-radius: 28px; background: linear-gradient(125deg, #ffe4ef, #fff0ce 65%, #eee1ff); border: 1px solid #f5d8e5; overflow: hidden; }
+.client-welcome > div:first-child { flex: 1; min-width: 0; }
+.client-welcome small { font-size: .75rem; color: #973565; font-weight: 800; letter-spacing: .08em; }
+.client-welcome h1 { margin: 16px 0; font-size: clamp(2rem, 5vw, 3rem); }
+.client-welcome p { max-width: 560px; color: #58475d; }
+.client-welcome-art { flex: 0 0 200px; text-align: center; }
+.client-welcome-art img { max-width: 100%; height: auto; border-radius: 50%; box-shadow: 0 8px 0 #fff8, 0 18px 32px #96366320; animation: client-logo-arrive .7s ease-out both; }
+.client-welcome-art span { display: block; margin-top: 20px; font-weight: 800; color: #71395f; line-height: 1.5; }
+.client-summary article:first-child { border-top: 4px solid #f52f83; }
+.client-summary article:last-child { border-top: 4px solid #9364cd; }
+.client-main .client-auth { border-top: 5px solid var(--pink); background: linear-gradient(#fff7fb, white 220px); }
+.client-auth-logo { width: 144px; height: 144px; box-shadow: 0 0 0 8px #fff, 0 10px 28px #f52f8320; }
+.client-footer { background: #ffffffa8; }
+.client-business-details { display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.client-business-details p { margin: 0; line-height: 1.6; max-width: 560px; }
+.client-auth { position: relative; isolation: isolate; overflow: hidden; }
+.client-auth::before { content: ''; position: absolute; inset: -60px; z-index: -1; pointer-events: none; background: radial-gradient(circle at 15% 15%, #f52f8325, transparent 30%), radial-gradient(circle at 85% 50%, #a379df22, transparent 30%), radial-gradient(circle at 20% 85%, #ffd75c28, transparent 28%); animation: client-colour-drift 10s ease-in-out infinite alternate; }
+.client-auth-logo { animation: client-logo-float 5s ease-in-out infinite; }
+.client-action-status:empty { display: none; }
+.client-action-status { margin: 0; text-align: center; }
+.client-auth-sending .client-auth-logo { animation: client-logo-float 2s ease-in-out infinite; }
+.client-auth-sending button::after { content: ''; width: 18px; height: 18px; margin-left: 10px; border: 2px solid #ffffff60; border-top-color: white; border-radius: 50%; animation: client-action-spin .8s linear infinite; flex-shrink: 0; }
+.client-auth-sending { animation: client-action-glow 1.5s ease-in-out infinite alternate; }
+@keyframes client-colour-drift { to { transform: translate(18px, -16px) rotate(8deg); } }
+@keyframes client-logo-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-7px) rotate(2deg); } }
+@keyframes client-action-spin { to { transform: rotate(360deg); } }
+@keyframes client-action-glow { to { box-shadow: 0 8px 32px #f52f8330; } }
+@media (prefers-reduced-motion: reduce) { .client-auth::before, .client-auth-logo, .client-auth-sending, .client-auth-sending .client-auth-logo, .client-auth-sending button::after { animation: none; } }
+@keyframes client-logo-arrive { from { opacity: 0; transform: translateY(10px) rotate(-5deg); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .client-welcome-art img { animation: none; } .client-main .btn { transition: none; } .client-main .btn:hover { transform: none; } }
 @media (max-width: 650px) {
+    .client-welcome { flex-direction: column; align-items: stretch; gap: 24px; padding: 24px; }
+    .client-welcome-art { flex: auto; display: flex; align-items: center; justify-content: center; gap: 20px; }
+    .client-welcome-art img { width: 100px; height: 100px; }
+    .client-welcome-art span { margin: 0; text-align: left; }
     .client-header { padding: 16px; }
     .client-header > small { display: none; }
     .client-header nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

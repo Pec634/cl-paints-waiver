@@ -575,9 +575,18 @@ def admin_dashboard():
                 upcoming.append({"booking": booking, "event": event, "date": event_date})
     upcoming.sort(key=lambda item: (item["date"], item["event"].get("start_time", "")))
     reward_count = fetch_one("SELECT COUNT(*) AS total FROM referrals WHERE status = 'earned'")["total"]
+    correspondence = db.session.query(ClientEnquiry, ClientAccount).join(
+        ClientAccount, ClientAccount.id == ClientEnquiry.client_id).order_by(
+        ClientEnquiry.created_at.desc(), ClientEnquiry.id.desc()).limit(5).all()
     return render_template(
         "admin_dashboard.html", today=today,
+        recent_correspondence=correspondence,
+        correspondence_week_count=ClientEnquiry.query.filter(
+            ClientEnquiry.created_at >= datetime.now() - timedelta(days=7)).count(),
         pending_count=pending_query.count(),
+        client_signup_count=ClientAccount.query.count(),
+        client_signup_month_count=ClientAccount.query.filter(
+            ClientAccount.created_at >= datetime.combine(today.replace(day=1), datetime.min.time())).count(),
         upcoming_event_count=Event.query.filter(Event.event_date >= today, Event.status != "Closed").count(),
         valid_waiver_count=valid_waivers.count(), reward_count=reward_count,
         pending_bookings=pending_query.order_by(Booking.submitted_at.asc()).limit(5).all(),
@@ -597,6 +606,7 @@ def waiver():
     <body style="font-family: Arial, sans-serif; text-align:center; padding:60px 20px;">
         <h1>CL Paints</h1>
         <p>Please use the waiver link or QR code provided for your event.</p>
+        <footer>Bringing colour to life - One face at time</footer>
     </body>
     </html>
     """
@@ -2375,7 +2385,7 @@ def send_client_email(to, subject, body):
         resend.Emails.send({'from': 'CL Paints <info@clpaints.com>', 'to': [to], 'subject': subject, 'text': body})
         return True
     except Exception:
-        app.logger.warning('Client verification email delivery failed.')
+        app.logger.warning('Client email delivery failed.')
         return False
 
 
