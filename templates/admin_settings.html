@@ -5,8 +5,18 @@
 {% endmacro %}
 {% block body %}
 <div class="admin"><aside><div class="brand light">CL <span>Paints</span></div><nav>
-<a href="/">Dashboard</a><a href="{{ url_for('admin_participants') }}">Participants</a><a href="{{ url_for('admin_bookings') }}">Bookings</a><a href="{{ url_for('admin_rewards') }}">Rewards</a><a href="{{ url_for('admin_events') }}">Events</a><a href="{{ url_for('admin_moodboard') }}">Moodboard</a><a href="{{ url_for('admin_reports') }}">Reports</a><a class="active" href="{{ url_for('admin_settings') }}">Settings</a><a href="{{ url_for('admin_logout') }}">Logout</a>
-</nav></aside><main class="settings-main">
+            <a href="/">Dashboard</a>
+            <hr class="admin-nav-divider">
+            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_events') }}">Events</a>
+            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
+            <a class="active" href="{{ url_for('admin_settings') }}">Settings</a>
+            <hr class="admin-nav-divider">
+            <a href="{{ url_for('admin_logout') }}">Logout</a>
+        </nav></aside><main class="settings-main">
 <header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Settings</h1><p>Manage your business details, booking rules and admin account.</p></div></header>
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
 <p class="report-note">Pricing changes apply to new booking requests. Existing bookings keep their saved event estimates and travel rules. Service credentials remain in your server configuration.</p>

@@ -2355,3 +2355,4 @@ label.moodboard-admin-card > div {
     .login-art-screen.is-submitting .login-panel { opacity: 1; transform: none; }
     .login-art-screen.is-submitting .login-burst { display: none; }
 }
+.admin-nav-divider { width: 100%; margin: 10px 0; border: 0; border-top: 1px solid rgba(219, 229, 243, .25); grid-column: 1 / -1; }

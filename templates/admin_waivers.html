@@ -15,13 +15,15 @@ Waiver Management | CL Paints
 
         <nav>
             <a href="/">Dashboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
+            <hr class="admin-nav-divider">
             <a href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
             <a href="/admin/events">Events</a>
             <a href="/admin/moodboard">Moodboard</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
             <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
             <a href="{{ url_for('admin_settings') }}">Settings</a>
+            <hr class="admin-nav-divider">
             <a href="/admin/logout">Logout</a>
         </nav>
     </aside>

@@ -15,16 +15,18 @@ Event Moodboard | CL Paints
         </div>
 
             <nav>
-                <a href="/">Dashboard</a>
-                <a>Participants</a>
-                <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="/">Dashboard</a>
+            <hr class="admin-nav-divider">
+            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a class="active" href="/admin/events">Events</a>
+            <a class="active" href="/admin/moodboard">Moodboard</a>
+            <a>Participants</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a>
             <a href="{{ url_for('admin_rewards') }}">Rewards</a>
-                <a class="active" href="/admin/events">Events</a>
-                <a class="active" href="/admin/moodboard">Moodboard</a>
-                <a href="{{ url_for('admin_reports') }}">Reports</a>
-                <a href="{{ url_for('admin_settings') }}">Settings</a>
-                <a href="/admin/logout">Logout</a>
-            </nav>
+            <a href="{{ url_for('admin_settings') }}">Settings</a>
+            <hr class="admin-nav-divider">
+            <a href="/admin/logout">Logout</a>
+        </nav>
 
     </aside>
 

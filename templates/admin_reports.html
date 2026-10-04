@@ -10,8 +10,18 @@
 {% endmacro %}
 {% block body %}
 <div class="admin"><aside><div class="brand light">CL <span>Paints</span></div><nav>
-<a href="/">Dashboard</a><a href="{{ url_for('admin_participants') }}">Participants</a><a href="{{ url_for('admin_bookings') }}">Bookings</a><a href="{{ url_for('admin_rewards') }}">Rewards</a><a href="{{ url_for('admin_events') }}">Events</a><a href="{{ url_for('admin_moodboard') }}">Moodboard</a><a class="active" href="{{ url_for('admin_reports') }}">Reports</a><a href="{{ url_for('admin_settings') }}">Settings</a><a href="{{ url_for('admin_logout') }}">Logout</a>
-</nav></aside><main class="reports-main">
+            <a href="/">Dashboard</a>
+            <hr class="admin-nav-divider">
+            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_events') }}">Events</a>
+            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
+            <a class="active" href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
+            <a href="{{ url_for('admin_settings') }}">Settings</a>
+            <hr class="admin-nav-divider">
+            <a href="{{ url_for('admin_logout') }}">Logout</a>
+        </nav></aside><main class="reports-main">
 <header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Reports</h1><p>Understand your bookings, participants, referrals and client locations.</p></div><a class="btn" href="{{ url_for('export_reports', period=period, start=start.isoformat(), end=end.isoformat(), location=location_source, setting=setting) }}">Export CSV</a></header>
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}

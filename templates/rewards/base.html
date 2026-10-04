@@ -6,13 +6,15 @@
         <div class="brand light">CL <span>Paints</span></div>
         <nav>
             <a href="/">Dashboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
+            <hr class="admin-nav-divider">
             <a href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a class="active" href="{{ url_for('rewards.dashboard') }}">Rewards</a>
             <a href="{{ url_for('admin_events') }}">Events</a>
             <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
             <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a class="active" href="{{ url_for('rewards.dashboard') }}">Rewards</a>
             <a href="{{ url_for('admin_settings') }}">Settings</a>
+            <hr class="admin-nav-divider">
             <a href="{{ url_for('admin_logout') }}">Logout</a>
         </nav>
     </aside>
