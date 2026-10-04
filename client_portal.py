@@ -145,6 +145,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 session['client_id'] = account.id
                 session['client_signed_in'] = now.timestamp()
                 session['client_csrf'] = secrets.token_urlsafe(32)
+                flash('You’re signed in. Welcome to your colourful corner of CL Paints!', 'client_login_success')
                 return redirect(url_for('client.account' if not account.phone or not account.address else 'client.dashboard'))
             except ValueError as problem:
                 db.session.rollback()
@@ -166,11 +167,16 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     def dashboard(account):
         bookings = owned_bookings(account).all()
         upcoming = []
+        today = datetime.now().date()
         for booking in bookings:
             if booking.status == 'Accepted':
                 for event in schedule_events(booking):
-                    if str(event.get('date', '')) >= datetime.now().date().isoformat():
-                        upcoming.append(dict(booking=booking, event=event))
+                    try:
+                        event_date = datetime.strptime(event.get('date', ''), '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        continue
+                    if event_date >= today:
+                        upcoming.append(dict(booking=booking, event=event, days_until=(event_date - today).days))
         upcoming.sort(key=lambda item: (item['event']['date'], item['event'].get('start_time', '')))
         return render_template('client/dashboard.html', bookings=bookings[:3], upcoming=upcoming[:3],
                                pending=sum(b.status == 'Under Review' for b in bookings), rewards=owned_rewards(account))

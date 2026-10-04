@@ -2418,7 +2418,50 @@ label.moodboard-admin-card > div {
 .client-footer { background: #ffffffa8; }
 .client-business-details { display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .client-business-details p { margin: 0; line-height: 1.6; max-width: 560px; }
+.client-countdown { background: linear-gradient(120deg, #fff0cf, #ffe7f0); margin-bottom: 24px; }
+.client-countdown small { font-weight: 800; color: #973565; letter-spacing: .06em; }
+.client-countdown h2 { font-size: clamp(1.8rem, 5vw, 2.4rem); margin: 14px 0; }
+.client-booking-progress { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 0; gap: 16px; }
+.client-booking-progress li { display: grid; justify-items: start; gap: 12px; padding: 16px 0; border-top: 4px solid var(--border); color: var(--muted); font-weight: 700; }
+.client-booking-progress li span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #edf0f6; }
+.client-booking-progress .complete { border-color: #18a566; color: #14794e; }
+.client-booking-progress .complete span { background: #e6f7ee; }
+.client-booking-progress .current { border-color: var(--pink); color: #b91660; }
+.client-booking-progress .current span { background: #ffe7f0; }
+.client-booking-progress .declined { border-color: #b85c25; color: #994719; }
+@media (max-width: 650px) { .client-booking-progress { grid-template-columns: 1fr; gap: 8px; } .client-booking-progress li { display: flex; align-items: center; padding: 12px 0; } }
 .client-auth { position: relative; isolation: isolate; overflow: hidden; }
+.client-paint-scene { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.client-brush-reveal { animation: client-brush-reveal .9s ease-out both; }
+@keyframes client-brush-reveal { from { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); } to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); } }
+.client-mail-animation { display: none; }
+.client-code-painting { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; pointer-events: none; }
+.client-painted-digit { position: relative; height: 52px; display: grid; place-items: center; font-size: 1.5rem; font-weight: 800; color: #a51458; border-bottom: 3px solid #eddae5; border-radius: 8px; background: #fff5fa; isolation: isolate; }
+.client-painted-digit:nth-child(2n) { color: #71429d; }
+.client-painted-digit.has-digit { border-color: #f52f83; }
+.client-painted-digit.is-painting::before { content: ''; position: absolute; inset: 8px 0; z-index: -1; background: #ffc7df; clip-path: polygon(0 8%, 100% 0, 96% 85%, 0 100%); transform-origin: left; animation: client-digit-stroke .55s ease-out both; }
+.client-painted-digit.is-painting::after { content: ''; position: absolute; top: 2px; left: 0; width: 8px; height: 26px; background: linear-gradient(to bottom, #71429d 0 55%, #aab1c1 55% 70%, #f52f83 70%); border-radius: 3px 3px 1px 1px; transform: rotate(-30deg); animation: client-digit-brush .55s ease-out both; }
+@keyframes client-digit-stroke { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes client-digit-brush { 0% { left: 0; opacity: 1; } 80% { left: calc(100% - 8px); opacity: 1; } 100% { left: calc(100% - 8px); opacity: 0; } }
+.client-auth-sending .client-mail-animation { display: block; position: relative; width: 46px; height: 32px; margin: 4px auto; border: 2px solid #b91660; border-radius: 5px; background: #ffe7f0; animation: client-mail-flight 1.8s ease-in-out infinite; }
+.client-mail-animation::before { content: ''; position: absolute; top: -1px; left: 6px; width: 28px; height: 20px; background: #f7afd0; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+@keyframes client-mail-flight { 0%, 100% { opacity: .4; transform: translate(-20px, 8px) rotate(-8deg); } 30% { opacity: 1; transform: translate(0, 0) rotate(0); } 80% { opacity: 0; transform: translate(36px, -16px) rotate(12deg); } }
+.client-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+.client-confetti span { position: absolute; top: -20px; width: 10px; height: 16px; background: var(--paint); border-radius: 60% 40% 60% 40%; animation: client-confetti-fall 1.8s var(--delay) ease-in both; }
+@keyframes client-confetti-fall { from { transform: translate(0, -20px) rotate(0); opacity: 1; } to { transform: translate(var(--drift), 75vh) rotate(330deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .client-brush-reveal, .client-auth-sending .client-mail-animation { animation: none; } }
+.client-paint-bubble { position: absolute; left: var(--left); top: var(--top); width: var(--size); height: var(--size); background: var(--paint); opacity: .16; border-radius: 38% 62% 65% 35% / 45% 35% 65% 55%; animation: client-paint-dance var(--duration) var(--delay) ease-in-out infinite; }
+.client-logo-halo { position: relative; width: 166px; height: 166px; margin: 0 auto 28px; display: grid; place-items: center; isolation: isolate; }
+.client-logo-halo::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(#f52f83, #ffb43f, #ffe876, #40c9bf, #a379df, #f52f83); animation: client-action-spin 12s linear infinite; z-index: -1; }
+.client-logo-halo::after { content: ''; position: absolute; inset: 5px; background: #fff7fb; border-radius: 50%; z-index: -1; }
+.client-logo-halo .client-auth-logo { margin: 0; box-shadow: 0 8px 22px #96366325; }
+.client-auth-sending .client-logo-halo::before { animation-duration: 2s; }
+.client-paint-drop { position: absolute; width: 9px; height: 14px; border-radius: 65% 35% 50% 50%; background: var(--paint); pointer-events: none; z-index: 2; animation: client-paint-burst .9s ease-out both; }
+.client-auth { animation: client-card-arrive .6s ease-out both; }
+@keyframes client-paint-dance { 0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); } 50% { transform: translate(-12px, -30px) rotate(90deg) scale(1.2); } }
+@keyframes client-paint-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(.4); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(160deg) scale(1); } }
+@keyframes client-card-arrive { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .client-auth, .client-paint-bubble, .client-logo-halo::before { animation: none !important; } }
 .client-auth::before { content: ''; position: absolute; inset: -60px; z-index: -1; pointer-events: none; background: radial-gradient(circle at 15% 15%, #f52f8325, transparent 30%), radial-gradient(circle at 85% 50%, #a379df22, transparent 30%), radial-gradient(circle at 20% 85%, #ffd75c28, transparent 28%); animation: client-colour-drift 10s ease-in-out infinite alternate; }
 .client-auth-logo { animation: client-logo-float 5s ease-in-out infinite; }
 .client-action-status:empty { display: none; }

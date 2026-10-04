@@ -9,7 +9,7 @@
 <form method="post" action="{{ url_for('client.logout') }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button type="submit">Sign out</button></form>
 </nav>{% endif %}</header>
 <main class="client-main">
-{% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
+{% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}{% if category == 'client_login_success' %} client-login-celebration{% endif %}" role="status">{{ message }}</p>{% endfor %}
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
 {% block content %}{% endblock %}
 </main><footer class="client-footer"><div class="client-business-details"><strong>{{ business_settings.business_name }}</strong><span>Company number: 16615959</span><p>Business address: Suite 53c Abbey Road, London, England, NW10 7TR</p></div><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a></footer>
