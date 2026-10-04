@@ -4,4 +4,5 @@ __pycache__/
 *.pyc
 instance/
 .vscode/
+*.db
 ADMIN_PASSWORD=your-admin
