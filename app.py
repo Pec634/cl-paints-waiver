@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for, abort
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
@@ -298,6 +298,43 @@ class ReportLocation(db.Model):
 class BusinessSetting(db.Model):
     key = db.Column(db.String(50), primary_key=True)
     value = db.Column(db.Text, nullable=False)
+
+
+class ClientAccount(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), nullable=False, unique=True)
+    first_name = db.Column(db.String(100), nullable=False)
+    last_name = db.Column(db.String(100), nullable=False)
+    phone = db.Column(db.String(50), nullable=False, default="")
+    address = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+
+class ClientLoginCode(db.Model):
+    id = db.Column(db.String(64), primary_key=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    first_name = db.Column(db.String(100), nullable=False, default="")
+    last_name = db.Column(db.String(100), nullable=False, default="")
+    mode = db.Column(db.String(10), nullable=False)
+    code_hash = db.Column(db.String(64), nullable=False)
+    ip_hash = db.Column(db.String(64), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    consumed = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class ClientRewardOwner(db.Model):
+    code = db.Column(db.String(100), primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('client_account.id'), nullable=False, index=True)
+
+
+class ClientEnquiry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('client_account.id'), nullable=False)
+    subject = db.Column(db.String(150), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
 class AdminCredential(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1404,7 +1441,16 @@ def send_booking_request_confirmation(booking):
 def booking_request():
     settings = get_business_settings()
     pricing_rules = {key: settings[key] for key in ['hourly_rate', 'minimum_hours', 'max_event_dates', 'free_miles', 'mile_rate', 'travel_cap']}
-    form_data = request.form if request.method == "POST" else {}
+    portal_account = get_current_client()
+    if portal_account and request.method == 'POST':
+        import hmac
+        if not session.get('client_csrf') or not hmac.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
+            abort(400)
+    form_data = request.form if request.method == "POST" else ({
+        'first_name': portal_account.first_name, 'last_name': portal_account.last_name,
+        'email': portal_account.email, 'phone': portal_account.phone,
+        'client_address': portal_account.address,
+    } if portal_account else {})
     error = None
 
     if request.method == "POST":
@@ -1416,7 +1462,7 @@ def booking_request():
             client_type = request.form.get("client_type", "")
             first_name = request.form.get("first_name", "").strip()
             last_name = request.form.get("last_name", "").strip()
-            email = request.form.get("email", "").strip()
+            email = portal_account.email if portal_account else request.form.get("email", "").strip()
             phone = request.form.get("phone", "").strip()
             client_address = request.form.get("client_address", "").strip()
             job_title = request.form.get("job_title", "").strip()
@@ -1647,6 +1693,8 @@ def booking_request():
             db.session.add(booking)
             db.session.commit()
             email_sent = send_booking_request_confirmation(booking)
+            if portal_account:
+                return redirect(url_for('client.booking_detail', booking_id=booking.id, submitted='yes'))
             return redirect(url_for(
                 "booking_request",
                 submitted=booking.id,
@@ -1665,6 +1713,7 @@ def booking_request():
         error=error,
         form_data=form_data,
         submitted=request.args.get("submitted"),
+        portal_account=portal_account,
         google_maps_api_key=GOOGLE_MAPS_API_KEY,
     )
 
@@ -2317,6 +2366,22 @@ register_reports(app, db, Booking, Waiver, Participant, ReportLocation, booking_
 
 from business_settings import register_settings
 get_business_settings = register_settings(app, db, BusinessSetting, AdminCredential, AdminPasswordReset, admin_required, ADMIN_PASSWORD, ADMIN_EMAIL)
+
+
+def send_client_email(to, subject, body):
+    if not RESEND_API_KEY:
+        return False
+    try:
+        resend.Emails.send({'from': 'CL Paints <info@clpaints.com>', 'to': [to], 'subject': subject, 'text': body})
+        return True
+    except Exception:
+        app.logger.warning('Client verification email delivery failed.')
+        return False
+
+
+from client_portal import register_client_portal
+get_current_client = register_client_portal(app, db, ClientAccount, ClientLoginCode, ClientRewardOwner, ClientEnquiry,
+    Booking, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events, admin_required)
 
 if __name__ == '__main__':
     app.run(debug=True)

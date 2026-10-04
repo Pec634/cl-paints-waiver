@@ -17,6 +17,7 @@ Participants | CL Paints
             <a href="/">Dashboard</a>
             <hr class="admin-nav-divider">
             <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
             <a href="/admin/events">Events</a>
             <a href="/admin/moodboard">Moodboard</a>
             <a class="active" href="{{ url_for('admin_participants') }}">Participants</a>

@@ -6,6 +6,7 @@ Client Booking Request | CL Paints
 
 {% block body %}
 <main class="booking-public">
+    {% if portal_account %}<p class="client-booking-banner"><a href="{{ url_for('client.bookings') }}">← My bookings</a> · Signed in as {{ portal_account.email }}</p>{% endif %}
     <header class="booking-public-header">
         <a class="brand" href="/">{{ business_settings.business_name }}</a>
         <small>CLIENT BOOKING REQUEST</small>
@@ -31,6 +32,7 @@ Client Booking Request | CL Paints
     {% endif %}
 
     <form class="booking-form" method="post" action="{{ url_for('booking_request') }}">
+        {% if portal_account %}<input type="hidden" name="csrf_token" value="{{ session.get('client_csrf', '') }}">{% endif %}
         <section class="booking-section">
             <div class="booking-section-heading">
                 <span>01</span>
@@ -181,7 +183,7 @@ Client Booking Request | CL Paints
                 </label>
                 <label class="booking-field">
                     <span>Email</span>
-                    <input type="email" name="email" autocomplete="email" maxlength="255" required value="{{ form_data.get('email', '') }}">
+                    <input type="email" name="email" autocomplete="email" maxlength="255" required {% if portal_account %}readonly{% endif %} value="{{ portal_account.email if portal_account else form_data.get('email', '') }}">
                 </label>
             </div>
         </section>

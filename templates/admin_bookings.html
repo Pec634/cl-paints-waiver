@@ -12,6 +12,7 @@ Bookings | CL Paints
             <a href="/">Dashboard</a>
             <hr class="admin-nav-divider">
             <a class="active" href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
             <a href="{{ url_for('admin_events') }}">Events</a>
             <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
             <a href="{{ url_for('admin_participants') }}">Participants</a>

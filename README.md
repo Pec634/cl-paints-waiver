@@ -51,3 +51,10 @@ The app uses `DATABASE_URL` when configured and otherwise uses a local SQLite da
 ## Transfer referral records to the live app
 
 Run `python export_rewards_transfer.py` locally to create `instance/rewards-transfer.json`. The file is excluded from Git and contains names, codes, dates, reward status and single-use history. After deploying the code, sign into the live app and open Rewards → Import existing data → Transfer from the development app. Upload that JSON file. Existing live codes are preserved and repeated imports do not create duplicates. Database files, admin credentials, waivers and booking personal details are not exported.
+
+## Client portal
+
+- `/client/signup` creates client accounts after email verification; `/client/login` signs returning clients in using email codes. Configure `RESEND_API_KEY`, a verified `info@clpaints.com` sender and a stable `SECRET_KEY` on the server. Codes expire after 10 minutes, permit five attempts and are single-use. Requests have email/IP rate limits and a 60-second resend cooldown. Plaintext codes are never stored or logged. Client sessions expire after eight hours.
+- Clients can view their dashboard, bookings, rewards, contact details and account. Existing bookings are matched to verified email addresses. Client booking submissions always use that verified email, even if a submitted form tries to supply another one. Internal notes, company signatures and other clients' records are excluded.
+- Admin → Clients lists verified accounts and the latest 50 enquiries. Link existing referral codes to their verified owners there; names alone are not sufficient to establish ownership. Referral status and redemption remain controlled in Rewards.
+- Contact enquiries are saved for admin review; they are not automatically emailed. The client portal does not process payments. Email changes and reassignment of existing reward owners require admin assistance.
