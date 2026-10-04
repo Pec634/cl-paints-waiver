@@ -12,11 +12,11 @@ Bookings | CL Paints
             <a href="/">Dashboard</a>
             <a href="{{ url_for('admin_participants') }}">Participants</a>
             <a class="active" href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
             <a href="{{ url_for('admin_events') }}">Events</a>
             <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
-            <a>Reports</a>
-            <a>Activity</a>
-            <a>Settings</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_settings') }}">Settings</a>
             <a href="{{ url_for('admin_logout') }}">Logout</a>
         </nav>
     </aside>
@@ -63,55 +63,6 @@ Bookings | CL Paints
         </section>
 
         <section class="panel">
-            <details class="referral-code-manager">
-                <summary>Manage local referral codes</summary>
-                <p>Codes can be verified on booking requests after they are added here. Import existing codes from the referral system when that data is migrated.</p>
-                <form method="post" action="{{ url_for('admin_create_referral_code') }}" class="referral-code-form">
-                    <label class="booking-field">
-                        <span>Referral code</span>
-                        <input name="code" maxlength="100" required>
-                    </label>
-                    <label class="booking-field">
-                        <span>Expires on <small>Optional</small></span>
-                        <input type="date" name="expires_at">
-                    </label>
-                    <button class="btn" type="submit">Add or update code</button>
-                </form>
-                <form method="post" action="{{ url_for('admin_import_referral_codes') }}" enctype="multipart/form-data" class="referral-import-form">
-                    <label class="booking-field">
-                        <span>Import existing codes</span>
-                        <input type="file" name="referral_csv" accept=".csv,text/csv" required>
-                        <small>CSV headers: code, expires_at (optional), active (optional).</small>
-                    </label>
-                    <button class="btn" type="submit">Import CSV</button>
-                </form>
-                {% if referral_codes %}
-                <div class="table-wrap">
-                    <table class="waiver-table referral-code-table">
-                        <thead><tr><th>Code</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead>
-                        <tbody>
-                        {% for code in referral_codes %}
-                            <tr>
-                                <td>{{ code.code }}</td>
-                                <td>{{ code.expires_at.strftime('%d/%m/%Y') if code.expires_at else 'No expiry' }}</td>
-                                <td>{{ 'Active' if code.active else 'Inactive' }}</td>
-                                <td>
-                                    {% if code.active %}
-                                    <form method="post" action="{{ url_for('admin_deactivate_referral_code', code_id=code.id) }}">
-                                        <button class="btn small" type="submit">Deactivate</button>
-                                    </form>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% endif %}
-            </details>
-        </section>
-
-        <section class="panel">
             <div class="panel-heading">
                 <div>
                     <h2>Booking requests</h2>
@@ -146,7 +97,7 @@ Bookings | CL Paints
                     <tbody>
                     {% for row in booking_rows %}
                         {% set booking = row.booking %}
-                        <tr class="booking-row">
+                        <tr class="booking-row" id="booking-{{ booking.id }}">
                             <td>{{ booking.submitted_at.strftime("%d/%m/%Y %H:%M") }}</td>
                             <td data-search-client>{{ booking.first_name }} {{ booking.last_name }}</td>
                             <td data-search-phone>{{ booking.phone }}</td>
@@ -164,6 +115,9 @@ Bookings | CL Paints
                                         <dt>Day {{ loop.index }}</dt><dd>{{ event.date }} · {{ event.start_time }}–{{ event.finish_time }} · {{ event.event_address }}</dd>
                                         <dt>Event</dt><dd>{{ event.event_type }}: {{ event.theme }}</dd>
                                         <dt>Pitch fee</dt><dd>{{ "Yes" if event.pitch_fee_required else "No" }}</dd>
+                                        {% if event.pitch_fee_required %}
+                                        <dt>CL Paints pitch cost</dt><dd>{% if event.get('pitch_fee_amount') is not none %}£{{ event.pitch_fee_amount }}{% else %}Not recorded{% endif %} (excluded from client event cost)</dd>
+                                        {% endif %}
                                         <dt>Attendees</dt><dd>{{ event.expected_attendees or "Not provided" }}</dd>
                                         <dt>Setting</dt><dd>{{ event.publicity_type }}</dd>
                                         <dt>Painting location</dt><dd>{{ event.location_type }}</dd>
@@ -179,7 +133,7 @@ Bookings | CL Paints
                                         <dt>Travel charge</dt><dd>£{{ "%.2f"|format(booking.travel_charge) }}</dd>
                                         <dt>Current total</dt><dd>£{{ "%.2f"|format(row.final_total) }}</dd>
                                         <dt>Payment preference</dt><dd>{{ booking.payment_preference }}</dd>
-                                        <dt>Promo code</dt><dd>{{ booking.promo_code or "None" }}</dd>
+                                        <dt>Referral code</dt><dd>{% if booking.promo_code %}<a href="{{ url_for('rewards.dashboard', q=booking.promo_code) }}">{{ booking.promo_code }}</a>{% else %}None{% endif %}</dd>
                                         <dt>Referral status</dt><dd>{{ "Verified" if booking.referral_verified else ("Pending migration" if booking.promo_code and booking.referral_verified is none else ("Invalid" if booking.promo_code else "Not provided")) }}</dd>
                                         <dt>Ethnicity</dt><dd>{{ booking.ethnicity }}{% if booking.ethnicity_detail %} · {{ booking.ethnicity_detail }}{% endif %}</dd>
                                         <dt>Religion</dt><dd>{{ booking.religion }}</dd>
@@ -202,7 +156,7 @@ Bookings | CL Paints
                                         </label>
                                         <fieldset class="travel-mileage-fields booking-field-wide">
                                             <legend>Admin travel distance and charge</legend>
-                                            <p>Enter one-way road miles for each event day. First 10 miles per day are free; additional miles are £1 each, capped at £50 for the whole booking.</p>
+                                            <p>Enter one-way road miles for each event day. First {{ row.pricing_rules.free_miles }} miles per day are free; additional miles are £{{ row.pricing_rules.mile_rate }} each, capped at £{{ row.pricing_rules.travel_cap }} for the whole booking.</p>
                                             {% for event in row.events %}
                                             <label class="booking-field">
                                                 <span>Day {{ loop.index }} one-way miles</span>

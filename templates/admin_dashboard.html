@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard | CL Paints{% endblock %}
+{% block body %}
+<div class="admin">
+    <aside>
+        <div class="brand light">CL <span>Paints</span></div>
+        <nav>
+            <a class="active" href="/">Dashboard</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
+            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
+            <a href="{{ url_for('admin_events') }}">Events</a>
+            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a><a href="{{ url_for('admin_settings') }}">Settings</a>
+            <a href="{{ url_for('admin_logout') }}">Logout</a>
+        </nav>
+    </aside>
+    <main class="dashboard-main">
+        <header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Dashboard</h1><p>Your daily overview, with the next steps ready to hand.</p></div><div class="dashboard-date"><span id="dashboardDate">{{ today.strftime('%A, %d %B %Y') }}</span><time id="dashboardClock" aria-label="Current UK time"></time></div></header>
+        <section class="stats dashboard-stats" aria-label="Overview">
+            <a href="{{ url_for('admin_bookings') }}"><article><span>Bookings awaiting review</span><strong>{{ pending_count }}</strong><small>Review client requests →</small></article></a>
+            <a href="{{ url_for('admin_events') }}"><article><span>Upcoming events</span><strong>{{ upcoming_event_count }}</strong><small>Open events from today →</small></article></a>
+            <a href="{{ url_for('admin_participants') }}"><article><span>Valid waivers</span><strong>{{ valid_waiver_count }}</strong><small>View participant records →</small></article></a>
+            <a href="{{ url_for('rewards.dashboard', section='earned') }}"><article><span>Rewards available</span><strong>{{ reward_count }}</strong><small>View earned rewards →</small></article></a>
+        </section>
+        <div class="dashboard-grid">
+            <section class="panel dashboard-attention">
+                <div class="panel-heading"><div><h2>Needs attention</h2><p>Booking requests and waivers expiring within 30 days.</p></div><span class="dashboard-count">{{ pending_count + expiring_count }}</span></div>
+                {% for booking in pending_bookings %}
+                <a class="dashboard-item" href="{{ url_for('admin_bookings') }}#booking-{{ booking.id }}"><div><span class="dashboard-tag">Booking to review</span><h3>{{ booking.first_name }} {{ booking.last_name }}</h3><p>Request #{{ booking.id }} · {{ booking.event_type }} · {{ booking.event_date.strftime('%d/%m/%Y') }}</p></div><span aria-hidden="true">→</span></a>
+                {% endfor %}
+                {% for waiver in expiring_waivers %}
+                <a class="dashboard-item" href="{{ url_for('admin_waiver_detail', waiver_id=waiver.id) }}"><div><span class="dashboard-tag dashboard-tag-amber">Waiver expiring</span><h3>{{ waiver.responsible_first_name }} {{ waiver.responsible_last_name }}</h3><p>{{ waiver.waiver_reference }} · Expires {{ waiver.expiry_date.strftime('%d/%m/%Y') }}</p></div><span aria-hidden="true">→</span></a>
+                {% endfor %}
+                {% if not pending_count and not expiring_count %}<div class="dashboard-empty"><h3>You're up to date.</h3><p>No booking requests or expiring waivers need attention.</p></div>{% endif %}
+                {% if pending_count > 5 or expiring_count > 5 %}<p class="dashboard-footnote">Showing the first five items in each group. Open Bookings or Participants to see all records.</p>{% endif %}
+            </section>
+            <section class="panel dashboard-quick">
+                <h2>Quick actions</h2><p>Go straight to the tools you use most.</p>
+                <a class="btn primary" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form ↗</a>
+                <a class="btn" href="{{ url_for('admin_events') }}">Open an event's waiver form →</a>
+                <a class="btn" href="{{ url_for('rewards.create_referral') }}">Create referral code →</a>
+                <small>Select the event to open its customer waiver link.</small>
+            </section>
+            <section class="panel dashboard-upcoming">
+                <div class="panel-heading"><div><h2>Upcoming bookings</h2><p>The next five accepted booking dates.</p></div><a class="btn" href="{{ url_for('admin_bookings') }}">View all bookings</a></div>
+                {% for item in upcoming_bookings %}
+                <a class="dashboard-item dashboard-booking" href="{{ url_for('admin_bookings') }}#booking-{{ item.booking.id }}">
+                    <div class="dashboard-calendar"><strong>{{ item.date.strftime('%d') }}</strong><span>{{ item.date.strftime('%b %Y') }}</span></div>
+                    <div class="dashboard-booking-info"><h3>{{ item.booking.first_name }} {{ item.booking.last_name }}</h3><p>{{ item.event.event_type }} · {{ item.event.start_time }}–{{ item.event.finish_time }}</p><p>{{ item.event.event_address }}</p></div><span class="dashboard-tag dashboard-tag-green">Accepted</span>
+                </a>
+                {% else %}<div class="dashboard-empty"><h3>No upcoming bookings yet.</h3><p>Accepted bookings will appear here with their dates and venues.</p><a class="btn" href="{{ url_for('admin_bookings') }}">Review bookings</a></div>{% endfor %}
+            </section>
+        </div>
+    </main>
+</div>
+<script>
+(() => {
+    const date = document.getElementById('dashboardDate');
+    const clock = document.getElementById('dashboardClock');
+    const dateFormat = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/London', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+    });
+    const timeFormat = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+    function updateClock() {
+        const now = new Date();
+        date.textContent = dateFormat.format(now);
+        clock.textContent = timeFormat.format(now);
+        clock.dateTime = now.toISOString();
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) updateClock();
+    });
+})();
+</script>
+{% endblock %}

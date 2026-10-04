@@ -6,12 +6,11 @@ Admin Login | CL Paints
 
 {% block body %}
 
-<main class="login-screen">
+<main class="login-screen login-art-screen">
+    <div class="login-paint-clouds" aria-hidden="true"><i></i><i></i><i></i></div>
     <section class="login-panel">
         <div class="login-heading">
-            <div class="brand login-brand">
-                CL <span>Paints</span>
-            </div>
+            <div class="login-logo-wrap"><img class="login-logo" src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="CL Paints — Professional Face Painting" width="156" height="156" fetchpriority="high"></div>
             <small>CL PAINTS MANAGEMENT SYSTEM</small>
             <h1>Admin Login</h1>
             <p>Enter your administrator password to continue.</p>
@@ -49,6 +48,10 @@ Admin Login | CL Paints
 
         <a class="login-recovery-link" href="{{ url_for('admin_password_reset_request') }}">Forgot password?</a>
     </section>
+    <div class="login-burst" aria-hidden="true">
+        <canvas id="loginPaintCanvas"></canvas>
+        <div class="login-burst-centre"><img src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="" width="180" height="180"><p>Bringing colour to life.</p><small>Checking your sign-in…</small></div>
+    </div>
 </main>
 
 <script>
@@ -59,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     form.addEventListener("submit", (event) => {
         if (form.dataset.transitioning === "true") {
+            event.preventDefault();
             return;
         }
 
@@ -68,9 +72,46 @@ document.addEventListener("DOMContentLoaded", () => {
         submitButton.disabled = true;
         submitButton.textContent = "Signing In...";
 
-        const delay = window.matchMedia(
+        const reducedMotion = window.matchMedia(
             "(prefers-reduced-motion: reduce)"
-        ).matches ? 240 : 820;
+        ).matches;
+        const delay = reducedMotion ? 0 : 2200;
+        if (!reducedMotion) {
+            const canvas = document.getElementById('loginPaintCanvas');
+            const context = canvas.getContext('2d');
+            if (context) {
+                const ratio = Math.min(window.devicePixelRatio || 1, 2);
+                const width = screen.clientWidth;
+                const height = screen.clientHeight;
+                canvas.width = width * ratio;
+                canvas.height = height * ratio;
+                context.scale(ratio, ratio);
+                const colours = ['#f52f83', '#a029b6', '#ff9b31', '#f1e93d', '#34c9db'];
+                const particles = Array.from({ length: width < 600 ? 65 : 110 }, (_, index) => ({
+                    angle: Math.random() * Math.PI * 2,
+                    distance: 90 + Math.random() * Math.max(width, height) * .65,
+                    radius: 3 + Math.random() * 12,
+                    colour: colours[index % colours.length]
+                }));
+                const started = performance.now();
+                function paint(now) {
+                    const progress = Math.min((now - started) / 2100, 1);
+                    const spread = 1 - Math.pow(1 - progress, 3);
+                    context.clearRect(0, 0, width, height);
+                    context.globalAlpha = 1 - progress * .75;
+                    particles.forEach(particle => {
+                        context.fillStyle = particle.colour;
+                        context.beginPath();
+                        context.arc(width / 2 + Math.cos(particle.angle) * particle.distance * spread,
+                            height / 2 + Math.sin(particle.angle) * particle.distance * spread,
+                            particle.radius * (1 - progress * .3), 0, Math.PI * 2);
+                        context.fill();
+                    });
+                    if (progress < 1) requestAnimationFrame(paint);
+                }
+                requestAnimationFrame(paint);
+            }
+        }
 
         window.setTimeout(() => form.submit(), delay);
     });

@@ -1,0 +1,19 @@
+
+{% extends "rewards/base.html" %}
+{% block content %}
+<section class="form-card">
+  <div class="eyebrow">NEW REFERRAL</div>
+  <h2>Create referral code</h2>
+  <p>The 12-month validity period starts from the date CL Paints attended the original customer's private booking.</p>
+
+  <form method="post" class="form-grid two-col">
+    <label>First name<input name="first_name" required></label>
+    <label>Surname<input name="surname" required></label>
+    <label class="full">Original event date<input name="event_date" value="{{ event_date }}" placeholder="DD/MM/YYYY" required></label>
+    <div class="form-actions full">
+      <a class="btn btn-ghost" href="{{ url_for('rewards.dashboard') }}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Create Referral Code</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

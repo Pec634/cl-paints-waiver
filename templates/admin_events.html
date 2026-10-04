@@ -17,11 +17,11 @@ Event Management | CL Paints
             <a href="/">Dashboard</a>
             <a href="{{ url_for('admin_participants') }}">Participants</a>
             <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
             <a class="active" href="/admin/events">Events</a>
             <a href="/admin/moodboard">Moodboard</a>
-            <a>Reports</a>
-            <a>Activity</a>
-            <a>Settings</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_settings') }}">Settings</a>
             <a href="/admin/logout">Logout</a>
         </nav>
     </aside>
@@ -87,7 +87,7 @@ Event Management | CL Paints
 
             <div class="table-wrap">
 
-                <table class="waiver-table">
+                <table class="waiver-table events-table">
 
                     <thead>
                         <tr>

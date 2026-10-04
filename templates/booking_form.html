@@ -7,10 +7,10 @@ Client Booking Request | CL Paints
 {% block body %}
 <main class="booking-public">
     <header class="booking-public-header">
-        <a class="brand" href="/">CL <span>Paints</span></a>
+        <a class="brand" href="/">{{ business_settings.business_name }}</a>
         <small>CLIENT BOOKING REQUEST</small>
         <h1>Let's plan your event.</h1>
-        <p>Send us your details and we will review availability and costs with you.</p>
+        <p>Send us your details and we will review availability and costs with you.</p><p><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% if business_settings.phone %} · {{ business_settings.phone }}{% endif %}{% if business_settings.website %} · <a href="{{ business_settings.website }}" target="_blank" rel="noopener">Website</a>{% endif %}</p>
     </header>
 
     {% if submitted %}
@@ -87,12 +87,12 @@ Client Booking Request | CL Paints
             <div class="booking-rate-note" data-full-booking>
                 <strong>Pricing options</strong>
                 <ul>
-                    <li>£45 per hour, charged to the client.</li>
+                    <li>£{{ business_settings.hourly_rate }} per hour, charged to the client.</li>
                     <li>Customers pay directly; no charge to the client.</li>
                     <li>CL Paints pays a pitch or stall fee.</li>
                     <li>Revenue sharing by separate agreement.</li>
                 </ul>
-                <p>All bookings require a minimum of two hours. Travel costs are confirmed during review.</p>
+                <p>All bookings require a minimum of {{ business_settings.minimum_hours }} hours. Travel costs are confirmed during review.</p>
             </div>
         </section>
 
@@ -191,7 +191,7 @@ Client Booking Request | CL Paints
                 <span>03</span>
                 <div>
                     <h2>Event details</h2>
-                    <p>Bookings require at least two hours.</p>
+                    <p>Bookings require at least {{ business_settings.minimum_hours }} hours.</p>
                 </div>
             </div>
 
@@ -199,13 +199,13 @@ Client Booking Request | CL Paints
                 <legend>Is this a single-date booking?</legend>
                 <div class="booking-inline-choices">
                     <label><input type="radio" name="single_date" value="yes" required {% if form_data.get('single_date', 'yes') == 'yes' %}checked{% endif %}> Yes, one date</label>
-                    <label><input type="radio" name="single_date" value="no" required {% if form_data.get('single_date') == 'no' %}checked{% endif %}> No, multiple dates</label>
+                    <label {% if business_settings.max_event_dates|int == 1 %}hidden{% endif %}><input type="radio" name="single_date" value="no" required {% if form_data.get('single_date') == 'no' %}checked{% endif %}> No, multiple dates</label>
                 </div>
             </fieldset>
 
             <label class="booking-field date-count-field" id="dateCountField" hidden>
                 <span>How many event dates?</span>
-                <input type="number" id="eventDateCount" min="2" max="10" value="2">
+                <input type="number" id="eventDateCount" min="2" max="{{ business_settings.max_event_dates }}" value="2">
             </label>
 
             <label class="booking-same-details" id="sameDetailsField" hidden>
@@ -247,12 +247,17 @@ Client Booking Request | CL Paints
                             <input data-event-field="theme" maxlength="200" required placeholder="Enter a theme or N/A">
                         </label>
                         <label class="booking-field">
-                            <span>Does CL Paints pay a pitch fee for this date?</span>
+                            <span>Does CL Paints need to pay a pitch / stall fee?</span>
                             <select data-event-field="pitch_fee_required" required>
                                 <option value="">Choose one</option>
                                 <option value="no">No</option>
                                 <option value="yes">Yes, pitch fee applies</option>
                             </select>
+                        </label>
+                        <label class="booking-field" data-pitch-fee-field hidden>
+                            <span>Pitch fee payable by CL Paints (£)</span>
+                            <input type="number" min="0" max="999999.99" step="0.01" data-event-field="pitch_fee_amount" disabled>
+                            <small>This is a cost to CL Paints. This date and its pitch fee are excluded from your estimated event cost.</small>
                         </label>
                         <label class="booking-field">
                             <span>Expected attendees <small>Optional</small></span>
@@ -282,7 +287,7 @@ Client Booking Request | CL Paints
                                 <option value="Customers">Customers</option>
                             </select>
                         </label>
-                        <label class="booking-field">
+                        <label class="booking-field" data-holiday-preference-field hidden>
                             <span>Do attendees celebrate Christmas and Easter?</span>
                             <select data-event-field="celebrates_christmas_easter">
                                 <option value="">Choose one</option>
@@ -313,8 +318,11 @@ Client Booking Request | CL Paints
 
             <div class="booking-price-preview" aria-live="polite">
                 <div><span>Total booked hours</span><strong id="totalBookedHours">0 hours</strong></div>
+                <div><span>Total pitch / stall fees payable by CL Paints</span><strong id="totalPitchFees">£0.00</strong></div>
                 <div><span>Estimated event cost</span><strong id="estimatedEventCost">£0.00</strong></div>
-                <p>£45 per hour, excluding dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
+                <div id="depositEstimateRow" hidden><span>Estimated 50% deposit</span><strong id="depositEstimateAmount">£0.00</strong></div>
+                <p>Pitch / stall fees are costs to CL Paints and are not included in your event cost or deposit.</p>
+                <p>£{{ business_settings.hourly_rate }} per hour, excluding dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
                 <p id="paymentEstimate">Choose a payment arrangement to see the estimated amount.</p>
             </div>
 
@@ -330,7 +338,7 @@ Client Booking Request | CL Paints
             <div class="booking-referral-entry">
                 <label class="booking-field booking-payment-field">
                     <span>Referral code <small>Optional</small></span>
-                    <input name="promo_code" id="referralCodeInput" maxlength="100" autocomplete="off" value="{{ form_data.get('promo_code', '') }}">
+                    <small>Enter the five-character referral code exactly as supplied. The referring customer earns 30 minutes free face painting after your qualifying booking is attended.</small><input name="promo_code" id="referralCodeInput" maxlength="100" autocomplete="off" value="{{ form_data.get('promo_code', '') }}">
                 </label>
                 <button class="btn" type="button" id="verifyReferralButton">Verify code</button>
                 <p id="referralVerification" role="status" aria-live="polite"></p>
@@ -430,9 +438,9 @@ Client Booking Request | CL Paints
                     <p>6.5 Additional time purchased during an event is payable before the additional service begins, in accordance with Section 4.</p>
                     <p>6.6 Where an amount properly due remains unpaid, CL Paints reserves the right to take reasonable steps to recover the outstanding amount. This may include using an appropriate debt-recovery process where necessary.</p>
                     <h3>7. Travel</h3>
-                    <p>7.1 Travel within the first 10 miles from CL Paints' trading address is included.</p>
-                    <p>7.2 For bookings located more than 10 miles from our trading address, a travel charge of £1.00 per one-way mile beyond the included 10 miles will apply, calculated using the shortest recommended driving route. For example, a venue 15 miles from our trading address would attract a £5 travel charge.</p>
-                    <p>7.3 The maximum travel charge is £50.</p>
+                    <p>7.1 Travel within the first {{ business_settings.free_miles }} miles from CL Paints' trading address is included.</p>
+                    <p>7.2 For bookings located more than {{ business_settings.free_miles }} miles from our trading address, a travel charge of £{{ business_settings.mile_rate }} per one-way mile beyond the included {{ business_settings.free_miles }} miles will apply, calculated using the shortest recommended driving route.</p>
+                    <p>7.3 The maximum travel charge is £{{ business_settings.travel_cap }}.</p>
                     <p>7.4 Any applicable travel charge will be advised to and agreed with the client before the booking is confirmed or payment is taken.</p>
                     <p>7.5 CL Paints reserves the right to decline bookings outside our normal operating area.</p>
                     <h3>8. Cancellation by the client</h3>
@@ -575,6 +583,8 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         setRequiredWithin(availabilityPanel, availabilityMode);
         availabilityResult.textContent = "";
+        syncPitchFees();
+        syncHolidayPreferences();
     }
 
     requestTypeInputs.forEach((input) => input.addEventListener("change", syncRequestMode));
@@ -649,18 +659,54 @@ document.addEventListener("DOMContentLoaded", () => {
                 event_type: repeatedValues.event_type || "",
                 theme: repeatedValues.theme || "",
                 pitch_fee_required: repeatedValues.pitch_fee_required || "",
+                pitch_fee_amount: repeatedValues.pitch_fee_required === "yes" ? repeatedValues.pitch_fee_amount || "" : "",
                 expected_attendees: repeatedValues.expected_attendees || "",
                 publicity_type: repeatedValues.publicity_type || "",
                 location_type: repeatedValues.location_type || "",
                 charge_type: repeatedValues.charge_type || "",
-                celebrates_christmas_easter: repeatedValues.celebrates_christmas_easter || "",
+                celebrates_christmas_easter: repeatedValues.publicity_type === "Private" ? repeatedValues.celebrates_christmas_easter || "" : "",
                 additional_info: repeatedValues.additional_info || ""
             };
         });
     }
 
+    function syncPitchFees() {
+        dayList.querySelectorAll("[data-event-day]").forEach((card) => {
+            const applies = card.querySelector('[data-event-field="pitch_fee_required"]').value === "yes";
+            const label = card.querySelector("[data-pitch-fee-field]");
+            const input = label.querySelector("input");
+            label.hidden = !applies;
+            input.disabled = !applies || card.querySelector("[data-day-details]").hidden ||
+                form.querySelector('[name="request_type"]:checked')?.value !== "booking";
+            input.required = applies && !input.disabled;
+        });
+    }
+
+    function syncHolidayPreferences() {
+        dayList.querySelectorAll("[data-event-day]").forEach((card) => {
+            const isPrivate = card.querySelector('[data-event-field="publicity_type"]').value === "Private";
+            const label = card.querySelector("[data-holiday-preference-field]");
+            const select = label.querySelector("select");
+            label.hidden = !isPrivate;
+            if (!isPrivate) select.value = "";
+            select.disabled = !isPrivate || card.querySelector("[data-day-details]").hidden ||
+                form.querySelector('[name="request_type"]:checked')?.value !== "booking";
+        });
+    }
+
     function updatePricing() {
+        syncPitchFees();
+        syncHolidayPreferences();
         const schedule = readSchedule();
+        const pitchFeePence = schedule.reduce((total, eventDay) => {
+            const amount = Number(eventDay.pitch_fee_amount);
+            return eventDay.pitch_fee_required === "yes" && Number.isFinite(amount) && amount >= 0
+                ? total + Math.round(amount * 100)
+                : total;
+        }, 0);
+        document.getElementById("totalPitchFees").textContent = new Intl.NumberFormat("en-GB", {
+            style: "currency", currency: "GBP"
+        }).format(pitchFeePence / 100);
         let totalMinutes = 0;
         let totalCost = 0;
 
@@ -685,7 +731,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             totalMinutes += minutes;
             if (eventDay.pitch_fee_required !== "yes") {
-                totalCost += (minutes / 60) * 45;
+                totalCost += (minutes / 60) * Number({{ business_settings.hourly_rate|tojson }});
             }
         });
 
@@ -695,8 +741,12 @@ document.addEventListener("DOMContentLoaded", () => {
             style: "currency", currency: "GBP"
         }).format(totalCost);
 
+        document.getElementById("depositEstimateRow").hidden = paymentChoice.value !== "50% deposit";
         if (paymentChoice.value === "50% deposit") {
-            paymentEstimate.textContent = `Estimated 50% deposit: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(totalCost / 2)}. Travel will be added after review.`;
+            document.getElementById("depositEstimateAmount").textContent = new Intl.NumberFormat("en-GB", {
+                style: "currency", currency: "GBP"
+            }).format(totalCost / 2);
+            paymentEstimate.textContent = "Travel will be added after review.";
         } else if (paymentChoice.value === "Full payment") {
             paymentEstimate.textContent = `Estimated event total: ${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(totalCost)}. Travel will be added after review.`;
         } else {
@@ -708,7 +758,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const previous = Array.from(dayList.querySelectorAll("[data-event-day]"), currentDayValues);
         const dayCount = isSingleDate()
             ? 1
-            : Math.max(2, Math.min(10, Number(dateCountInput.value) || 2));
+            : Math.max(2, Math.min(Number({{ business_settings.max_event_dates|tojson }}), Number(dateCountInput.value) || 2));
         dateCountField.hidden = isSingleDate();
         sameDetailsField.hidden = isSingleDate() || dayCount < 2;
         dayList.replaceChildren();
@@ -806,10 +856,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({ code })
             });
             const result = await response.json();
+            if (referralInput.value.trim() !== code) return;
             referralResult.textContent = result.message;
             referralResult.dataset.status = result.status;
         } catch (error) {
-            referralResult.textContent = "Referral verification is unavailable. The code can be checked manually.";
+            referralResult.textContent = "Code verification is unavailable. Please try again.";
             referralResult.dataset.status = "not_configured";
         } finally {
             referralButton.disabled = false;

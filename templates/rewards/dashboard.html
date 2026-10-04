@@ -1,0 +1,51 @@
+{% extends 'rewards/base.html' %}
+{% block content %}
+<div class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Rewards</h1><p>Refer a friend and earn {{ reward_text }} after their qualifying booking is attended.</p></div></div>
+<div class="actions rewards-toolbar">
+    <a class="btn primary" href="{{ url_for('rewards.create_referral') }}">Create referral code</a>
+    <a class="btn" href="{{ url_for('rewards.import_legacy_data') }}">Import existing data</a>
+</div>
+<section class="stats">
+    <article><span>Active codes</span><strong>{{ counts.active }}</strong></article>
+    <article><span>Expired codes</span><strong>{{ counts.expired }}</strong></article>
+    <article><span>Rewards available</span><strong>{{ counts.earned }}</strong></article>
+    <article><span>Rewards redeemed</span><strong>{{ counts.redeemed }}</strong></article>
+</section>
+<section class="panel">
+    <div class="actions rewards-filters">
+        <a class="btn {{ 'primary' if section == 'all' }}" href="{{ url_for('rewards.dashboard', section='all', q=query) }}">All codes ({{ counts.total }})</a>
+        <a class="btn {{ 'primary' if section == 'active' }}" href="{{ url_for('rewards.dashboard', section='active', q=query) }}">Referral codes</a>
+        <a class="btn {{ 'primary' if section == 'earned' }}" href="{{ url_for('rewards.dashboard', section='earned', q=query) }}">Rewards available</a>
+        <a class="btn {{ 'primary' if section == 'redeemed' }}" href="{{ url_for('rewards.dashboard', section='redeemed', q=query) }}">Redeemed rewards</a>
+    </div>
+    <form method="get" class="referral-code-form rewards-search">
+        <input type="hidden" name="section" value="{{ section }}">
+        <label class="booking-field"><span>Search by customer or code</span><input name="q" value="{{ query }}"></label>
+        <button class="btn" type="submit">Search</button>
+    </form>
+    <p>Referral codes last 12 months from the original attended event and can only be used in one submitted booking, including a booking that is later declined. Earned rewards do not expire. Enter codes exactly as supplied when booking; attendance must be confirmed before a reward is earned.</p>
+    <div class="table-wrap rewards-table-wrap"><table class="waiver-table rewards-table">
+        <thead><tr><th scope="col">Customer</th><th scope="col">Code</th><th scope="col">Booking usage</th><th scope="col">Event &amp; reward dates</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+        <tbody>{% for record in records %}
+            <tr><td data-label="Customer" class="rewards-customer">{{ record.customer_name }}</td><td data-label="Code"><strong class="rewards-code">{{ record.code }}</strong></td>
+                <td data-label="Booking usage">{% if record.booking_usage %}
+                    <strong>Used in {{ record.booking_usage|length }} booking request{{ 's' if record.booking_usage|length != 1 }}</strong>
+                    {% for booking in record.booking_usage %}
+                    <p><a href="{{ url_for('admin_bookings') }}#booking-{{ booking.id }}">Booking #{{ booking.id }}</a><br>{{ booking.first_name }} {{ booking.last_name }}<br><small>{{ booking.display_submitted_at }} · {{ booking.status }}</small></p>
+                    {% endfor %}
+                {% else %}Not used in a booking{% endif %}</td>
+                <td data-label="Event &amp; reward dates"><dl class="rewards-dates">
+                    <div><dt>Original event</dt><dd>{{ record.display_original_event_date or '—' }}</dd></div>
+                    <div><dt>Code expires</dt><dd>{{ record.display_expires_date or '—' }}</dd></div>
+                    <div><dt>Friend attended</dt><dd>{{ record.display_friend_event_date or '—' }}</dd></div>
+                    <div><dt>Reward earned</dt><dd>{{ record.display_reward_earned_date or '—' }}</dd></div>
+                    <div><dt>Reward redeemed</dt><dd>{{ record.display_reward_redeemed_date or '—' }}</dd></div>
+                </dl></td>
+                <td data-label="Status"><span class="rewards-status">{{ record.display_status }}</span></td><td data-label="Actions" class="rewards-actions">
+                {% if record.status == 'active' %}<a class="btn small" href="{{ url_for('rewards.validate_referral', referral_id=record.id) }}">Validate attendance</a>{% elif record.status == 'earned' %}<a class="btn small" href="{{ url_for('rewards.redeem_reward', referral_id=record.id) }}">Redeem reward</a>{% endif %}
+                <form method="post" action="{{ url_for('rewards.delete_referral', referral_id=record.id) }}" onsubmit="return confirm('Delete this referral record? This cannot be undone.')"><button class="btn small" type="submit">Delete</button></form>
+            </td></tr>
+        {% else %}<tr class="rewards-empty"><td colspan="6">No records found.</td></tr>{% endfor %}</tbody>
+    </table></div>
+</section>
+{% endblock %}

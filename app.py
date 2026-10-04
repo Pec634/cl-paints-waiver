@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, render_template_stri
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from io import StringIO
@@ -20,6 +20,7 @@ import cloudinary
 import cloudinary.uploader
 from dotenv import load_dotenv
 from email_validator import EmailNotValidError, validate_email
+from business_settings import DEFAULTS as DEFAULT_BUSINESS_SETTINGS
 
 load_dotenv()
 
@@ -280,6 +281,24 @@ class ReferralCode(db.Model):
     expires_at = db.Column(db.Date, nullable=True)
     active = db.Column(db.Boolean, nullable=False, default=True)
 
+
+class ReferralCodeUse(db.Model):
+    code = db.Column(db.String(100), primary_key=True)
+    used_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+
+class ReportLocation(db.Model):
+    outcode = db.Column(db.String(10), primary_key=True)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    town = db.Column(db.String(255), nullable=False, default="")
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+
+class BusinessSetting(db.Model):
+    key = db.Column(db.String(50), primary_key=True)
+    value = db.Column(db.Text, nullable=False)
+
 class AdminCredential(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -493,6 +512,42 @@ def generate_customer_number():
 
         if not existing:
             return customer_number
+
+@app.get("/")
+@app.get("/admin/dashboard")
+@admin_required
+def admin_dashboard():
+    from rewards import fetch_one
+    today = datetime.now().date()
+    tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
+    expiry_limit = tomorrow + timedelta(days=30)
+    # Include waivers valid through today, matching booking code date semantics.
+    valid_waivers = Waiver.query.filter(
+        Waiver.is_archived.is_(False), Waiver.status != "Superseded",
+        Waiver.expiry_date >= datetime.combine(today, datetime.min.time()))
+    expiring_query = valid_waivers.filter(Waiver.expiry_date < expiry_limit)
+    pending_query = Booking.query.filter_by(status="Under Review")
+    upcoming = []
+    for booking in Booking.query.filter_by(status="Accepted").all():
+        for event in booking_schedule_events(booking):
+            try:
+                event_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
+            except (KeyError, TypeError, ValueError):
+                continue
+            if event_date >= today:
+                upcoming.append({"booking": booking, "event": event, "date": event_date})
+    upcoming.sort(key=lambda item: (item["date"], item["event"].get("start_time", "")))
+    reward_count = fetch_one("SELECT COUNT(*) AS total FROM referrals WHERE status = 'earned'")["total"]
+    return render_template(
+        "admin_dashboard.html", today=today,
+        pending_count=pending_query.count(),
+        upcoming_event_count=Event.query.filter(Event.event_date >= today, Event.status != "Closed").count(),
+        valid_waiver_count=valid_waivers.count(), reward_count=reward_count,
+        pending_bookings=pending_query.order_by(Booking.submitted_at.asc()).limit(5).all(),
+        expiring_count=expiring_query.count(),
+        expiring_waivers=expiring_query.order_by(Waiver.expiry_date.asc()).limit(5).all(),
+        upcoming_bookings=upcoming[:5], upcoming_booking_count=len(upcoming))
+
 
 @app.get("/waiver")
 def waiver():
@@ -1034,7 +1089,7 @@ def admin_login():
         elif password_is_valid:
             session.clear()
             session["admin_authenticated"] = True
-            return redirect(url_for("admin_waivers"))
+            return redirect(url_for("admin_dashboard"))
         else:
             error = "Incorrect password."
 
@@ -1047,7 +1102,8 @@ def admin_login():
 
 @app.route("/admin/password-reset", methods=["GET", "POST"])
 def admin_password_reset_request():
-    recovery_configured = bool(ADMIN_EMAIL and RESEND_API_KEY)
+    recovery_email = get_business_settings()["recovery_email"]
+    recovery_configured = bool(recovery_email and RESEND_API_KEY)
     requested = False
 
     if request.method == "POST":
@@ -1059,9 +1115,9 @@ def admin_password_reset_request():
                 check_deliverability=False,
             ).normalized.lower()
             configured_email = validate_email(
-                ADMIN_EMAIL,
+                recovery_email,
                 check_deliverability=False,
-            ).normalized.lower() if ADMIN_EMAIL else ""
+            ).normalized.lower() if recovery_email else ""
         except EmailNotValidError:
             normalized_email = ""
             configured_email = ""
@@ -1218,25 +1274,47 @@ def booking_availability_check():
     })
 
 
+def booking_code_is_valid(code):
+    from rewards import fetch_one, parse_date
+    if db.session.get(ReferralCodeUse, code) is not None or Booking.query.filter_by(promo_code=code).first() is not None:
+        return False
+    referral = fetch_one("SELECT * FROM referrals WHERE code = :code", {"code": code})
+    if referral:
+        return (referral["status"] == "active"
+                and parse_date(referral["original_event_date"]) <= datetime.now().date()
+                <= parse_date(referral["expires_date"]))
+    return False
+
+
+def claim_booking_code(code):
+    # The unique key arbitrates concurrent submissions; the claim commits with the booking.
+    if not booking_code_is_valid(code):
+        raise ValueError("Code invalid. It has already been used, is expired or is unavailable.")
+    try:
+        db.session.add(ReferralCodeUse(code=code))
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        raise ValueError("Code invalid. This referral code has already been used.") from None
+
+
 @app.post("/api/referrals/verify")
 def verify_referral_code():
-    data = request.get_json(silent=True) or {}
-    code = data.get("code", "").strip().upper()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("code", ""), str):
+        return jsonify({"status": "invalid", "message": "Enter a valid referral code."}), 400
+    code = data.get("code", "").strip()
     if not code:
         return jsonify({"status": "empty", "message": "Enter a referral code."}), 400
+    if not booking_code_is_valid(code):
+        return jsonify({"status": "invalid", "message": "Code invalid. Check the code and try again; used, expired or already processed codes cannot be used."})
+    return jsonify({"status": "valid", "message": "Code confirmed. It will be recorded with your booking."})
 
-    active_codes_exist = ReferralCode.query.filter_by(active=True).first() is not None
-    if not active_codes_exist:
-        return jsonify({
-            "status": "not_configured",
-            "message": "Referral codes are not connected yet. Your code can be checked manually.",
-        })
 
-    referral = ReferralCode.query.filter_by(code=code, active=True).first()
-    if referral is None or (referral.expires_at and referral.expires_at < datetime.now().date()):
-        return jsonify({"status": "invalid", "message": "This referral code is invalid or expired."})
-
-    return jsonify({"status": "valid", "message": "Referral code verified."})
+@app.get("/admin/rewards")
+@admin_required
+def admin_rewards():
+    return redirect(url_for("rewards.dashboard"))
 
 
 def send_booking_request_confirmation(booking):
@@ -1285,6 +1363,7 @@ def send_booking_request_confirmation(booking):
             f"Painting location: {event.get('location_type', '')}",
             f"Who pays for face painting: {event.get('charge_type', '')}",
             f"CL Paints pitch fee: {'Yes' if event.get('pitch_fee_required') else 'No'}",
+            f"Pitch fee payable by CL Paints (excluded from client cost): {'£' + str(event['pitch_fee_amount']) if event.get('pitch_fee_amount') is not None else 'Not applicable or not recorded'}",
             f"Estimated event cost: £{Decimal(event.get('estimated_cost', '0')):.2f}",
             f"Christmas and Easter celebrated: {event.get('celebrates_christmas_easter') or 'Not provided'}",
             f"Additional information: {event.get('additional_info') or 'None'}",
@@ -1323,6 +1402,8 @@ def send_booking_request_confirmation(booking):
 
 @app.route("/booking", methods=["GET", "POST"])
 def booking_request():
+    settings = get_business_settings()
+    pricing_rules = {key: settings[key] for key in ['hourly_rate', 'minimum_hours', 'max_event_dates', 'free_miles', 'mile_rate', 'travel_cap']}
     form_data = request.form if request.method == "POST" else {}
     error = None
 
@@ -1411,13 +1492,14 @@ def booking_request():
                     "event_type": request.form.get("event_type", ""),
                     "theme": request.form.get("theme", ""),
                     "pitch_fee_required": request.form.get("pitch_fee_required", ""),
+                    "pitch_fee_amount": request.form.get("pitch_fee_amount", ""),
                 }]
 
             single_date = request.form.get("single_date", "")
             if single_date not in {"yes", "no"}:
                 raise ValueError("Choose whether this booking is for one or multiple dates.")
-            if len(submitted_events) > 10:
-                raise ValueError("A booking can include up to 10 event dates.")
+            if len(submitted_events) > int(pricing_rules["max_event_dates"]):
+                raise ValueError(f"A booking can include up to {pricing_rules['max_event_dates']} event dates.")
             if (single_date == "yes" and len(submitted_events) != 1) or (single_date == "no" and len(submitted_events) < 2):
                 raise ValueError("The selected number of dates does not match your event schedule.")
 
@@ -1435,8 +1517,8 @@ def booking_request():
                 if finish_time <= start_time:
                     raise ValueError(f"Finish time must be after start time for event day {day_number}.")
                 duration_hours = Decimal(str((finish_time - start_time).total_seconds())) / Decimal("3600")
-                if duration_hours < 2:
-                    raise ValueError(f"Event day {day_number} must be at least two hours long.")
+                if duration_hours < Decimal(pricing_rules["minimum_hours"]):
+                    raise ValueError(f"Event day {day_number} must be at least {pricing_rules['minimum_hours']} hours long.")
                 event_address = str(event_item.get("event_address", "")).strip()
                 event_type = str(event_item.get("event_type", "")).strip()
                 theme = str(event_item.get("theme", "")).strip()
@@ -1461,11 +1543,21 @@ def booking_request():
                     raise ValueError(f"Enter a valid attendee count for event day {day_number}.")
                 if expected_attendees is not None and expected_attendees < 0:
                     raise ValueError(f"Attendee count cannot be negative for event day {day_number}.")
-                celebrates = str(event_item.get("celebrates_christmas_easter", ""))
+                celebrates = str(event_item.get("celebrates_christmas_easter", "")) if publicity_type == "Private" else ""
                 if celebrates not in {"", "yes", "no"}:
                     raise ValueError(f"Choose the holiday preference for event day {day_number}.")
                 pitch_fee_required = pitch_value == "yes"
-                day_cost = Decimal("0.00") if pitch_fee_required else (duration_hours * Decimal("45.00")).quantize(Decimal("0.01"))
+                pitch_fee_amount = None
+                if pitch_fee_required:
+                    try:
+                        pitch_fee_amount = Decimal(str(event_item.get("pitch_fee_amount", "")))
+                    except InvalidOperation:
+                        raise ValueError(f"Enter a valid pitch fee for event day {day_number}.")
+                    if not pitch_fee_amount.is_finite() or pitch_fee_amount < 0 or pitch_fee_amount > Decimal("999999.99"):
+                        raise ValueError(f"Enter a pitch fee between £0 and £999,999.99 for event day {day_number}.")
+                    if pitch_fee_amount != pitch_fee_amount.quantize(Decimal("0.01")):
+                        raise ValueError(f"Enter the pitch fee with no more than two decimal places for event day {day_number}.")
+                day_cost = Decimal("0.00") if pitch_fee_required else (duration_hours * Decimal(pricing_rules["hourly_rate"])).quantize(Decimal("0.01"))
                 total_event_cost += day_cost
                 normalized_schedule.append({
                     "date": event_date.isoformat(),
@@ -1476,6 +1568,7 @@ def booking_request():
                     "event_type": event_type,
                     "theme": theme,
                     "pitch_fee_required": pitch_fee_required,
+                    "pitch_fee_amount": str(pitch_fee_amount.quantize(Decimal("0.01"))) if pitch_fee_amount is not None else None,
                     "expected_attendees": expected_attendees,
                     "publicity_type": publicity_type,
                     "location_type": location_type,
@@ -1493,16 +1586,13 @@ def booking_request():
             if request.form.get("terms_accepted") != "yes":
                 raise ValueError("Accept the booking terms and conditions to continue.")
 
-            promo_code = request.form.get("promo_code", "").strip().upper() or None
+            promo_code = request.form.get("promo_code", "").strip() or None
             referral_verified = None
             if promo_code:
-                active_codes_exist = ReferralCode.query.filter_by(active=True).first() is not None
-                referral = ReferralCode.query.filter_by(code=promo_code, active=True).first()
-                referral_verified = bool(
-                    referral and (not referral.expires_at or referral.expires_at >= today)
-                ) if active_codes_exist else None
-                if active_codes_exist and not referral_verified:
-                    raise ValueError("The referral code is invalid or expired. Remove it or enter a valid code.")
+                referral_verified = booking_code_is_valid(promo_code)
+                if not referral_verified:
+                    raise ValueError("The referral code is invalid, already processed or expired. Remove it or enter a valid code.")
+                claim_booking_code(promo_code)
 
             first_event = normalized_schedule[0]
             booking = Booking(
@@ -1524,6 +1614,7 @@ def booking_request():
                 single_date=single_date == "yes",
                 additional_event_dates=", ".join(item["date"] for item in normalized_schedule[1:]) or None,
                 event_schedule=json.dumps({
+                    "pricing_rules": pricing_rules,
                     "same_details": all_dates_same_details,
                     "events": normalized_schedule,
                 }),
@@ -1695,6 +1786,7 @@ def admin_bookings():
             "same_details": same_details,
             "total_hours": hours,
             "final_total": Decimal(booking.total_event_cost or 0) + Decimal(booking.travel_charge or 0),
+            "pricing_rules": saved_schedule.get("pricing_rules", DEFAULT_BUSINESS_SETTINGS) if isinstance(saved_schedule, dict) else DEFAULT_BUSINESS_SETTINGS,
             "public_event_count": sum(event.get("publicity_type") == "Public" for event in events),
             "created_events": Event.query.filter_by(booking_id=booking.id).order_by(Event.booking_day_number.asc()).all(),
         })
@@ -1738,6 +1830,8 @@ def admin_manage_booking(booking_id):
     except (TypeError, ValueError):
         schedule_data = {"same_details": False, "events": []}
         schedule_events = []
+    if isinstance(schedule_data, list):
+        schedule_data = {"same_details": False, "events": schedule_events}
     if not schedule_events:
         schedule_events = [{
             "date": booking.event_date.isoformat(),
@@ -1750,7 +1844,9 @@ def admin_manage_booking(booking_id):
         }]
         schedule_data = {"same_details": False, "events": schedule_events}
 
-    remaining_travel_cap = Decimal("50.00")
+    from business_settings import DEFAULTS
+    pricing_rules = dict(DEFAULTS, **schedule_data.get("pricing_rules", {}))
+    remaining_travel_cap = Decimal(pricing_rules["travel_cap"])
     total_travel_charge = Decimal("0.00")
     for index, event in enumerate(schedule_events):
         try:
@@ -1761,7 +1857,7 @@ def admin_manage_booking(booking_id):
             return redirect(url_for("admin_bookings", update_error="travel"))
         if travel_miles < 0 or travel_miles > Decimal("10000"):
             return redirect(url_for("admin_bookings", update_error="travel"))
-        charge_before_cap = max(Decimal("0.00"), travel_miles - Decimal("10.00"))
+        charge_before_cap = max(Decimal("0.00"), travel_miles - Decimal(pricing_rules["free_miles"])) * Decimal(pricing_rules["mile_rate"])
         day_travel_charge = min(charge_before_cap, remaining_travel_cap)
         event["travel_miles"] = str(travel_miles.normalize())
         event["travel_charge"] = str(day_travel_charge.quantize(Decimal("0.01")))
@@ -1850,12 +1946,12 @@ def admin_create_referral_code():
     code = request.form.get("code", "").strip().upper()
     expires_raw = request.form.get("expires_at", "").strip()
     if not code:
-        return redirect(url_for("admin_bookings", referral_error="code"))
+        return redirect(url_for("admin_rewards", referral_error="code"))
 
     try:
         expires_at = datetime.strptime(expires_raw, "%Y-%m-%d").date() if expires_raw else None
     except ValueError:
-        return redirect(url_for("admin_bookings", referral_error="date"))
+        return redirect(url_for("admin_rewards", referral_error="date"))
 
     referral = ReferralCode.query.filter_by(code=code).first()
     if referral is None:
@@ -1865,7 +1961,7 @@ def admin_create_referral_code():
         referral.expires_at = expires_at
         referral.active = True
     db.session.commit()
-    return redirect(url_for("admin_bookings", referral_added=code))
+    return redirect(url_for("admin_rewards", referral_added=code))
 
 
 @app.post("/admin/referral-codes/import")
@@ -1873,15 +1969,15 @@ def admin_create_referral_code():
 def admin_import_referral_codes():
     upload = request.files.get("referral_csv")
     if upload is None or not upload.filename:
-        return redirect(url_for("admin_bookings", referral_error="file"))
+        return redirect(url_for("admin_rewards", referral_error="file"))
 
     try:
         contents = upload.stream.read(2_000_001)
         if len(contents) > 2_000_000:
-            return redirect(url_for("admin_bookings", referral_error="size"))
+            return redirect(url_for("admin_rewards", referral_error="size"))
         reader = csv.DictReader(StringIO(contents.decode("utf-8-sig")))
     except (UnicodeDecodeError, csv.Error):
-        return redirect(url_for("admin_bookings", referral_error="file"))
+        return redirect(url_for("admin_rewards", referral_error="file"))
 
     headers = {
         header.strip().lower().replace(" ", "").replace("_", ""): header
@@ -1897,7 +1993,7 @@ def admin_import_referral_codes():
     )
     active_header = headers.get("active") or headers.get("status")
     if code_header is None:
-        return redirect(url_for("admin_bookings", referral_error="header"))
+        return redirect(url_for("admin_rewards", referral_error="header"))
 
     imported_count = 0
     skipped_count = 0
@@ -1938,7 +2034,7 @@ def admin_import_referral_codes():
 
     db.session.commit()
     return redirect(url_for(
-        "admin_bookings",
+        "admin_rewards",
         referral_imported=imported_count,
         referral_skipped=skipped_count,
     ))
@@ -1951,7 +2047,7 @@ def admin_deactivate_referral_code(code_id):
     if referral is not None:
         referral.active = False
         db.session.commit()
-    return redirect(url_for("admin_bookings"))
+    return redirect(url_for("admin_rewards"))
 
 @app.get("/admin/participants")
 @admin_required
@@ -2206,6 +2302,21 @@ def admin_waiver_detail(waiver_id):
         "admin_waiver_detail.html",
         waiver=waiver
 )
+
+import rewards as rewards_module
+with app.app_context():
+    rewards_module.engine = db.engine
+    rewards_module.init_db()
+app.register_blueprint(rewards_module.app)
+from rewards_transfer import register_transfer
+register_transfer(app, rewards_module.engine, admin_required)
+
+from reports import register_reports
+register_reports(app, db, Booking, Waiver, Participant, ReportLocation, booking_schedule_events, admin_required)
+
+
+from business_settings import register_settings
+get_business_settings = register_settings(app, db, BusinessSetting, AdminCredential, AdminPasswordReset, admin_required, ADMIN_PASSWORD, ADMIN_EMAIL)
 
 if __name__ == '__main__':
     app.run(debug=True)

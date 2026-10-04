@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Reports | CL Paints{% endblock %}
+{% macro bars(title, rows, note='', unit='') %}
+<section class="panel report-chart"><h2>{{ title }}</h2><p>{{ note }}</p>
+{% if rows and rows|sum(attribute='value') %}
+<div class="report-bars" role="list" aria-label="{{ title }}">
+{% for item in rows %}<div class="report-bar-row" role="listitem"><span>{{ item.label }}</span><div class="report-bar-track"><div style="width: {{ item.width }}%"></div></div><strong>{{ item.value }}{{ unit }}</strong></div>{% endfor %}
+</div>
+{% else %}<p class="report-empty">No records in this period.</p>{% endif %}</section>
+{% endmacro %}
+{% block body %}
+<div class="admin"><aside><div class="brand light">CL <span>Paints</span></div><nav>
+<a href="/">Dashboard</a><a href="{{ url_for('admin_participants') }}">Participants</a><a href="{{ url_for('admin_bookings') }}">Bookings</a><a href="{{ url_for('admin_rewards') }}">Rewards</a><a href="{{ url_for('admin_events') }}">Events</a><a href="{{ url_for('admin_moodboard') }}">Moodboard</a><a class="active" href="{{ url_for('admin_reports') }}">Reports</a><a href="{{ url_for('admin_settings') }}">Settings</a><a href="{{ url_for('admin_logout') }}">Logout</a>
+</nav></aside><main class="reports-main">
+<header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Reports</h1><p>Understand your bookings, participants, referrals and client locations.</p></div><a class="btn" href="{{ url_for('export_reports', period=period, start=start.isoformat(), end=end.isoformat(), location=location_source, setting=setting) }}">Export CSV</a></header>
+{% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
+{% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
+<form method="get" class="panel reports-filters">
+<label>Period<select name="period" id="reportPeriod"><option value="month" {% if period == 'month' %}selected{% endif %}>This month</option><option value="quarter" {% if period == 'quarter' %}selected{% endif %}>Last 3 months</option><option value="year" {% if period == 'year' %}selected{% endif %}>This year</option><option value="custom" {% if period == 'custom' %}selected{% endif %}>Custom dates</option></select></label>
+<label>Start date<input type="date" name="start" value="{{ start.isoformat() }}" required></label><label>End date<input type="date" name="end" value="{{ end.isoformat() }}" required></label>
+<label>Event setting<select name="setting"><option value="all" {% if setting == 'all' %}selected{% endif %}>All events</option><option value="Private" {% if setting == 'Private' %}selected{% endif %}>Private events</option><option value="Public" {% if setting == 'Public' %}selected{% endif %}>Public events</option></select></label><label>Location view<select name="location"><option value="client" {% if location_source == 'client' %}selected{% endif %}>Client addresses</option><option value="venue" {% if location_source == 'venue' %}selected{% endif %}>Event venues</option></select></label><button class="btn primary" type="submit">Apply filters</button>
+</form>
+<p class="report-period">{{ start.strftime('%d %B %Y') }} – {{ end.strftime('%d %B %Y') }}. Booking reports use request submission dates; {% if setting != 'Private' %}waiver reports use signing dates.{% endif %} Outcomes reflect current booking status.</p>
+<section class="stats" aria-label="Report totals"><article><span>Booking requests</span><strong>{{ booking_count }}</strong></article>{% if setting != 'Private' %}<article><span>Waivers signed</span><strong>{{ waiver_count }}</strong></article><article><span>Participants recorded</span><strong>{{ participant_count }}</strong></article><article><span>Average participant age</span><strong>{{ average_age if average_age is not none else '—' }}</strong><small>{{ age_sample }} recorded ages</small></article>{% endif %}</section>
+<p class="report-note">Event setting filters booking figures, workload and locations. Mixed bookings appear in either applicable filter and count once per view. {% if setting == 'Private' %}Waiver and participant reports are omitted because waivers are not operated at private events.{% else %}Waiver and age figures include recorded waivers; their records do not consistently identify an event setting.{% endif %} Referral figures cover the complete referral cohort.</p><div class="report-grid">
+{{ bars('Public and private events', setting_comparison, 'Comparison of all requests in this date range, regardless of the event-setting filter. Mixed bookings are shown separately.') }}
+{{ bars('Booking trends', booking_trend, 'Requests received each month.') }}
+<section class="panel report-chart"><h2>Booking outcomes</h2><p>Where the {{ booking_count }} requests currently stand.</p><div class="report-flow">
+<div><strong>{{ booking_count }}</strong><span>Requests received</span></div><span class="report-flow-arrow" aria-hidden="true">→</span>
+<div class="report-outcomes">{% for item in outcomes %}<div><strong>{{ item.value }}</strong><span>{{ item.label }} · {{ ((item.value / booking_count * 100)|round(1)) if booking_count else 0 }}%</span></div>{% else %}<p>No booking requests in this period.</p>{% endfor %}</div></div></section>
+{{ bars('Popular event types', event_types, 'One event type per booking request, using its first matching event date.') }}
+{% if setting != 'Private' %}
+{{ bars('Participant age bands', ages, 'Ages recorded on waivers; repeat attendance may appear more than once.') }}
+{{ bars('Waivers over time', waiver_trend, 'Signed waiver records, including archives; superseded records are excluded.') }}
+{{ bars('Participants over time', participant_trend, 'Participants on waivers signed each month; these are attendance records, not unique people.') }}
+{% endif %}
+<section class="panel report-chart"><h2>Referral performance</h2><p>Codes whose original attended event falls in this period. Milestones are counted up to {{ end.strftime('%d/%m/%Y') }}.</p><div class="report-referral-flow">{% for item in referral_flow %}<div><strong>{{ item.value }}</strong><span>{{ item.label }}</span></div>{% endfor %}</div><small>Historical imports can contain earned rewards without a linked booking. Attendance must be confirmed before a reward is earned.</small></section>
+{{ bars('Booked hours', workload, 'Accepted event dates falling within the selected period, including future dates when selected.', ' hrs') }}
+<section class="panel report-chart"><h2>Estimated booking value</h2><strong class="report-value">£{{ estimated_value }}</strong><p>Whole-booking estimates plus travel for matching accepted requests submitted in this period; mixed bookings include all their dates. This is estimated value, not payments received.</p></section>
+<section class="panel report-chart"><h2>Client overview</h2><strong class="report-value">{{ unique_clients }}</strong><p>Distinct client email addresses on requests submitted in this period. Repeat bookings count once here.</p></section>
+</div>
+<section class="panel report-location">
+<div class="panel-heading"><div><h2>{{ 'Client locations' if location_source == 'client' else 'Event locations' }}</h2><p>Grouped by postcode district. Larger circles show {{ 'more clients' if location_source == 'client' else 'more booking requests' }}.</p></div>
+<form method="post" action="{{ url_for('refresh_report_locations') }}"><input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="start" value="{{ start.isoformat() }}"><input type="hidden" name="end" value="{{ end.isoformat() }}"><input type="hidden" name="setting" value="{{ setting }}"><input type="hidden" name="location" value="{{ location_source }}"><button class="btn" type="submit" {% if not unmapped_areas %}disabled{% endif %}>Map new postcode districts</button></form></div>
+<p>{{ missing_addresses }} booking request{{ 's' if missing_addresses != 1 }} have an address without a recognised UK postcode. {{ unmapped_areas }} district{{ 's' if unmapped_areas != 1 }} await map coordinates.</p>
+<div class="report-location-grid"><div><div id="reportMap" class="report-map" aria-label="Map of postcode districts"></div><p id="reportMapStatus" role="status">{% if markers %}Loading location map…{% else %}No mapped locations yet. Use “Map new postcode districts” to locate recorded postcode districts.{% endif %}</p></div>
+<div class="report-area-list"><h3>Top postcode districts</h3>{% for area in areas %}<article><div><strong>{{ area.outcode }}</strong><span>{{ area.town or 'Postcode district' }}</span></div><dl><div><dt>Clients</dt><dd>{{ area.clients }}</dd></div><div><dt>Requests</dt><dd>{{ area.bookings }}</dd></div><div><dt>Accepted</dt><dd>{{ area.accepted }}</dd></div></dl></article>{% else %}<p>No usable postcodes found in this period.</p>{% endfor %}</div></div>
+<p class="report-note">Client locations use each email's latest address in the selected period for client counts; request counts include earlier addresses. Venue clients may appear in more than one district. Dates for venue locations follow booking submission dates. Only postcode districts are sent for map lookups; exact home addresses are not plotted.</p>
+</section>
+<script type="application/json" id="reportMapData">{{ markers|tojson }}</script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ url_for('static', filename='reports.js') }}"></script>
+</main></div>
+{% endblock %}

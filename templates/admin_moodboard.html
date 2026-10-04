@@ -6,7 +6,7 @@ Moodboard Library | CL Paints
 
 {% block body %}
 
-<div class="admin">
+<div class="admin moodboard-library">
 
     <aside>
         <div class="brand light">
@@ -17,11 +17,11 @@ Moodboard Library | CL Paints
             <a href="/">Dashboard</a>
             <a href="{{ url_for('admin_participants') }}">Participants</a>
             <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
             <a href="/admin/events">Events</a>
             <a class="active" href="/admin/moodboard">Moodboard</a>
-            <a>Reports</a>
-            <a>Activity</a>
-            <a>Settings</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_settings') }}">Settings</a>
             <a href="/admin/logout">Logout</a>
         </nav>
     </aside>
@@ -93,9 +93,12 @@ Moodboard Library | CL Paints
 
             {% if images %}
 
+    {% for design_type, group_title in [("large", "Large Paints"), ("small", "Small Paints")] %}
+    <section class="moodboard-category" aria-labelledby="library-{{ design_type }}-heading">
+        <h3 id="library-{{ design_type }}-heading">{{ group_title }}</h3>
     <div class="moodboard-admin-grid">
 
-        {% for image in images %}
+        {% for image in images if image.design_type == design_type %}
 
             <article class="moodboard-admin-card">
 
@@ -156,9 +159,13 @@ Moodboard Library | CL Paints
 
             </article>
 
+        {% else %}
+            <p class="moodboard-category-empty">No images in this group yet.</p>
         {% endfor %}
 
     </div>
+    </section>
+    {% endfor %}
 
 {% else %}
 

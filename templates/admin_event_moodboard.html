@@ -18,11 +18,11 @@ Event Moodboard | CL Paints
                 <a href="/">Dashboard</a>
                 <a>Participants</a>
                 <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
                 <a class="active" href="/admin/events">Events</a>
                 <a class="active" href="/admin/moodboard">Moodboard</a>
-                <a>Reports</a>
-                <a>Activity</a>
-                <a>Settings</a>
+                <a href="{{ url_for('admin_reports') }}">Reports</a>
+                <a href="{{ url_for('admin_settings') }}">Settings</a>
                 <a href="/admin/logout">Logout</a>
             </nav>
 
@@ -66,9 +66,12 @@ Event Moodboard | CL Paints
                     action="/admin/events/{{ event.id }}/moodboard"
                 >
 
+                    {% for design_type, group_title in [("large", "Large Paints"), ("small", "Small Paints")] %}
+                    <section class="moodboard-category" aria-labelledby="event-{{ design_type }}-heading">
+                        <h3 id="event-{{ design_type }}-heading">{{ group_title }}</h3>
                     <div class="moodboard-admin-grid">
 
-                        {% for image in images %}
+                        {% for image in images if image.design_type == design_type %}
 
                             <label class="moodboard-admin-card">
 
@@ -94,9 +97,13 @@ Event Moodboard | CL Paints
 
                             </label>
 
+                        {% else %}
+                            <p class="moodboard-category-empty">No images available in this group.</p>
                         {% endfor %}
 
                     </div>
+                    </section>
+                    {% endfor %}
 
                     <div style="margin-top: 20px;">
 

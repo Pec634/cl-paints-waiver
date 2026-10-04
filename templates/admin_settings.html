@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Settings | CL Paints{% endblock %}
+{% macro field(label, name, type='text', minimum='', maximum='', step='') %}
+<label class="booking-field"><span>{{ label }}</span><input type="{{ type }}" name="{{ name }}" value="{{ settings[name] }}" {% if minimum != '' %}min="{{ minimum }}"{% endif %} {% if maximum != '' %}max="{{ maximum }}"{% endif %} {% if step %}step="{{ step }}"{% endif %} {% if type == 'number' %}required{% endif %} {% if type in ['text', 'email', 'url'] %}maxlength="255"{% endif %}></label>
+{% endmacro %}
+{% block body %}
+<div class="admin"><aside><div class="brand light">CL <span>Paints</span></div><nav>
+<a href="/">Dashboard</a><a href="{{ url_for('admin_participants') }}">Participants</a><a href="{{ url_for('admin_bookings') }}">Bookings</a><a href="{{ url_for('admin_rewards') }}">Rewards</a><a href="{{ url_for('admin_events') }}">Events</a><a href="{{ url_for('admin_moodboard') }}">Moodboard</a><a href="{{ url_for('admin_reports') }}">Reports</a><a class="active" href="{{ url_for('admin_settings') }}">Settings</a><a href="{{ url_for('admin_logout') }}">Logout</a>
+</nav></aside><main class="settings-main">
+<header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Settings</h1><p>Manage your business details, booking rules and admin account.</p></div></header>
+{% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
+<p class="report-note">Pricing changes apply to new booking requests. Existing bookings keep their saved event estimates and travel rules. Service credentials remain in your server configuration.</p>
+<div class="settings-grid">
+<form method="post" class="panel"><h2>Business details</h2><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="section" value="business"><div class="booking-fields">
+{{ field('Business name', 'business_name') }}{{ field('Contact email', 'contact_email', 'email') }}{{ field('Phone', 'phone', 'tel') }}{{ field('Website', 'website', 'url') }}
+</div><button class="btn primary" type="submit">Save business details</button></form>
+<form method="post" class="panel"><h2>Booking rules</h2><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="section" value="booking"><div class="booking-fields">
+{{ field('Hourly rate (£)', 'hourly_rate', 'number', '0.01', '10000', '0.01') }}{{ field('Minimum hours per event', 'minimum_hours', 'number', '0.5', '24', '0.01') }}{{ field('Maximum event dates per request', 'max_event_dates', 'number', '1', '10', '1') }}
+</div><button class="btn primary" type="submit">Save booking rules</button></form>
+<form method="post" class="panel"><h2>Travel charges</h2><p>One-way road miles, calculated separately for each event date.</p><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="section" value="travel"><div class="booking-fields">
+{{ field('Free miles per event date', 'free_miles', 'number', '0', '10000', '0.01') }}{{ field('Charge per additional mile (£)', 'mile_rate', 'number', '0', '1000', '0.01') }}{{ field('Maximum travel charge per booking (£)', 'travel_cap', 'number', '0', '10000', '0.01') }}
+</div><button class="btn primary" type="submit">Save travel charges</button></form>
+<form method="post" class="panel"><h2>Admin account</h2><p>Enter your current password to update your recovery email or password.</p><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="section" value="account"><div class="booking-fields">
+{{ field('Password-recovery email', 'recovery_email', 'email') }}
+<label class="booking-field"><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
+<label class="booking-field"><span>New password (optional)</span><input type="password" name="new_password" autocomplete="new-password" minlength="12" maxlength="128"><small>12–128 characters. Leave blank to keep your password.</small></label>
+<label class="booking-field"><span>Confirm new password</span><input type="password" name="confirm_password" autocomplete="new-password" minlength="12" maxlength="128"></label>
+</div><button class="btn primary" type="submit">Save account settings</button></form>
+</div></main></div>
+{% endblock %}

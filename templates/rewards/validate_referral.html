@@ -1,0 +1,27 @@
+
+{% extends "rewards/base.html" %}
+{% block content %}
+<section class="form-card">
+  <div class="eyebrow">VALIDATE REFERRAL</div>
+  <h2>{{ record.customer_name }}</h2>
+
+  <div class="detail-grid">
+    <div><span>Referral code</span><strong>{{ record.code }}</strong></div>
+    <div><span>Original event</span><strong>{{ record.display_original_event_date }}</strong></div>
+    <div><span>Referral expires</span><strong>{{ record.display_expires_date }}</strong></div>
+    <div><span>Reward</span><strong>{{ record.reward_text }}</strong></div>
+  </div>
+
+  <form method="post" class="form-grid">
+    <label>
+      Referred friend's attended event date
+      <input name="friend_event_date" value="{{ friend_event_date }}" placeholder="DD/MM/YYYY" required>
+    </label>
+    <p class="hint">The friend's qualifying booking must have been attended within the original 12-month validity period.</p>
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="{{ url_for('rewards.dashboard', section='active') }}">Cancel</a>
+      <button class="btn btn-yellow" type="submit">Confirm & Earn Reward</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

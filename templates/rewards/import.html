@@ -1,0 +1,100 @@
+
+{% extends "rewards/base.html" %}
+{% block title %}Import Existing Data • CL Paints{% endblock %}
+{% block content %}
+<section class="form-card">
+  <h2>Transfer from the development app</h2>
+  <p>Import a private Rewards JSON transfer file to preserve names, codes, dates, reward status and single-use history. Existing codes are kept.</p>
+  <form method="post" action="{{ url_for('import_rewards_transfer') }}" enctype="multipart/form-data" class="form-grid">
+    <label>Rewards transfer file<input type="file" name="transfer_file" accept=".json,application/json" required></label>
+    <button class="btn primary" type="submit">Transfer Rewards records</button>
+  </form>
+</section>
+<section class="dashboard-heading">
+  <div>
+    <div class="eyebrow">IMPORT EXISTING DATA</div>
+    <h2>Transfer customers from the original program</h2>
+    <p>
+      Upload your old CL Paints text files and the web app will convert the
+      customer names, referral codes, dates and reward status into the new database.
+    </p>
+  </div>
+  <a class="btn btn-ghost" href="{{ url_for('rewards.download_database_backup') }}">Download Database Backup</a>
+</section>
+
+<section class="import-info">
+  <strong>Safe import:</strong>
+  Existing referral codes are never overwritten. If a code already exists in the
+  web app, that line is skipped so importing the same file twice will not create duplicates.
+</section>
+
+<section class="form-card import-card">
+  <form method="post" enctype="multipart/form-data" class="form-grid">
+    <label class="upload-box">
+      <span>Active Referral Codes</span>
+      <small>Choose your old <b>client_codes.txt</b> file.</small>
+      <input type="file" name="active_file" accept=".txt,text/plain">
+    </label>
+
+    <label class="upload-box">
+      <span>30-Minute Rewards Available</span>
+      <small>Choose your old <b>validated_vouchers.txt</b> file.</small>
+      <input type="file" name="earned_file" accept=".txt,text/plain">
+    </label>
+
+    <label class="upload-box">
+      <span>Redeemed Rewards</span>
+      <small>Choose <b>redeemed_rewards.txt</b> if your later desktop version created it.</small>
+      <input type="file" name="redeemed_file" accept=".txt,text/plain">
+    </label>
+
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="{{ url_for('rewards.dashboard') }}">Back to Dashboard</a>
+      <button class="btn btn-primary" type="submit">Import Selected Files</button>
+    </div>
+  </form>
+</section>
+
+{% if results %}
+<section class="table-card import-results">
+  <div class="results-title">
+    <div class="eyebrow">IMPORT RESULTS</div>
+    <h2>Transfer summary</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Imported</th>
+          <th>Skipped</th>
+          <th>Could Not Import</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td><strong>{{ r.filename }}</strong><br><small>{{ r.label }}</small></td>
+          <td class="import-good">{{ r.imported }}</td>
+          <td>{{ r.skipped }}</td>
+          <td class="{% if r.failed %}import-bad{% endif %}">{{ r.failed }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if warnings %}
+<section class="warning-card">
+  <h3>Items to check</h3>
+  <p>These lines were skipped or need attention. Your original files have not been changed.</p>
+  <ul>
+    {% for warning in warnings %}
+      <li>{{ warning }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

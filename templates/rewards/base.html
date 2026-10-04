@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Rewards | CL Paints{% endblock %}
+{% block body %}
+<div class="admin">
+    <aside>
+        <div class="brand light">CL <span>Paints</span></div>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="{{ url_for('admin_participants') }}">Participants</a>
+            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a class="active" href="{{ url_for('rewards.dashboard') }}">Rewards</a>
+            <a href="{{ url_for('admin_events') }}">Events</a>
+            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_settings') }}">Settings</a>
+            <a href="{{ url_for('admin_logout') }}">Logout</a>
+        </nav>
+    </aside>
+    <main class="rewards-main">
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+        {% block content %}{% endblock %}
+    </main>
+</div>
+{% endblock %}

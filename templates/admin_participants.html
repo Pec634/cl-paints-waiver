@@ -17,11 +17,11 @@ Participants | CL Paints
             <a href="/">Dashboard</a>
             <a class="active" href="{{ url_for('admin_participants') }}">Participants</a>
             <a href="{{ url_for('admin_bookings') }}">Bookings</a>
+            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
             <a href="/admin/events">Events</a>
             <a href="/admin/moodboard">Moodboard</a>
-            <a>Reports</a>
-            <a>Activity</a>
-            <a>Settings</a>
+            <a href="{{ url_for('admin_reports') }}">Reports</a>
+            <a href="{{ url_for('admin_settings') }}">Settings</a>
             <a href="/admin/logout">Logout</a>
         </nav>
     </aside>
@@ -117,18 +117,18 @@ Participants | CL Paints
                         <tbody>
                             {% for participant in group["participants"] %}
                             <tr class="participant-row">
-                                <td>
+                                <td data-label="Name">
                                     <strong>
                                         {{ participant.first_name }}
                                         {{ participant.last_name }}
                                     </strong>
                                 </td>
-                                <td>{{ participant.age }}</td>
-                                <td>{{ participant.waiver.event_name }}</td>
-                                <td>{{ participant.waiver.waiver_reference }}</td>
-                                <td>{{ participant.waiver.signed_date.strftime("%d/%m/%Y") }}</td>
-                                <td>{{ participant.waiver.status }}</td>
-                                <td>
+                                <td data-label="Age">{{ participant.age }}</td>
+                                <td data-label="Event">{{ participant.waiver.event_name }}</td>
+                                <td data-label="Waiver Reference">{{ participant.waiver.waiver_reference }}</td>
+                                <td data-label="Waiver Date">{{ participant.waiver.signed_date.strftime("%d/%m/%Y") }}</td>
+                                <td data-label="Status">{{ participant.waiver.status }}</td>
+                                <td data-label="Action">
                                     <div class="participant-actions">
                                         <a
                                             class="btn small"

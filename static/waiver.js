@@ -1,4 +1,37 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Collapse the existing admin navigation on mobile; without JavaScript
+    // the links remain visible. Desktop navigation is unaffected.
+    document.querySelectorAll(".admin aside").forEach((sidebar, index) => {
+        const navigation = sidebar.querySelector("nav");
+        if (!navigation) return;
+
+        navigation.id = navigation.id || `admin-navigation-${index}`;
+        const menuButton = document.createElement("button");
+        menuButton.type = "button";
+        menuButton.className = "admin-menu-toggle";
+        menuButton.setAttribute("aria-controls", navigation.id);
+        menuButton.setAttribute("aria-expanded", "false");
+        menuButton.innerHTML = '<span class="admin-menu-icon" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span>';
+
+        function setMenuOpen(open) {
+            sidebar.classList.toggle("admin-menu-open", open);
+            menuButton.setAttribute("aria-expanded", String(open));
+        }
+
+        menuButton.addEventListener("click", () => {
+            setMenuOpen(!sidebar.classList.contains("admin-menu-open"));
+        });
+        sidebar.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && sidebar.classList.contains("admin-menu-open")) {
+                setMenuOpen(false);
+                menuButton.focus();
+            }
+        });
+
+        sidebar.insertBefore(menuButton, navigation);
+        sidebar.classList.add("admin-menu-ready");
+    });
+
     const app = document.getElementById("waiverApp");
 
     // =========================================================

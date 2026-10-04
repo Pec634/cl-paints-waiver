@@ -5,4 +5,3 @@ __pycache__/
 instance/
 .vscode/
 *.db
-ADMIN_PASSWORD=your-admin
