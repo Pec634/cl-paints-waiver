@@ -1,0 +1,3 @@
+<nav class="client-social-links" aria-label="CL Paints social media and reviews">
+{% for key, label in [('facebook_url','Facebook'),('instagram_url','Instagram'),('trustpilot_url','Read our Trustpilot reviews')] %}{% if business_settings[key] %}<a class="btn" href="{{ business_settings[key] }}" target="_blank" rel="noopener noreferrer">{{ label }}</a>{% endif %}{% endfor %}
+</nav>

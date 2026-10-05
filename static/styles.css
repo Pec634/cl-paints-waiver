@@ -2600,3 +2600,5 @@ label.moodboard-admin-card > div {
 
 .client-form .client-remember-choice { display: flex; align-items: center; gap: 10px; }
 .client-form .client-remember-choice input { width: 20px; height: 20px; margin: 0; accent-color: var(--pink); }
+
+.client-social-links { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }

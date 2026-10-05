@@ -11,6 +11,9 @@ DEFAULTS = dict(business_name='CL Paints', contact_email='info@clpaints.com', ph
 from client_notifications import EMAIL_DEFAULTS, validate_email_settings
 DEFAULTS.update(EMAIL_DEFAULTS)
 DEFAULTS.update(calendar_buffer_minutes='60', reminder_days='2', public_app_url='')
+DEFAULTS.update(facebook_url='https://www.facebook.com/profile.php?id=61578784131483&locale=en_GB',
+                instagram_url='https://www.instagram.com/cl.paints_/',
+                trustpilot_url='https://uk.trustpilot.com/review/clpaints.com')
 
 
 def read_settings(db, Setting, recovery_default=''):
@@ -49,6 +52,16 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                     values['contact_email'] = validate_email(values['contact_email'], check_deliverability=False).normalized
                     if values['website'] and not values['website'].startswith(('https://', 'http://')):
                         raise ValueError('The website must begin with https:// or http://.')
+                elif section == 'social':
+                    from urllib.parse import urlsplit
+                    for key, domain in [('facebook_url','facebook.com'),('instagram_url','instagram.com'),('trustpilot_url','trustpilot.com')]:
+                        value = request.form.get(key, '').strip()
+                        parsed = urlsplit(value)
+                        host = (parsed.hostname or '').lower()
+                        if value and (len(value) > 1000 or parsed.scheme != 'https' or parsed.username or parsed.password
+                                      or parsed.port not in (None,443) or not (host == domain or host.endswith('.'+domain))):
+                            raise ValueError(f'Use an HTTPS link on {domain}, or leave it blank to hide it.')
+                        values[key] = value
                 elif section in {'notifications', 'email_bookings', 'email_rewards', 'email_design'}:
                     groups = {
                         'email_bookings': ['notification_booking_subject', 'notification_booking_body'],

@@ -12,7 +12,7 @@
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}{% if category == 'client_login_success' %} client-login-celebration{% endif %}" role="status">{{ message }}</p>{% endfor %}
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
 {% block content %}{% endblock %}
-</main><footer class="client-footer"><div class="client-business-details"><strong>{{ business_settings.business_name }}</strong><span>Company number: 16615959</span><p>Business address: Suite 53c Abbey Road, London, England, NW10 7TR</p></div><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a></footer>
+</main><footer class="client-footer"><div class="client-business-details"><strong>{{ business_settings.business_name }}</strong><span>Company number: 16615959</span><p>Business address: Suite 53c Abbey Road, London, England, NW10 7TR</p></div><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% include 'client/_social_links.html' %}</footer>
 </div>
 <script src="{{ url_for('static', filename='client-auth.js') }}" defer></script>
 {% endblock %}

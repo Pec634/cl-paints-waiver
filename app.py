@@ -488,6 +488,8 @@ from business_tools import define_models as define_tool_models
 tool_models = define_tool_models(db)
 from sumup_invoices import define_model as define_invoice_model
 BookingInvoice = define_invoice_model(db)
+from booking_requests import define_model as define_booking_request_model
+BookingRequest = define_booking_request_model(db)
 from client_addresses import define_model as define_address_model, FIELDS as BILLING_ADDRESS_FIELDS, read_address, format_address
 ClientBillingAddress = define_address_model(db)
 app.extensions['client_billing_address_model'] = ClientBillingAddress
@@ -2479,6 +2481,10 @@ register_tools(app, db, tool_models, Booking, ClientAccount, ClientEnquiry, Part
 
 from sumup_invoices import register as register_sumup_invoices
 register_sumup_invoices(app, db, BookingInvoice, Booking, admin_required, get_current_client, booking_schedule_events)
+
+from booking_requests import register as register_booking_requests
+register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_current_client,
+    admin_required, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events)
 
 if __name__ == '__main__':
     app.run(debug=True)

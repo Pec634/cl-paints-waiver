@@ -24,7 +24,7 @@ Bookings | CL Paints
         </nav>
     </aside>
 
-    <main>
+    <main>{% if booking_requests %}<section class="panel"><h2>Booking requests awaiting review</h2>{% for item in booking_requests %}<p><a href="{{ url_for('admin_booking_request', request_id=item.id) }}">{{ item.kind|capitalize }} request ? Booking #{{ item.booking_id }}</a></p>{% endfor %}</section>{% endif %}
         <div class="top bookings-top">
             <div>
                 <small>CL PAINTS MANAGEMENT SYSTEM</small>
