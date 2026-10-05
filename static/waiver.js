@@ -356,17 +356,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const waiverData = buildWaiverData();
 
     try {
-        const eventId = document.getElementById("waiverApp")?.dataset.eventId;
+        const waiverApp = document.getElementById("waiverApp");
+        const eventId = waiverApp?.dataset.eventId;
+        const submitUrl = waiverApp?.dataset.submitUrl || (eventId ? `/api/waivers/event/${eventId}` : '');
 
-        if (!eventId) {
+        if (!submitUrl) {
             alert("The event could not be identified. Please use the waiver link provided for your event.");
             return;
         }
 
-        const response = await fetch(`/api/waivers/event/${eventId}`, {
+        const response = await fetch(submitUrl, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "X-CSRF-Token": waiverApp.dataset.csrfToken || ''
             },
             body: JSON.stringify(waiverData)
         });

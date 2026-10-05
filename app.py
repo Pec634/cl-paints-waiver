@@ -486,6 +486,15 @@ from client_notifications import define_notification_models
 notification_models = define_notification_models(db)
 from business_tools import define_models as define_tool_models
 tool_models = define_tool_models(db)
+from sumup_invoices import define_model as define_invoice_model
+BookingInvoice = define_invoice_model(db)
+from client_addresses import define_model as define_address_model, FIELDS as BILLING_ADDRESS_FIELDS, read_address, format_address
+ClientBillingAddress = define_address_model(db)
+app.extensions['client_billing_address_model'] = ClientBillingAddress
+
+@app.context_processor
+def billing_address_context():
+    return dict(billing_address_fields=BILLING_ADDRESS_FIELDS)
 
 with app.app_context():
     db.create_all()
@@ -673,7 +682,8 @@ def waiver_event(event_id):
     current_event=event,
     moodboard_images=moodboard_images,
     large_moodboard_images=large_moodboard_images,
-    small_moodboard_images=small_moodboard_images
+    small_moodboard_images=small_moodboard_images,
+    responsible_account=get_current_client()
     )
 
 @app.post("/admin/moodboard/upload")
@@ -862,23 +872,33 @@ def admin_event_moodboard_save(event_id):
         )
     )
 
+@app.post('/api/waivers/account')
 @app.post("/api/waivers/event/<int:event_id>")
-def create_waiver(event_id):
-    current_event = db.session.get(Event, event_id)
+def create_waiver(event_id=None):
+    account = get_current_client() if event_id is None else None
+    if event_id is None:
+        if account is None:
+            return jsonify(success=False, error='Sign in to complete your waiver.'), 401
+        import hmac
+        if not session.get('client_csrf') or not hmac.compare_digest(session['client_csrf'], request.headers.get('X-CSRF-Token', '')):
+            abort(400)
+    current_event = db.session.get(Event, event_id) if event_id is not None else None
 
-    if current_event is None:
+    if event_id is not None and current_event is None:
         return jsonify({
             "success": False,
             "error": "Event not found."
         }), 404
 
-    if not current_event or current_event.status == "Closed":
+    if current_event and current_event.status == "Closed":
         return jsonify({
             "success": False,
             "error": "New waiver submissions are currently closed."
         }), 403
 
     data = request.get_json()
+    if isinstance(data, dict) and account:
+        data['responsible_email'] = account.email
     if not data:
         return jsonify({
             "success": False,
@@ -1047,8 +1067,8 @@ def create_waiver(event_id):
             signed_date=now,
             expiry_date=expiry,
             status="Valid",
-            event_name=current_event.name,
-            event_date=current_event.event_date,
+            event_name=current_event.name if current_event else 'Account waiver',
+            event_date=current_event.event_date if current_event else None,
             marketing_consent=marketing_consent,
             terms_version=TERMS_VERSION,
             terms_snapshot=terms_snapshot,
@@ -1484,6 +1504,10 @@ def booking_request():
         'email': portal_account.email, 'phone': portal_account.phone,
         'client_address': portal_account.address,
     } if portal_account else {})
+    if request.method == 'GET' and portal_account:
+        billing = db.session.get(ClientBillingAddress, portal_account.id)
+        if billing:
+            form_data.update(billing.details)
     error = None
 
     if request.method == "POST":
@@ -1497,7 +1521,7 @@ def booking_request():
             last_name = request.form.get("last_name", "").strip()
             email = portal_account.email if portal_account else request.form.get("email", "").strip()
             phone = request.form.get("phone", "").strip()
-            client_address = request.form.get("client_address", "").strip()
+            client_address = format_address(read_address(request.form))
             job_title = request.form.get("job_title", "").strip()
             signature = request.form.get("signature", "").strip()
 
@@ -2449,6 +2473,9 @@ register_notifications(app, db, notification_models, Booking, ClientAccount, Cli
 from business_tools import register_tools
 register_tools(app, db, tool_models, Booking, ClientAccount, ClientEnquiry, Participant, loyalty_models, notification_models,
     get_current_client, admin_required, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events)
+
+from sumup_invoices import register as register_sumup_invoices
+register_sumup_invoices(app, db, BookingInvoice, Booking, admin_required, get_current_client, booking_schedule_events)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,0 +1,10 @@
+<section class="panel"><h2>SumUp invoices</h2>
+{% if request.endpoint == 'admin_payments' %}
+<p>Create invoices in SumUp, then attach them here for your client. SumUp invoice statuses do not sync automatically; record confirmed payments in the ledger below.</p>
+<a class="btn primary" href="{{ url_for('admin_booking_invoices', booking_id=booking.id) }}">Attach SumUp invoice</a>
+{% else %}<p>Your invoices are issued through SumUp. Open an invoice to view its details and payment options. Payments below are updated by CL Paints after confirmation.</p>{% endif %}
+{% for invoice in booking_invoices %}
+<article class="client-record"><strong>{{ invoice.purpose }} · {{ invoice.reference }}</strong>
+<p>£{{ '%.2f'|format(invoice.amount) }} · Due {{ invoice.due_date.strftime('%d/%m/%Y') }}</p>
+<a class="btn" href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">View invoice in SumUp</a></article>
+{% else %}<p>No SumUp invoices attached.</p>{% endfor %}</section>

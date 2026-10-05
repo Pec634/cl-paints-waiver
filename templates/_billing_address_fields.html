@@ -1,0 +1,6 @@
+<fieldset class="booking-fields"><legend>Billing address</legend>
+<p>Please complete every field so your invoices show the correct address.</p>
+{% for name, label, autocomplete, limit in billing_address_fields %}
+<label class="booking-field"><span>{{ label }}</span><input name="{{ name }}" maxlength="{{ limit }}" autocomplete="{{ autocomplete }}" required value="{{ form_data.get(name, 'United Kingdom' if name == 'address_country' else '') }}"></label>
+{% endfor %}
+</fieldset>

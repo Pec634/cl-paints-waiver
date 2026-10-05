@@ -84,3 +84,16 @@ Run `python export_rewards_transfer.py` locally to create `instance/rewards-tran
 - Rewards shows per-member balances. My waivers displays signed records matched to the verified account email, including participants, signature, declarations and the original terms. Historical signed records are preserved; archived, expired and superseded waivers cannot qualify a current member for loyalty.
 - The current responsible person initiates a member transfer to an existing verified client account. The recipient receives a hashed, single-use, ten-minute approval code (five attempts), signs in and accepts using their own valid waiver reference and responsibility declaration. The member's original ID, waiver and loyalty history are retained. Current responsibility is stored separately and completed transfer records form an audit trail. No member deletion occurs.
 - Loyalty uses new additive tables created at startup; install the updated requirements (`qrcode`, `tzdata`). Existing participants on different signed waivers are distinct IDs; the app does not merge people by name. Live email delivery and event QR scans must be checked after deployment.
+# SumUp invoices
+
+From a booking's Payments page, choose **Attach SumUp invoice**. Create and send
+the invoice in SumUp first; include the booking reference in its description.
+Attach its invoice number, purpose (deposit, balance or full payment), amount,
+due date and secure customer link. The client can open it from their booking.
+Invoice numbers are unique across bookings to prevent accidental duplicate links.
+
+This is an invoice-link workflow, not an API synchronisation. No SumUp API key
+is required. Attaching an invoice does not charge a card, email the client or
+mark it paid. Confirm receipt in SumUp, then record the payment in the booking
+ledger using SumUp as the method and the invoice number in the internal note.
+The existing booking update notification then reports the changed balance.

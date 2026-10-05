@@ -2,7 +2,9 @@
 <div
     class="waiver"
     id="waiverApp"
-    data-event-id="{{ current_event.id }}">
+    data-event-id="{{ current_event.id if current_event else '' }}"
+    data-submit-url="{{ url_for('create_waiver') if account_waiver else url_for('create_waiver', event_id=current_event.id) }}"
+    data-csrf-token="{{ client_csrf if account_waiver else '' }}">
     <header>
         <div class="brand">CL <span>Paints</span></div>
         <small>Bringing colour to life, one face at a time!</small>
@@ -16,18 +18,20 @@
     <h1>Welcome to CL Paints</h1>
 
     <strong>
-    Please complete this waiver before receiving face painting at today's event.
+    Please complete this waiver before receiving face painting at a public event. You can complete it in advance without selecting an event.
     Read the information below, then scrolll down to select 'I confirm' to continue to the next step.
     </strong>
 
 <div class="event">
     <strong>
-        Public Event Waiver for - {{ current_event.name }}
+        {{ 'Your face painting waiver' if account_waiver else 'Public Event Waiver for - ' ~ current_event.name }}
     </strong>
 
 
 
-    {% if current_event and current_event.status == "Open" %}
+    {% if account_waiver %}
+        <p>Your waiver lasts 12 months, provided the information remains accurate. Event attendance and loyalty points are recorded separately.</p>
+    {% elif current_event and current_event.status == "Open" %}
         <span class="open">Event is Open</span>
 
     {% elif current_event and current_event.status == "Closing Soon" %}
@@ -46,7 +50,7 @@
         </p>
     {% endif %}
 </div>
-{% if current_event and current_event.status in ["Open", "Closing Soon"] %}
+{% if account_waiver or (current_event and current_event.status in ["Open", "Closing Soon"]) %}
 
 <hr class="section-divider">
 
@@ -71,7 +75,11 @@
 <section class="step" data-step="2">
     <b>Step 2 of 4</b>
 
-    <h1>Our Face Painting Designs</h1>
+    <h1>{{ 'Ready for your next visit' if account_waiver else 'Our Face Painting Designs' }}</h1>
+    {% if account_waiver %}
+    <p>Add everyone you are responsible for who may be painted. Your signed waiver will appear in My waivers &amp; members.</p>
+    <p>Bring your valid waiver to public events. Designs are chosen from the event moodboard on the day. To earn loyalty points, scan the event’s loyalty QR code and select only those being painted.</p>
+    {% else %}
 
     <p>
         Have a look at some of the designs available today.
@@ -152,6 +160,7 @@
 
     </div>
 
+    {% endif %}
     <div class="nav">
         <button class="back link">← Back</button>
         <button class="btn primary next">Continue →</button>
@@ -192,17 +201,17 @@
     <div class="person">
         <label>
             First name
-            <input id="responsibleFirstName" type="text">
+            <input id="responsibleFirstName" type="text" value="{{ responsible_account.first_name if responsible_account else '' }}">
         </label>
 
         <label>
             Last name
-            <input id="responsibleLastName" type="text">
+            <input id="responsibleLastName" type="text" value="{{ responsible_account.last_name if responsible_account else '' }}">
         </label>
 
         <label>
             Email address
-            <input id="responsibleEmail" type="email">
+            <input id="responsibleEmail" type="email" value="{{ responsible_account.email if responsible_account else '' }}" {% if responsible_account %}readonly{% endif %}>
         </label>
     </div>
 
@@ -267,7 +276,7 @@
     <div class="waiver-summary">
         <h2>Waiver Overview</h2>
         <p class="confirmation-event">
-        Event: <strong>{{ current_event.name }}</strong>
+        {% if account_waiver %}Your waiver is linked to your account. <a href="{{ url_for('loyalty.waivers') }}">View my waivers &amp; members</a>{% else %}Event: <strong>{{ current_event.name }}</strong>{% endif %}
         </p>
 
         <div class="summary-row">

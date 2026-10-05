@@ -172,11 +172,7 @@ Client Booking Request | CL Paints
                         {% endfor %}
                     </select>
                 </label>
-                <label class="booking-field booking-field-wide">
-                    <span>Home or business address</span>
-                    <input class="address-autocomplete" name="client_address" autocomplete="street-address" required value="{{ form_data.get('client_address', '') }}">
-                    <small>{% if google_maps_api_key %}Google Maps address suggestions are enabled.{% else %}Enter the address manually; suggestions need a Google Maps API key.{% endif %}</small>
-                </label>
+                <div class="booking-field-wide">{% include '_billing_address_fields.html' %}</div>
                 <label class="booking-field">
                     <span>Phone</span>
                     <input type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="For example, +44 7700 900000" maxlength="50" required value="{{ form_data.get('phone', '') }}">

@@ -115,6 +115,13 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
         records = Waiver.query.filter(func.lower(func.trim(Waiver.responsible_email)) == account.email).order_by(Waiver.signed_date.desc()).all()
         return render_template('client/waivers.html', waivers=records, transfers=Transfer.query.filter_by(to_client_id=account.id, completed_at=None).filter(Transfer.expires_at > now()).all())
 
+    @bp.get('/client/waivers/new')
+    @client_required
+    def new_waiver(account):
+        return render_template('waiver.html', current_event=None, account_waiver=True,
+            responsible_account=account, client_csrf=csrf(), moodboard_images=[],
+            large_moodboard_images=[], small_moodboard_images=[])
+
     @bp.get('/client/waivers/<int:waiver_id>')
     @client_required
     def waiver_detail(account, waiver_id):

@@ -61,6 +61,33 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         return dict(reward_clients=accounts, reward_owners={owner.code: by_id.get(owner.client_id)
                     for owner in Owner.query.all()}, client_csrf=csrf())
 
+    def issue_code(email, first, last, signup):
+        now = datetime.now()
+        ip = digest(request.remote_addr or 'unknown')
+        recent = Code.query.filter(Code.email == email, Code.created_at > now-timedelta(seconds=60)).first()
+        email_count = Code.query.filter(Code.email == email, Code.created_at > now-timedelta(minutes=15)).count()
+        ip_count = Code.query.filter(Code.ip_hash == ip, Code.created_at > now-timedelta(hours=1)).count()
+        if recent or email_count >= 3 or ip_count >= 20:
+            raise ValueError('Please wait before requesting another code. Check your inbox and spam folder.')
+        account = Account.query.filter_by(email=email).first()
+        # Keep the same response for unknown sign-in addresses.
+        raw_code = f'{secrets.randbelow(1000000):06d}'
+        challenge_id = secrets.token_hex(24)
+        Code.query.filter_by(email=email, consumed=False).update({'consumed': True})
+        challenge = Code(id=challenge_id, email=email, first_name=first if signup else '',
+            last_name=last if signup else '', mode='signup' if signup else 'login',
+            code_hash=digest(challenge_id + ':' + raw_code), ip_hash=ip,
+            created_at=now, expires_at=now+timedelta(minutes=10), consumed=not (signup or account))
+        db.session.add(challenge)
+        db.session.commit()
+        session['client_challenge'] = challenge_id
+        if signup or account:
+            if not send_email(email, 'Your CL Paints verification code',
+                f'Your verification code is {raw_code}.\n\nIt expires in 10 minutes and can only be used once.\nIf you did not request this, ignore this email.'):
+                challenge.consumed = True
+                db.session.commit()
+                raise ValueError('We could not send your code. Please try again later or contact us.')
+
     @portal.route('/login', methods=['GET', 'POST'])
     @portal.route('/signup', methods=['GET', 'POST'], endpoint='signup')
     def login():
@@ -76,31 +103,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 last = request.form.get('last_name', '').strip()
                 if signup and (not first or not last or len(first) > 100 or len(last) > 100):
                     raise ValueError('Enter your first name and surname (up to 100 characters each).')
-                now = datetime.now()
-                ip = digest(request.remote_addr or 'unknown')
-                recent = Code.query.filter(Code.email == email, Code.created_at > now-timedelta(seconds=60)).first()
-                email_count = Code.query.filter(Code.email == email, Code.created_at > now-timedelta(minutes=15)).count()
-                ip_count = Code.query.filter(Code.ip_hash == ip, Code.created_at > now-timedelta(hours=1)).count()
-                if recent or email_count >= 3 or ip_count >= 20:
-                    raise ValueError('Please wait before requesting another code. Check your inbox and spam folder.')
-                account = Account.query.filter_by(email=email).first()
-                # Keep the same response for unknown sign-in addresses.
-                raw_code = f'{secrets.randbelow(1000000):06d}'
-                challenge_id = secrets.token_hex(24)
-                Code.query.filter_by(email=email, consumed=False).update({'consumed': True})
-                challenge = Code(id=challenge_id, email=email, first_name=first if signup else '',
-                    last_name=last if signup else '', mode='signup' if signup else 'login',
-                    code_hash=digest(challenge_id + ':' + raw_code), ip_hash=ip,
-                    created_at=now, expires_at=now+timedelta(minutes=10), consumed=not (signup or account))
-                db.session.add(challenge)
-                db.session.commit()
-                session['client_challenge'] = challenge_id
-                if signup or account:
-                    if not send_email(email, 'Your CL Paints verification code',
-                        f'Your verification code is {raw_code}.\n\nIt expires in 10 minutes and can only be used once.\nIf you did not request this, ignore this email.'):
-                        challenge.consumed = True
-                        db.session.commit()
-                        raise ValueError('We could not send your code. Please try again later or contact us.')
+                issue_code(email, first, last, signup)
                 return redirect(url_for('client.verify'))
             except (EmailNotValidError, ValueError) as problem:
                 error = str(problem)
@@ -156,7 +159,40 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
             except SQLAlchemyError:
                 db.session.rollback()
                 error = 'We could not complete verification. Please request a new code.'
-        return render_template('client/verify.html', error=error, signup=challenge.mode == 'signup')
+        return render_template('client/verify.html', error=error, signup=challenge.mode == 'signup',
+            resend_seconds=resend_wait(challenge.email))
+
+    def resend_wait(email):
+        now = datetime.now()
+        recent = Code.query.filter_by(email=email).order_by(Code.created_at.desc()).all()
+        deadlines = [recent[0].created_at + timedelta(seconds=60)] if recent else []
+        email_window = [code for code in recent if code.created_at > now - timedelta(minutes=15)]
+        if len(email_window) >= 3:
+            deadlines.append(email_window[2].created_at + timedelta(minutes=15))
+        ip = digest(request.remote_addr or 'unknown')
+        ip_window = Code.query.filter(Code.ip_hash == ip, Code.created_at > now - timedelta(hours=1)).order_by(Code.created_at.desc()).all()
+        if len(ip_window) >= 20:
+            deadlines.append(ip_window[19].created_at + timedelta(hours=1))
+        import math
+        return max(0, math.ceil((max(deadlines) - now).total_seconds())) if deadlines else 0
+
+    @portal.post('/resend-code')
+    def resend_code():
+        check_csrf()
+        if current_account():
+            return redirect(url_for('client.dashboard'))
+        challenge = db.session.get(Code, session.get('client_challenge', ''))
+        if challenge is None:
+            return redirect(url_for('client.login'))
+        try:
+            issue_code(challenge.email, challenge.first_name, challenge.last_name, challenge.mode == 'signup')
+            flash('If your email is eligible, a new code has been sent. Use the latest email.', 'success')
+        except ValueError as problem:
+            flash(str(problem), 'error')
+        except SQLAlchemyError:
+            db.session.rollback()
+            flash('We could not request a code. Please try again.', 'error')
+        return redirect(url_for('client.verify'))
 
     @portal.post('/logout')
     def logout():
@@ -206,16 +242,31 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         error = None
         if request.method == 'POST':
             check_csrf()
-            values = {key: request.form.get(key, '').strip() for key in ['first_name', 'last_name', 'phone', 'address']}
-            if not all(values.values()) or any(len(values[key]) > limit for key, limit in [('first_name', 100), ('last_name', 100), ('phone', 50), ('address', 1000)]):
+            ClientBillingAddress = app.extensions['client_billing_address_model']
+            from client_addresses import read_address, format_address
+            values = {key: request.form.get(key, '').strip() for key in ['first_name', 'last_name', 'phone']}
+            try:
+                address_details = read_address(request.form)
+            except ValueError as problem:
+                error = str(problem)
+            if not all(values.values()) or any(len(values[key]) > limit for key, limit in [('first_name', 100), ('last_name', 100), ('phone', 50)]):
                 error = 'Complete your name, phone and address using the stated field limits.'
-            else:
+            if error is None:
                 for key, value in values.items():
                     setattr(account, key, value)
+                billing = db.session.get(ClientBillingAddress, account.id)
+                if not billing:
+                    billing = ClientBillingAddress(client_id=account.id)
+                    db.session.add(billing)
+                billing.details = address_details
+                account.address = format_address(address_details)
                 db.session.commit()
                 flash('Your account details are saved.', 'success')
                 return redirect(url_for('client.dashboard'))
-        return render_template('client/account.html', error=error)
+        ClientBillingAddress = app.extensions['client_billing_address_model']
+        billing = db.session.get(ClientBillingAddress, account.id)
+        form_data = request.form if request.method == 'POST' else (billing.details if billing else {})
+        return render_template('client/account.html', error=error, form_data=form_data, legacy_address=account.address if not billing else '')
 
     @portal.route('/contact', methods=['GET', 'POST'])
     @client_required

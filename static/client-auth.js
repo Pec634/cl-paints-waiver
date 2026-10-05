@@ -1,4 +1,28 @@
 (() => {
+    const resendForm = document.querySelector('[data-resend-seconds]');
+    if (resendForm) {
+        const resendButton = resendForm.querySelector('[data-resend-button]');
+        const countdown = resendForm.querySelector('[data-resend-countdown]');
+        const readyAt = Date.now() + Number(resendForm.dataset.resendSeconds) * 1000;
+        let resending = false;
+        const updateCountdown = () => {
+            const seconds = Math.max(0, Math.ceil((readyAt - Date.now()) / 1000));
+            resendButton.disabled = resending || seconds > 0;
+            const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+            resendButton.textContent = resending ? 'Sending your code…'
+                : seconds ? `Resend code in ${time}` : 'Resend verification code';
+            countdown.textContent = seconds ? 'Please wait before requesting another code.'
+                : 'You can request a new code now.';
+        };
+        resendForm.addEventListener('submit', (event) => {
+            if (resending || Date.now() < readyAt) { event.preventDefault(); return; }
+            resending = true;
+            updateCountdown();
+        });
+        window.addEventListener('pageshow', () => { resending = false; updateCountdown(); });
+        updateCountdown();
+        window.setInterval(updateCountdown, 1000);
+    }
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const colours = ['#f52f83', '#a379df', '#ffb43f', '#40c9bf'];
     const welcome = document.querySelector('.client-login-celebration');

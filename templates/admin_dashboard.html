@@ -29,7 +29,7 @@
             <a href="{{ url_for('rewards.dashboard', section='earned') }}"><article><span>Rewards available</span><strong>{{ reward_count }}</strong><small>View earned rewards →</small></article></a>
         </section>
         <div class="dashboard-grid">
-            <section class="panel dashboard-upcoming"><div class="panel-heading"><div><h2>Business tools</h2><p>Manage your diary, payments and client communication.</p></div></div><div class="dashboard-tools">
+            <section class="panel dashboard-upcoming dashboard-tools-panel"><details class="dashboard-tools-folder" open><summary><span aria-hidden="true">📁</span> Business tools <span class="dashboard-folder-hint">Tap to open or close</span></summary><div class="panel-heading"><div><h2>Business tools</h2><p>Manage your diary, payments and client communication.</p></div></div><div class="dashboard-tools">
                 <a class="dashboard-tool" href="{{ url_for('admin_calendar') }}"><strong>Availability calendar</strong><span>Check bookings, overlaps and unavailable time.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_bookings') }}"><strong>Payments &amp; deposits</strong><span>Open a booking to record payments or refunds.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_clients') }}#recent-enquiries"><strong>Client enquiries</strong><span>Reply to messages and track their status.</span></a>
@@ -38,7 +38,7 @@
                 <a class="dashboard-tool" href="{{ url_for('backups') }}"><strong>Backup &amp; recovery</strong><span>Protect your records and view recovery instructions.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_settings') }}"><strong>Booking reminders</strong><span>Configure reminder timing and the public app URL.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_events') }}"><strong>Loyalty visits</strong><span>Open an event to view scans or correct an award.</span></a>
-            </div></section>
+            </div></details></section>
             <section class="panel dashboard-upcoming" aria-label="Recent correspondence">
                 <div class="panel-heading"><div><h2>Recent correspondence</h2><p>Client portal messages · {{ correspondence_week_count }} received in the last 7 days.</p></div><a class="btn" href="{{ url_for('admin_clients') }}#recent-enquiries">View messages</a></div>
                 {% for enquiry, client in recent_correspondence %}
@@ -76,6 +76,22 @@
     </main>
 </div>
 <script>
+(() => {
+    const folder = document.querySelector('.dashboard-tools-folder');
+    const mobile = window.matchMedia('(max-width: 800px)');
+    let mobileOpen = false;
+    let applying = false;
+    const updateFolder = () => {
+        applying = true;
+        folder.open = mobile.matches ? mobileOpen : true;
+        window.setTimeout(() => { applying = false; }, 0);
+    };
+    folder.addEventListener('toggle', () => {
+        if (!applying && mobile.matches) mobileOpen = folder.open;
+    });
+    mobile.addEventListener('change', updateFolder);
+    updateFolder();
+})();
 (() => {
     const date = document.getElementById('dashboardDate');
     const clock = document.getElementById('dashboardClock');

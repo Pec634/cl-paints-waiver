@@ -2416,6 +2416,15 @@ label.moodboard-admin-card > div {
     .events-table td .btn.small { width: 100%; min-height: 44px; }
 }
 .dashboard-tools { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; margin-top: 18px; }
+.dashboard-tools-folder { display: contents; }
+.dashboard-tools-folder > summary { display: none; }
+@media (max-width: 800px) {
+    .dashboard-tools-folder { display: block; }
+    .dashboard-tools-folder > summary { display: list-item; cursor: pointer; font-weight: 800; padding: 8px 0; }
+    .dashboard-folder-hint { display: block; margin-top: 6px; font-size: .8rem; font-weight: 400; color: var(--muted); }
+    .dashboard-tools-folder .panel-heading { margin-top: 16px; }
+    .dashboard-tools-folder .panel-heading h2 { display: none; }
+}
 .dashboard-tool { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: #fffafc; }
 .dashboard-tool span { color: var(--muted); line-height: 1.5; font-size: .9rem; }
 .dashboard-tool:hover, .dashboard-tool:focus-visible { border-color: var(--pink); background: #fff0f6; }
