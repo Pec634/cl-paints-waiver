@@ -243,10 +243,12 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         if request.method == 'POST':
             check_csrf()
             ClientBillingAddress = app.extensions['client_billing_address_model']
-            from client_addresses import read_address, format_address
+            from client_addresses import read_address, format_address, profile_details
             values = {key: request.form.get(key, '').strip() for key in ['first_name', 'last_name', 'phone']}
             try:
                 address_details = read_address(request.form)
+                if 'client_type' in request.form:
+                    address_details.update(profile_details(request.form, app.extensions['profile_ethnicities']))
             except ValueError as problem:
                 error = str(problem)
             if not all(values.values()) or any(len(values[key]) > limit for key, limit in [('first_name', 100), ('last_name', 100), ('phone', 50)]):

@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block title %}Availability | CL Paints{% endblock %}
+{% block body %}<main class="panel"><h1>Availability calendar</h1>
+<p>UK local time. Unavailable times include confirmed bookings and setup/travel buffers. Unmarked times may be available; every request still needs confirmation by CL Paints.</p>
+<nav class="nav"><a class="btn" href="{{ url_for('client_availability_calendar', month=previous) }}">Previous</a><strong>{{ month.strftime('%B %Y') }}</strong><a class="btn" href="{{ url_for('client_availability_calendar', month=next_month) }}">Next</a></nav>
+<div class="availability-calendar">{% for name in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<strong>{{ name }}</strong>{% endfor %}
+{% for week in weeks %}{% for cell in week %}<article class="availability-day"><strong>{{ cell.date.day }}</strong>{% if cell.in_month %}{% for time in cell.times %}<span>Unavailable {{ time }}</span>{% else %}<span>Enquire</span>{% endfor %}{% endif %}</article>{% endfor %}{% endfor %}</div>
+<p><a href="{{ url_for('booking_request') }}" target="_top">Make a booking request</a></p></main>{% endblock %}

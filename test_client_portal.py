@@ -236,6 +236,17 @@ class ClientPortalTest(unittest.TestCase):
         self.assertIn(b'value="NW10 7TR"', page.data)
         self.assertIn(b'value="London"', self.client.get('/client/account').data)
 
+    def test_address_autofill_whitespace_and_specific_errors(self):
+        from client_addresses import read_address
+        data = dict(address_property='Suite\n53c', address_street='Abbey\tRoad', address_city='London',
+                    address_postcode='NW10 7TR', address_country='United Kingdom')
+        self.assertEqual(read_address(data)['address_property'], 'Suite 53c')
+        self.assertEqual(read_address(data)['address_street'], 'Abbey Road')
+        with self.assertRaisesRegex(ValueError, 'too long'):
+            read_address(dict(data, address_property='x'*151))
+        with self.assertRaisesRegex(ValueError, 'No house'):
+            read_address(dict(data, address_property=''))
+
     def test_account_waiver_without_event_and_verified_email(self):
         self.signup()
         page = self.client.get('/client/waivers/new')
@@ -261,6 +272,38 @@ class ClientPortalTest(unittest.TestCase):
         self.assertIn(waiver.public_reference.encode(), self.client.get('/client/waivers').data)
         self.assertEqual(main.loyalty_models[2].query.count(), 0)
         self.assertEqual(main.app.test_client().get('/client/waivers/new').status_code, 302)
+
+    def test_booking_profile_details_prefill_and_validation(self):
+        self.signup()
+        data = dict(csrf_token=self.csrf(), first_name='Test', last_name='Client', phone='01234',
+            address_property='Suite 53c', address_street='Abbey Road', address_city='London',
+            address_postcode='NW10 7TR', address_country='United Kingdom', client_type='business',
+            title='Dr', job_title='Event organiser', date_of_birth='1990-01-01',
+            ethnicity='Prefer not to say', ethnicity_detail='Prefer not to say', religion='Prefer not to say')
+        self.assertEqual(self.client.post('/client/account', data=dict(data, job_title='')).status_code, 200)
+        self.assertEqual(main.ClientBillingAddress.query.count(), 0)
+        self.assertEqual(self.client.post('/client/account', data=data).status_code, 302)
+        page = self.client.get('/booking').data
+        self.assertIn(b'value="1990-01-01"', page)
+        self.assertIn(b'value="Event organiser"', page)
+        self.assertIn(b'value="business" selected', page)
+        self.assertIn(b'value="Dr" selected', page)
+        self.assertIn(b'value="yes" required checked', page)
+        self.assertIn(b'data-initial-value="Prefer not to say"', page)
+
+    def test_client_calendar_does_not_expose_booking_information(self):
+        self.booking('secret@example.com', status='Accepted', first_name='SECRET PERSON', event_address='SECRET VENUE')
+        self.booking('pending@example.com', status='Under Review', start_time='15:00', finish_time='17:00')
+        Block = main.tool_models[2]
+        main.db.session.add(Block(starts_at=datetime(2099,1,2,9), ends_at=datetime(2099,1,2,11), reason='SECRET REASON'))
+        main.db.session.commit()
+        response = main.app.test_client().get('/booking/calendar?month=2099-01')
+        self.assertEqual(response.status_code, 200)
+        for secret in [b'secret@example.com', b'SECRET PERSON', b'SECRET VENUE', b'SECRET REASON', b'15:00']:
+            self.assertNotIn(secret, response.data)
+        self.assertIn('Unavailable 09:00–13:00'.encode(), response.data)
+        self.assertIn('Unavailable 09:00–11:00'.encode(), response.data)
+        self.assertEqual(self.client.get('/booking/calendar?month=invalid').status_code, 400)
 
     def test_enquiry_survives_notification_failure(self):
         self.signup()

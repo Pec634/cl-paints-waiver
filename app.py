@@ -491,10 +491,11 @@ BookingInvoice = define_invoice_model(db)
 from client_addresses import define_model as define_address_model, FIELDS as BILLING_ADDRESS_FIELDS, read_address, format_address
 ClientBillingAddress = define_address_model(db)
 app.extensions['client_billing_address_model'] = ClientBillingAddress
+app.extensions['profile_ethnicities'] = ETHNICITY_BREAKDOWNS
 
 @app.context_processor
 def billing_address_context():
-    return dict(billing_address_fields=BILLING_ADDRESS_FIELDS)
+    return dict(billing_address_fields=BILLING_ADDRESS_FIELDS, profile_ethnicities=ETHNICITY_BREAKDOWNS)
 
 with app.app_context():
     db.create_all()
@@ -1508,6 +1509,8 @@ def booking_request():
         billing = db.session.get(ClientBillingAddress, portal_account.id)
         if billing:
             form_data.update(billing.details)
+            if billing.details.get('date_of_birth'):
+                form_data['is_over_18'] = 'yes'
     error = None
 
     if request.method == "POST":

@@ -32,6 +32,8 @@ Client Booking Request | CL Paints
     {% endif %}
 
     <form class="booking-form" method="post" action="{{ url_for('booking_request') }}">
+        <details class="panel"><summary>View our availability calendar</summary><iframe title="CL Paints availability calendar" src="{{ url_for('client_availability_calendar') }}" loading="lazy" style="width:100%;height:560px;border:0"></iframe><a href="{{ url_for('client_availability_calendar') }}" target="_blank" rel="noopener">Open calendar in a separate tab</a></details>
+        <div class="booking-error" id="bookingValidationError" role="alert" tabindex="-1" hidden></div>
         {% if portal_account %}<input type="hidden" name="csrf_token" value="{{ session.get('client_csrf', '') }}">{% endif %}
         <section class="booking-section">
             <div class="booking-section-heading">
@@ -103,7 +105,7 @@ Client Booking Request | CL Paints
                 <span>02</span>
                 <div>
                     <h2>Client details</h2>
-                    <p>We use these details to respond to your request.</p>
+                    <p>{% if portal_account %}These details are prefilled from your profile. <a href="{{ url_for('client.account') }}">Update my profile</a>. Check them before submitting.{% else %}We use these details to respond to your request.{% endif %}</p>
                 </div>
             </div>
 
@@ -580,6 +582,12 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
         setRequiredWithin(availabilityPanel, availabilityMode);
+        dateCountInput.disabled = !bookingMode || isSingleDate();
+        dayList.querySelectorAll('[data-day-details]').forEach((details) => {
+            if (details.hidden) details.querySelectorAll('input, select, textarea').forEach((control) => {
+                control.disabled = true;
+            });
+        });
         availabilityResult.textContent = "";
         syncPitchFees();
         syncHolidayPreferences();
@@ -758,6 +766,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ? 1
             : Math.max(2, Math.min(Number({{ business_settings.max_event_dates|tojson }}), Number(dateCountInput.value) || 2));
         dateCountField.hidden = isSingleDate();
+        dateCountInput.disabled = isSingleDate() || form.querySelector('[name="request_type"]:checked')?.value !== 'booking';
         sameDetailsField.hidden = isSingleDate() || dayCount < 2;
         dayList.replaceChildren();
 
@@ -795,7 +804,26 @@ document.addEventListener("DOMContentLoaded", () => {
     paymentChoice.addEventListener("change", updatePricing);
     renderEventDays();
 
+    const validationError = document.getElementById('bookingValidationError');
+    let validationQueued = false;
+    form.addEventListener('invalid', () => {
+        if (validationQueued) return;
+        validationQueued = true;
+        window.setTimeout(() => {
+            validationQueued = false;
+            const invalid = Array.from(form.querySelectorAll('input:invalid, select:invalid, textarea:invalid'));
+            const labels = [...new Set(invalid.map((control) => {
+                const label = control.closest('label');
+                return label?.querySelector('span')?.textContent.trim()
+                    || label?.textContent.trim() || control.name || 'Event details';
+            }))];
+            validationError.textContent = `Please complete or correct: ${labels.join(', ')}.`;
+            validationError.hidden = false;
+            validationError.scrollIntoView({block: 'center', behavior: 'auto'});
+        }, 0);
+    }, true);
     form.addEventListener("submit", (event) => {
+        validationError.hidden = true;
         if (form.querySelector('[name="request_type"]:checked')?.value === "availability") {
             event.preventDefault();
             checkAvailability();
