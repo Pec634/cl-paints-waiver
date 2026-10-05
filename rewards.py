@@ -2,7 +2,7 @@
 import secrets
 from datetime import datetime, date
 from pathlib import Path
-from flask import Blueprint, flash, redirect, render_template, request, url_for, send_file
+from flask import Blueprint, flash, redirect, render_template, request, url_for, send_file, current_app, has_app_context
 from sqlalchemy import text
 
 REWARD_TEXT = "30 minutes free face painting"
@@ -125,9 +125,16 @@ def fetch_all(sql, params=None):
 
 
 def execute(sql, params=None):
+    previous = fetch_one('SELECT code, status FROM referrals WHERE id=:id', {'id': params['id']}) if params and 'id' in params and sql.strip().upper().startswith('UPDATE REFERRALS') else None
     with engine.begin() as conn:
         result = conn.execute(text(sql), params or {})
-        return result.rowcount
+        count = result.rowcount
+    if count and previous and has_app_context():
+        updated = fetch_one('SELECT code, status FROM referrals WHERE id=:id', {'id': params['id']})
+        callback = current_app.extensions.get('client_reward_code_notice')
+        if callback and updated and updated['status'] != previous['status']:
+            callback(updated['code'], f'Referral code {updated["code"]}: reward status is now {updated["status"]}. Open Rewards for details.')
+    return count
 
 
 def parse_date(value):

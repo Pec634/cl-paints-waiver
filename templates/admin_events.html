@@ -45,7 +45,7 @@ Event Management | CL Paints
             <div class="panel-heading">
                 <div>
                     <h2>Create Event</h2>
-                    <p>New events are created closed for safety.</p>
+                    <p>New events are created closed, with a unique loyalty QR code ready for the event date.</p>
                 </div>
             </div>
 
@@ -88,7 +88,7 @@ Event Management | CL Paints
                 </div>
             </div>
 
-            <div class="table-wrap">
+            <div class="table-wrap events-table-wrap">
 
                 <table class="waiver-table events-table">
 
@@ -99,7 +99,7 @@ Event Management | CL Paints
                             <th>Rename</th>
                             <th>Waiver Status</th>
                             <th>Waiver Link</th>
-                            <th>Moodboard</th>
+                            <th>Moodboard &amp; loyalty</th>
                             <th>Delete</th>
                         </tr>
                     </thead>
@@ -110,13 +110,13 @@ Event Management | CL Paints
 
                         <tr>
 
-                            <td>
+                            <td data-label="Event">
                                 <strong>{{ event.name }}</strong>
                             </td>
-                            <td>
+                            <td data-label="Event date">
                                 {{ event.event_date.strftime("%d/%m/%Y") if event.event_date else "No date" }}
                             </td>
-                            <td>
+                            <td data-label="Rename">
 
                                 <form
                                     method="post"
@@ -140,7 +140,7 @@ Event Management | CL Paints
 
                             </td>
 
-                            <td>
+                            <td data-label="Waiver status">
 
                                 <form
                                     method="post"
@@ -188,7 +188,7 @@ Event Management | CL Paints
                                 </form>
 
                             </td>
-                            <td>
+                            <td data-label="Waiver link">
                                 <a
                                     class="btn small"
                                     href="/waiver/event/{{ event.id }}"
@@ -212,16 +212,17 @@ Event Management | CL Paints
                                 </button>
                             </td>
 
-                            <td>
+                            <td data-label="Moodboard & loyalty">
                                 <a
                                     class="btn small"
                                     href="/admin/events/{{ event.id }}/moodboard"
                                 >
                                     Manage Moodboard
                                 </a>
+                                <a class="btn small" href="{{ url_for('loyalty.event_admin', event_id=event.id) }}">Loyalty QR &amp; visits</a>
                             </td>
 
-                            <td>
+                            <td data-label="Delete">
                                 <form
                                     method="post"
                                     action="/admin/events/{{ event.id }}/delete"

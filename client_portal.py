@@ -146,6 +146,9 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 session['client_signed_in'] = now.timestamp()
                 session['client_csrf'] = secrets.token_urlsafe(32)
                 flash('You’re signed in. Welcome to your colourful corner of CL Paints!', 'client_login_success')
+                scan_token = session.pop('loyalty_scan_token', None)
+                if scan_token:
+                    return redirect(url_for('loyalty.scan', token=scan_token))
                 return redirect(url_for('client.account' if not account.phone or not account.address else 'client.dashboard'))
             except ValueError as problem:
                 db.session.rollback()
@@ -267,6 +270,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                             db.session.rollback()
                             flash('This code was linked by another request. Refresh and check its owner.', 'error')
                             return redirect(url_for('rewards.dashboard' if request.form.get('return_to') == 'rewards' else 'admin_clients'))
+                        app.extensions['client_reward_code_notice'](code, f'Referral code {code} has been linked to your verified account. Open Rewards to see its details.')
                     flash('Referral code linked to the verified client account.', 'success')
             return redirect(url_for('rewards.dashboard' if request.form.get('return_to') == 'rewards' else 'admin_clients'))
         clients = Account.query.order_by(Account.first_name, Account.last_name).all()

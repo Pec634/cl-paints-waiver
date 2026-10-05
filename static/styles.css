@@ -2391,6 +2391,46 @@ label.moodboard-admin-card > div {
 .client-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .client-detail dd { margin: 0; font-weight: 700; }
 .client-message { white-space: pre-wrap; }
+.settings-tabs { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 24px; }
+.events-table { min-width: 920px; table-layout: auto; }
+.events-table th, .events-table td { padding: 12px 10px; vertical-align: top; }
+.events-table td:nth-child(1) { min-width: 140px; max-width: 220px; overflow-wrap: anywhere; }
+.events-table td:nth-child(2) { min-width: 105px; white-space: nowrap; }
+.events-table td:nth-child(3), .events-table td:nth-child(4) { min-width: 150px; }
+.events-table td:nth-child(5), .events-table td:nth-child(6) { min-width: 165px; }
+.events-table td:nth-child(7) { min-width: 100px; }
+.events-table td form { flex-direction: column; align-items: stretch; }
+.events-table td input, .events-table td select { width: 100%; box-sizing: border-box; }
+.events-table td .btn.small { display: flex; justify-content: center; width: 100%; min-width: 90px; min-height: 40px; padding: 10px 12px; white-space: normal; text-align: center; }
+.events-table td:nth-child(5) .btn, .events-table td:nth-child(6) .btn { width: 100%; margin-bottom: 10px; white-space: normal; }
+@media(max-width:800px) {
+    .events-table-wrap { overflow: visible; }
+    .events-table { display: block; min-width: 0; width: 100%; }
+    .events-table thead { display: none; }
+    .events-table tbody { display: grid; gap: 18px; }
+    .events-table tr { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: white; }
+    .events-table td:nth-child(n) { display: block; min-width: 0; max-width: none; width: 100%; padding: 0; border: 0; white-space: normal; }
+    .events-table td[data-label]::before { content: attr(data-label); display: block; font-weight: 700; color: var(--muted); font-size: .85rem; margin-bottom: 8px; }
+    .events-table td:nth-child(n) form { min-width: 0; flex-wrap: nowrap; }
+    .events-table td:nth-child(n) input, .events-table td:nth-child(n) select { min-width: 0; width: 100%; flex: none; }
+    .events-table td .btn.small { width: 100%; min-height: 44px; }
+}
+.dashboard-tools { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; margin-top: 18px; }
+.dashboard-tool { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: #fffafc; }
+.dashboard-tool span { color: var(--muted); line-height: 1.5; font-size: .9rem; }
+.dashboard-tool:hover, .dashboard-tool:focus-visible { border-color: var(--pink); background: #fff0f6; }
+@media(max-width:650px) { .dashboard-tools { grid-template-columns: minmax(0,1fr); } }
+.availability-month { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; margin: 18px 0; }
+.availability-day { padding: 10px; min-height: 90px; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: white; overflow-wrap: anywhere; }
+.availability-day.outside { opacity: .5; }
+.availability-day a, .availability-day span { display: block; font-size: .75rem; margin-top: 6px; border-radius: 6px; background: #fff0f6; padding: 4px; }
+@media(max-width:650px) { .availability-day { padding: 5px; min-height: 65px; } .availability-day a, .availability-day span { font-size: .65rem; padding: 2px; } }
+.client-booking-updates { border: 2px solid #e3ad39 !important; background: #fff9e8; }
+.client-booking-updates dd { margin: 8px 0 16px; line-height: 1.6; }
+.client-field-updated, .client-booking-updates mark { background: #fff0b5; padding: 4px 8px; border-radius: 6px; color: var(--text); }
+.client-form .loyalty-check { display: inline-block; width: auto; margin-right: 8px; }
+.loyalty-qr { width: min(100%, 320px); height: auto; }
+.loyalty-design { width: 100%; max-height: 280px; object-fit: contain; border-radius: 12px; }
 .client-booking-banner { overflow-wrap: anywhere; margin-bottom: 20px; }
 .brand-slogan { padding: 20px; text-align: center; color: var(--muted); background: white; border-top: 3px solid var(--pink); font-size: .95rem; }
 .client-shell { background: radial-gradient(ellipse at 0% 15%, #ffe2ee 0, transparent 45%), radial-gradient(ellipse at 100% 60%, #eee3ff 0, transparent 45%), #fffaf6; }
@@ -2432,22 +2472,38 @@ label.moodboard-admin-card > div {
 @media (max-width: 650px) { .client-booking-progress { grid-template-columns: 1fr; gap: 8px; } .client-booking-progress li { display: flex; align-items: center; padding: 12px 0; } }
 .client-auth { position: relative; isolation: isolate; overflow: hidden; }
 .client-paint-scene { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.client-brush-reveal { animation: client-brush-reveal .9s ease-out both; }
+.client-brush-reveal { animation: client-brush-reveal 1.5s ease-out both; }
 @keyframes client-brush-reveal { from { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); } to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); } }
 .client-mail-animation { display: none; }
 .client-code-painting { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; pointer-events: none; }
+.client-painted-entry { position: relative; border-radius: 10px; }
+.client-form .client-painted-entry input { position: absolute; inset: 0; z-index: 1; height: 100%; color: transparent; caret-color: transparent; background: transparent; border: 0; box-shadow: none; -webkit-text-fill-color: transparent; }
+.client-painted-entry:focus-within { outline: 3px solid #f52f8335; outline-offset: 3px; }
+.client-web { position: relative; height: 360px; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 12px; align-items: center; justify-items: center; }
+.client-web svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.client-web path { stroke: #d5a6c8; stroke-width: 3; fill: none; stroke-dasharray: 8 6; }
+.client-web a, .client-web-centre { position: relative; width: 100%; max-width: 230px; text-align: center; padding: 20px 12px; border-radius: 24px; border: 2px solid #edd1e3; background: #fff5fa; display: grid; gap: 8px; }
+.client-web a:hover, .client-web a:focus-visible { border-color: var(--pink); box-shadow: 0 6px 20px #f52f831c; }
+.client-web span { font-size: .85rem; color: #66536b; line-height: 1.4; }
+.client-web-centre { grid-column: 2; grid-row: 2; border-radius: 50%; background: #ffe3ef; padding: 30px 12px; }
+.client-web-bookings { grid-column: 1; grid-row: 1; }
+.client-web-rewards { grid-column: 3; grid-row: 1; }
+.client-web-contact { grid-column: 1; grid-row: 3; }
+.client-web-account { grid-column: 3; grid-row: 3; }
+.client-reward-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-left: 24px; }
+@media (max-width: 650px) { .client-web { height: auto; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; gap: 16px; padding-top: 12px; } .client-web svg { display: none; } .client-web-centre { grid-column: 1 / -1; grid-row: 1; border-radius: 24px; padding: 20px; } .client-web-bookings { grid-column: 1; grid-row: 2; } .client-web-rewards { grid-column: 2; grid-row: 2; } .client-web-contact { grid-column: 1; grid-row: 3; } .client-web-account { grid-column: 2; grid-row: 3; } .client-web a { min-height: 112px; } .client-reward-steps { grid-template-columns: 1fr; gap: 8px; } }
 .client-painted-digit { position: relative; height: 52px; display: grid; place-items: center; font-size: 1.5rem; font-weight: 800; color: #a51458; border-bottom: 3px solid #eddae5; border-radius: 8px; background: #fff5fa; isolation: isolate; }
 .client-painted-digit:nth-child(2n) { color: #71429d; }
 .client-painted-digit.has-digit { border-color: #f52f83; }
-.client-painted-digit.is-painting::before { content: ''; position: absolute; inset: 8px 0; z-index: -1; background: #ffc7df; clip-path: polygon(0 8%, 100% 0, 96% 85%, 0 100%); transform-origin: left; animation: client-digit-stroke .55s ease-out both; }
-.client-painted-digit.is-painting::after { content: ''; position: absolute; top: 2px; left: 0; width: 8px; height: 26px; background: linear-gradient(to bottom, #71429d 0 55%, #aab1c1 55% 70%, #f52f83 70%); border-radius: 3px 3px 1px 1px; transform: rotate(-30deg); animation: client-digit-brush .55s ease-out both; }
+.client-painted-digit.is-painting::before { content: ''; position: absolute; inset: 8px 0; z-index: -1; background: #ffc7df; clip-path: polygon(0 8%, 100% 0, 96% 85%, 0 100%); transform-origin: left; animation: client-digit-stroke 1s ease-out both; }
+.client-painted-digit.is-painting::after { content: ''; position: absolute; top: 2px; left: 0; width: 8px; height: 26px; background: linear-gradient(to bottom, #71429d 0 55%, #aab1c1 55% 70%, #f52f83 70%); border-radius: 3px 3px 1px 1px; transform: rotate(-30deg); animation: client-digit-brush 1s ease-out both; }
 @keyframes client-digit-stroke { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes client-digit-brush { 0% { left: 0; opacity: 1; } 80% { left: calc(100% - 8px); opacity: 1; } 100% { left: calc(100% - 8px); opacity: 0; } }
-.client-auth-sending .client-mail-animation { display: block; position: relative; width: 46px; height: 32px; margin: 4px auto; border: 2px solid #b91660; border-radius: 5px; background: #ffe7f0; animation: client-mail-flight 1.8s ease-in-out infinite; }
+.client-auth-sending .client-mail-animation { display: block; position: relative; width: 46px; height: 32px; margin: 4px auto; border: 2px solid #b91660; border-radius: 5px; background: #ffe7f0; animation: client-mail-flight 2.8s ease-in-out infinite; }
 .client-mail-animation::before { content: ''; position: absolute; top: -1px; left: 6px; width: 28px; height: 20px; background: #f7afd0; clip-path: polygon(0 0, 100% 0, 50% 100%); }
 @keyframes client-mail-flight { 0%, 100% { opacity: .4; transform: translate(-20px, 8px) rotate(-8deg); } 30% { opacity: 1; transform: translate(0, 0) rotate(0); } 80% { opacity: 0; transform: translate(36px, -16px) rotate(12deg); } }
 .client-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
-.client-confetti span { position: absolute; top: -20px; width: 10px; height: 16px; background: var(--paint); border-radius: 60% 40% 60% 40%; animation: client-confetti-fall 1.8s var(--delay) ease-in both; }
+.client-confetti span { position: absolute; top: -20px; width: 10px; height: 16px; background: var(--paint); border-radius: 60% 40% 60% 40%; animation: client-confetti-fall 3s var(--delay) ease-in both; }
 @keyframes client-confetti-fall { from { transform: translate(0, -20px) rotate(0); opacity: 1; } to { transform: translate(var(--drift), 75vh) rotate(330deg); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .client-brush-reveal, .client-auth-sending .client-mail-animation { animation: none; } }
 .client-paint-bubble { position: absolute; left: var(--left); top: var(--top); width: var(--size); height: var(--size); background: var(--paint); opacity: .16; border-radius: 38% 62% 65% 35% / 45% 35% 65% 55%; animation: client-paint-dance var(--duration) var(--delay) ease-in-out infinite; }
@@ -2457,7 +2513,7 @@ label.moodboard-admin-card > div {
 .client-logo-halo .client-auth-logo { margin: 0; box-shadow: 0 8px 22px #96366325; }
 .client-auth-sending .client-logo-halo::before { animation-duration: 2s; }
 .client-paint-drop { position: absolute; width: 9px; height: 14px; border-radius: 65% 35% 50% 50%; background: var(--paint); pointer-events: none; z-index: 2; animation: client-paint-burst .9s ease-out both; }
-.client-auth { animation: client-card-arrive .6s ease-out both; }
+.client-auth { animation: client-card-arrive 1s ease-out both; }
 @keyframes client-paint-dance { 0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); } 50% { transform: translate(-12px, -30px) rotate(90deg) scale(1.2); } }
 @keyframes client-paint-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(.4); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(160deg) scale(1); } }
 @keyframes client-card-arrive { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }

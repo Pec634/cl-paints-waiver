@@ -8,6 +8,9 @@ DEFAULTS = dict(business_name='CL Paints', contact_email='info@clpaints.com', ph
                 website='https://www.clpaints.com', hourly_rate='45.00', minimum_hours='2',
                 max_event_dates='10', free_miles='10', mile_rate='1.00', travel_cap='50.00',
                 recovery_email='')
+from client_notifications import EMAIL_DEFAULTS, validate_email_settings
+DEFAULTS.update(EMAIL_DEFAULTS)
+DEFAULTS.update(calendar_buffer_minutes='60', reminder_days='2', public_app_url='')
 
 
 def read_settings(db, Setting, recovery_default=''):
@@ -27,6 +30,8 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
     @admin_required
     def admin_settings():
         token = session.setdefault('settings_csrf', secrets.token_urlsafe(32))
+        email_sections = {'notifications', 'email_bookings', 'email_rewards', 'email_design'}
+        active_tab = 'email' if request.args.get('tab') == 'email' or request.form.get('section') in email_sections else 'general'
         if request.method == 'POST':
             if not secrets.compare_digest(request.form.get('csrf_token', ''), token):
                 return 'Your session expired. Reload Settings and try again.', 400
@@ -44,6 +49,27 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                     values['contact_email'] = validate_email(values['contact_email'], check_deliverability=False).normalized
                     if values['website'] and not values['website'].startswith(('https://', 'http://')):
                         raise ValueError('The website must begin with https:// or http://.')
+                elif section in {'notifications', 'email_bookings', 'email_rewards', 'email_design'}:
+                    groups = {
+                        'email_bookings': ['notification_booking_subject', 'notification_booking_body'],
+                        'email_rewards': ['notification_reward_subject', 'notification_reward_body'],
+                        'email_design': ['notification_heading', 'notification_footer', 'notification_colour', 'notification_layout'],
+                    }
+                    keys = groups.get(section, EMAIL_DEFAULTS)
+                    values = {key: request.form.get(key, '').strip() for key in keys}
+                    validate_email_settings(values)
+                elif section == 'operations':
+                    for key, maximum in [('calendar_buffer_minutes', 240), ('reminder_days', 14)]:
+                        raw = request.form.get(key, '')
+                        if not raw.isdigit() or not 0 <= int(raw) <= maximum:
+                            raise ValueError(f'Enter a whole number from 0 to {maximum} for {key.replace("_", " ")}.')
+                        values[key] = raw
+                    public_url = request.form.get('public_app_url','').strip().rstrip('/')
+                    from urllib.parse import urlsplit
+                    parsed = urlsplit(public_url)
+                    if public_url and (parsed.scheme != 'https' or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path):
+                        raise ValueError('Public app URL must be an HTTPS address with no path, credentials or query.')
+                    values['public_app_url'] = public_url
                 elif section in {'booking', 'travel'}:
                     limits = {'hourly_rate': ('0.01', '10000'), 'minimum_hours': ('0.5', '24'),
                               'max_event_dates': ('1', '10')} if section == 'booking' else {
@@ -91,12 +117,12 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                         row.value = value
                 db.session.commit()
                 flash('Settings saved.', 'success')
-                return redirect(url_for('admin_settings'))
+                return redirect(url_for('admin_settings', tab='email') if active_tab == 'email' else url_for('admin_settings'))
             except (ValueError, InvalidOperation) as error:
                 db.session.rollback()
                 flash(str(error) if not isinstance(error, InvalidOperation) else 'Enter valid numbers for all fields.', 'error')
             except SQLAlchemyError:
                 db.session.rollback()
                 flash('Settings could not be saved. Please try again.', 'error')
-        return render_template('admin_settings.html', settings=get_settings(), csrf_token=token)
+        return render_template('admin_settings.html', settings=get_settings(), csrf_token=token, active_tab=active_tab)
     return get_settings

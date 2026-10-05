@@ -18,7 +18,7 @@ Client Booking Request | CL Paints
     <section class="booking-success" role="status">
         <p class="booking-eyebrow">REQUEST RECEIVED</p>
         <h2>Thank you, your request is with us.</h2>
-        <p>Booking reference <strong>#{{ submitted }}</strong>. Your request status is <strong>Under Review</strong>. We will review the details and contact you using the information provided.</p>
+        <p>Booking reference <strong>{{ submitted }}</strong>. Your request status is <strong>Under Review</strong>. We will review the details and contact you using the information provided.</p>
         {% if request.args.get('email_sent') == 'yes' %}
         <p>A complete copy of your request has been sent to your email address.</p>
         {% else %}

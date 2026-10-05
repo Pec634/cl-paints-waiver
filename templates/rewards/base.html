@@ -9,11 +9,11 @@
             <hr class="admin-nav-divider">
             <a href="{{ url_for('admin_bookings') }}">Bookings</a>
             <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
-            <a href="{{ url_for('admin_events') }}">Events</a>
+            <a href="{{ url_for('admin_events') }}" {% if request.endpoint == 'loyalty.event_admin' %}class="active"{% endif %}>Events</a>
             <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
             <a href="{{ url_for('admin_participants') }}">Participants</a>
             <a href="{{ url_for('admin_reports') }}">Reports</a>
-            <a {% if request.endpoint != 'admin_clients' %}class="active"{% endif %} href="{{ url_for('rewards.dashboard') }}">Rewards</a>
+            <a {% if request.endpoint.startswith('rewards.') %}class="active"{% endif %} href="{{ url_for('rewards.dashboard') }}">Rewards</a>
             <a href="{{ url_for('admin_settings') }}">Settings</a>
             <hr class="admin-nav-divider">
             <a href="{{ url_for('admin_logout') }}">Logout</a>

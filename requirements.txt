@@ -9,3 +9,5 @@ cloudinary
 python-dateutil
 phonenumbers>=8.13,<10
 email-validator>=2.0,<3
+qrcode>=8.0,<9
+tzdata>=2025.1

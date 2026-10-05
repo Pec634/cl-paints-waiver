@@ -102,6 +102,11 @@ db = SQLAlchemy(app)
 class Waiver(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
+    @property
+    def public_reference(self):
+        from record_ids import record_reference
+        return record_reference('W', self.id, self.signed_date)
+
     customer_id = db.Column(
     db.Integer,
     db.ForeignKey("customer.id"),
@@ -176,6 +181,11 @@ class Waiver(db.Model):
 class Participant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
+    @property
+    def loyalty_reference(self):
+        from record_ids import record_reference
+        return record_reference('L', self.id, self.waiver.signed_date)
+
     waiver_id = db.Column(
         db.Integer,
         db.ForeignKey("waiver.id"),
@@ -231,6 +241,11 @@ class Event(db.Model):
 
 class Booking(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+
+    @property
+    def public_reference(self):
+        from record_ids import record_reference
+        return record_reference('B', self.id, self.submitted_at)
     submitted_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
     request_type = db.Column(db.String(30), nullable=False)
     client_type = db.Column(db.String(30), nullable=False)
@@ -464,6 +479,13 @@ class EventMoodboardImage(db.Model):
             name="uq_event_moodboard_image"
         ),
     )
+
+from loyalty import define_models
+loyalty_models = define_models(db)
+from client_notifications import define_notification_models
+notification_models = define_notification_models(db)
+from business_tools import define_models as define_tool_models
+tool_models = define_tool_models(db)
 
 with app.app_context():
     db.create_all()
@@ -1074,7 +1096,7 @@ def create_waiver(event_id):
 )
 
     confirmation_subject = (
-        f"CL Paints Waiver Confirmation - {waiver.waiver_reference}"
+        f"CL Paints Waiver Confirmation - {waiver.public_reference}"
     )
 
     confirmation_body = f"""
@@ -1082,7 +1104,7 @@ Hello {waiver.responsible_first_name},
 
 Thank you for completing your CL Paints waiver.
 
-Waiver Reference: {waiver.waiver_reference}
+Waiver Reference: {waiver.public_reference}
 Event: {waiver.event_name}
 People Covered: {participant_names}
 Date Completed: {waiver.signed_date.strftime('%d/%m/%Y')}
@@ -1113,7 +1135,8 @@ info@clpaints.com
 
     return jsonify({
         "success": True,
-        "waiver_reference": waiver.waiver_reference,
+        "waiver_reference": waiver.public_reference,
+        "legacy_waiver_reference": waiver.waiver_reference,
         "confirmation_subject": confirmation_subject,
         "confirmation_body": confirmation_body
     })
@@ -1376,7 +1399,7 @@ def send_booking_request_confirmation(booking):
         events = []
 
     lines = [
-        f"Booking request #{booking.id}",
+        f"Booking request {booking.public_reference}",
         "Status: Under Review",
         "",
         "We have received your booking request. The request is under review, and CL Paints will contact you after checking the details.",
@@ -1438,7 +1461,7 @@ def send_booking_request_confirmation(booking):
         resend.Emails.send({
             "from": "CL Paints <info@clpaints.com>",
             "to": [booking.email],
-            "subject": f"Booking request received - #{booking.id} (Under Review)",
+            "subject": f"Booking request received - {booking.public_reference} (Under Review)",
             "text": "\n".join(lines),
         })
         return True
@@ -1703,11 +1726,14 @@ def booking_request():
             db.session.add(booking)
             db.session.commit()
             email_sent = send_booking_request_confirmation(booking)
+            if booking.promo_code and booking.referral_verified:
+                app.extensions['client_reward_code_notice'](booking.promo_code,
+                    f'Referral code {booking.promo_code} has been used in a booking request. A reward is earned after the qualifying event is attended and confirmed by CL Paints.')
             if portal_account:
                 return redirect(url_for('client.booking_detail', booking_id=booking.id, submitted='yes'))
             return redirect(url_for(
                 "booking_request",
-                submitted=booking.id,
+                submitted=booking.public_reference,
                 email_sent="yes" if email_sent else "no",
             ))
 
@@ -1757,7 +1783,7 @@ def send_booking_status_email(booking):
     accepted = booking.status == "Accepted"
     status_text = "accepted" if accepted else "declined"
     lines = [
-        f"Booking request #{booking.id} has been {status_text}.",
+        f"Booking request {booking.public_reference} has been {status_text}.",
         "",
         f"Hello {booking.first_name},",
         "",
@@ -1800,7 +1826,7 @@ def send_booking_status_email(booking):
         resend.Emails.send({
             "from": "CL Paints <info@clpaints.com>",
             "to": [booking.email],
-            "subject": f"Booking request #{booking.id} {status_text}",
+            "subject": f"Booking request {booking.public_reference} {status_text}",
             "text": "\n".join(lines),
         })
         return True
@@ -1870,6 +1896,8 @@ def admin_manage_booking(booking_id):
     if booking is None:
         return redirect(url_for("admin_bookings"))
 
+    from client_notifications import booking_snapshot
+    previous_snapshot = booking_snapshot(booking, booking_schedule_events)
     previous_status = booking.status
     action = request.form.get("action", "update")
     if action == "accept":
@@ -1936,8 +1964,7 @@ def admin_manage_booking(booking_id):
 
     db.session.commit()
     status_email_sent = None
-    if booking.status != previous_status and booking.status in {"Accepted", "Declined"}:
-        status_email_sent = send_booking_status_email(booking)
+    status_email_sent = app.extensions['client_booking_updated'](booking, previous_snapshot, booking_schedule_events)
     return redirect(url_for(
         "admin_bookings",
         updated=booking.id,
@@ -1980,7 +2007,7 @@ def admin_create_booking_events(booking_id):
             f"{booking.first_name} {booking.last_name} "
             f"(Booking #{booking.id}, Day {day_number})"
         )[:200]
-        db.session.add(Event(
+        public_event = Event(
             name=event_name,
             event_date=event_date,
             event_address=event_data.get("event_address", ""),
@@ -1988,7 +2015,10 @@ def admin_create_booking_events(booking_id):
             is_current=False,
             booking_id=booking.id,
             booking_day_number=day_number,
-        ))
+        )
+        db.session.add(public_event)
+        db.session.flush()
+        db.session.add(loyalty_models[0](event_id=public_event.id, token=secrets.token_urlsafe(32)))
         created_count += 1
 
     db.session.commit()
@@ -2246,6 +2276,15 @@ def delete_waiver(waiver_id):
     if waiver is None:
         return jsonify({"error": "Waiver not found."}), 404
 
+    _, balance_model, visit_model, custodian_model, transfer_model = loyalty_models
+    member_ids = [person.id for person in waiver.participants]
+    protected = (balance_model.query.filter(balance_model.participant_id.in_(member_ids)).first()
+        or visit_model.query.filter(visit_model.participant_id.in_(member_ids)).first()
+        or custodian_model.query.filter(db.or_(custodian_model.participant_id.in_(member_ids), custodian_model.waiver_id == waiver.id)).first()
+        or transfer_model.query.filter(db.or_(transfer_model.participant_id.in_(member_ids), transfer_model.target_waiver_id == waiver.id)).first())
+    if protected:
+        return jsonify({"error": "This waiver has loyalty or transfer history. Archive it instead to preserve member records."}), 409
+
     try:
         Participant.query.filter_by(
             waiver_id=waiver.id
@@ -2301,6 +2340,8 @@ def admin_create_event():
             is_current=False
         )
         db.session.add(event)
+        db.session.flush()
+        db.session.add(loyalty_models[0](event_id=event.id, token=secrets.token_urlsafe(32)))
         db.session.commit()
 
     return redirect(url_for("admin_events"))
@@ -2378,11 +2419,14 @@ from business_settings import register_settings
 get_business_settings = register_settings(app, db, BusinessSetting, AdminCredential, AdminPasswordReset, admin_required, ADMIN_PASSWORD, ADMIN_EMAIL)
 
 
-def send_client_email(to, subject, body):
+def send_client_email(to, subject, body, html_body=None):
     if not RESEND_API_KEY:
         return False
     try:
-        resend.Emails.send({'from': 'CL Paints <info@clpaints.com>', 'to': [to], 'subject': subject, 'text': body})
+        payload = {'from': 'CL Paints <info@clpaints.com>', 'to': [to], 'subject': subject, 'text': body}
+        if html_body:
+            payload['html'] = html_body
+        resend.Emails.send(payload)
         return True
     except Exception:
         app.logger.warning('Client email delivery failed.')
@@ -2392,6 +2436,19 @@ def send_client_email(to, subject, body):
 from client_portal import register_client_portal
 get_current_client = register_client_portal(app, db, ClientAccount, ClientLoginCode, ClientRewardOwner, ClientEnquiry,
     Booking, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events, admin_required)
+
+from loyalty import register_loyalty
+register_loyalty(app, db, loyalty_models, ClientAccount, Waiver, Participant, Event, Booking,
+    EventMoodboardImage, MoodboardImage, get_current_client, admin_required,
+    lambda *args: send_client_email(*args), booking_schedule_events)
+
+from client_notifications import register_notifications
+register_notifications(app, db, notification_models, Booking, ClientAccount, ClientRewardOwner,
+    get_current_client, get_business_settings, lambda *args: send_client_email(*args))
+
+from business_tools import register_tools
+register_tools(app, db, tool_models, Booking, ClientAccount, ClientEnquiry, Participant, loyalty_models, notification_models,
+    get_current_client, admin_required, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events)
 
 if __name__ == '__main__':
     app.run(debug=True)

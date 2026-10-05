@@ -12,7 +12,7 @@
             celebration.append(fleck);
         }
         document.body.append(celebration);
-        window.setTimeout(() => celebration.remove(), 2500);
+        window.setTimeout(() => celebration.remove(), 4000);
     }
     const panel = document.querySelector('.client-auth');
     const form = panel?.querySelector('form');
@@ -47,7 +47,10 @@
             painting.append(slot);
             return slot;
         });
-        codeInput.after(painting);
+        const entry = document.createElement('div');
+        entry.className = 'client-painted-entry';
+        codeInput.before(entry);
+        entry.append(codeInput, painting);
         let previous = '';
         const paintDigits = () => {
             const value = codeInput.value;

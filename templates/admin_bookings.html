@@ -28,7 +28,7 @@ Bookings | CL Paints
         <div class="top bookings-top">
             <div>
                 <small>CL PAINTS MANAGEMENT SYSTEM</small>
-                <h1>Bookings</h1>
+                <h1>Bookings</h1><a class="client-text-link" href="{{ url_for('admin_calendar') }}">Check availability calendar &rarr;</a>
                 <p>Client requests submitted through the CL Paints booking form.</p>
             </div>
             <a class="btn primary" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form</a>
@@ -45,6 +45,8 @@ Bookings | CL Paints
         {% elif request.args.get('update_error') %}
         <p class="booking-admin-error" role="alert">Check the mileage values or authorized CL Paints signature and try again.</p>
         {% endif %}
+
+        {% if request.args.get('status_email') == 'sent' %}<p class="booking-admin-notice">The client has been emailed about the booking update.</p>{% elif request.args.get('status_email') == 'failed' %}<p class="booking-admin-error">The booking is saved, but its update email could not be sent. Contact the client to let them know.</p>{% endif %}
 
         <section class="stats">
             <article>
@@ -111,6 +113,7 @@ Bookings | CL Paints
                             <td>
                                 <details class="booking-detail">
                                     <summary>View</summary>
+                                    <p><a class="btn small" href="{{ url_for('admin_payments',booking_id=booking.id) }}">Payments &amp; deposit</a></p>
                                     <dl>
                                         <dt>Request type</dt><dd>{{ "Availability" if booking.request_type == "availability" else "Booking" }}</dd>
                                         <dt>Scheduled hours</dt><dd>{{ "%.2f"|format(row.total_hours) }} hours</dd>

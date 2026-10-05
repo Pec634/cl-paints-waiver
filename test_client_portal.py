@@ -18,8 +18,11 @@ class ClientPortalTest(unittest.TestCase):
         main.db.create_all()
         rewards.execute('DELETE FROM referrals')
         self.client = main.app.test_client()
+        self.email_patch = patch.object(main, 'send_client_email', return_value=True)
+        self.email_patch.start()
 
     def tearDown(self):
+        self.email_patch.stop()
         self.context.pop()
 
     def csrf(self, client=None):
@@ -121,7 +124,7 @@ class ClientPortalTest(unittest.TestCase):
         own = self.booking('CLIENT@example.com')
         other = self.booking('other@example.com', event_type='PRIVATE OTHER EVENT')
         response = self.client.get('/client/bookings')
-        self.assertIn(f'#{own.id}'.encode(), response.data)
+        self.assertIn(own.public_reference.encode(), response.data)
         self.assertNotIn(b'PRIVATE OTHER EVENT', response.data)
         self.assertEqual(self.client.get(f'/client/bookings/{other.id}').status_code, 404)
         detail = self.client.get(f'/client/bookings/{own.id}')
