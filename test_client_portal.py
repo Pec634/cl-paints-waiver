@@ -305,6 +305,39 @@ class ClientPortalTest(unittest.TestCase):
         self.assertIn('Unavailable 09:00–11:00'.encode(), response.data)
         self.assertEqual(self.client.get('/booking/calendar?month=invalid').status_code, 400)
 
+    def test_client_session_expiry_and_timer(self):
+        self.signup()
+        self.assertIn(b'data-client-session-expires=', self.client.get('/client/').data)
+        self.assertIn(b'data-client-session-expires=', self.client.get('/booking').data)
+        with self.client.session_transaction() as session:
+            session['client_signed_in'] = datetime.now().timestamp() - 8*3600 - 1
+        self.assertEqual(self.client.get('/client/').status_code, 302)
+        with self.client.session_transaction() as session:
+            self.assertNotIn('client_id', session)
+        page = self.client.get('/client/login?expired=1')
+        self.assertIn(b'Your sign-in has expired', page.data)
+        self.assertNotIn(b'data-client-session-expires=', page.data)
+
+    def test_stay_signed_in_persistent_cookie_and_fixed_expiry(self):
+        self.client.get('/client/signup')
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            self.client.post('/client/signup', data=dict(csrf_token=self.csrf(), email='remember@example.com',
+                first_name='Test', last_name='Client', stay_signed_in='yes'))
+        code = re.search(r'code is (\d{6})', send.call_args.args[2]).group(1)
+        response = self.verify(code)
+        self.assertIn('Expires=', response.headers.get('Set-Cookie', ''))
+        with self.client.session_transaction() as session:
+            self.assertTrue(session['client_remember'])
+            self.assertNotIn('client_pending_remember', session)
+            session['client_signed_in'] = datetime.now().timestamp() - 9*3600
+        self.assertEqual(self.client.get('/client/').status_code, 200)
+        with self.client.session_transaction() as session:
+            session['client_signed_in'] = datetime.now().timestamp() - 30*86400 - 1
+        self.assertEqual(self.client.get('/client/').status_code, 302)
+        with self.client.session_transaction() as session:
+            self.assertNotIn('client_id', session)
+            self.assertNotIn('client_remember', session)
+
     def test_enquiry_survives_notification_failure(self):
         self.signup()
         with patch.object(main, 'send_client_email', return_value=False) as send:

@@ -12,15 +12,21 @@ from email_validator import validate_email, EmailNotValidError
 
 def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, settings, send_email,
                            schedule_events, admin_required):
+    session_seconds = 8 * 3600
+    remembered_seconds = 30 * 24 * 3600
+    app.permanent_session_lifetime = timedelta(days=30)
+    def client_session_seconds():
+        return remembered_seconds if session.get('client_remember') is True else session_seconds
     portal = Blueprint('client', __name__, url_prefix='/client')
     def digest(value):
         return hmac.new(str(app.secret_key).encode(), value.encode(), hashlib.sha256).hexdigest()
     def current_account():
         account_id = session.get('client_id')
         issued = session.get('client_signed_in', 0)
-        if not account_id or datetime.now().timestamp() - issued > 8 * 3600:
+        if not account_id or datetime.now().timestamp() - issued >= client_session_seconds():
             session.pop('client_id', None)
             session.pop('client_signed_in', None)
+            session.pop('client_remember', None)
             return None
         return db.session.get(Account, account_id)
     def client_required(view):
@@ -51,6 +57,11 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     @portal.context_processor
     def context():
         return dict(client_account=current_account(), client_csrf=csrf())
+
+    @app.context_processor
+    def client_session_context():
+        account = current_account() if not request.path.startswith('/admin') else None
+        return dict(client_session_expires=(session.get('client_signed_in', 0) + client_session_seconds()) if account else None)
 
     @app.context_processor
     def reward_link_context():
@@ -94,7 +105,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         signup = request.path.endswith('/signup')
         if current_account():
             return redirect(url_for('client.dashboard'))
-        error = None
+        error = 'Your sign-in has expired. Enter your email to sign in again.' if request.args.get('expired') == '1' else None
         if request.method == 'POST':
             check_csrf()
             try:
@@ -104,6 +115,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 if signup and (not first or not last or len(first) > 100 or len(last) > 100):
                     raise ValueError('Enter your first name and surname (up to 100 characters each).')
                 issue_code(email, first, last, signup)
+                session['client_pending_remember'] = request.form.get('stay_signed_in') == 'yes'
                 return redirect(url_for('client.verify'))
             except (EmailNotValidError, ValueError) as problem:
                 error = str(problem)
@@ -147,6 +159,8 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 session.pop('client_challenge', None)
                 session['client_id'] = account.id
                 session['client_signed_in'] = now.timestamp()
+                session['client_remember'] = session.pop('client_pending_remember', False) is True
+                session.permanent = session['client_remember']
                 session['client_csrf'] = secrets.token_urlsafe(32)
                 flash('You’re signed in. Welcome to your colourful corner of CL Paints!', 'client_login_success')
                 scan_token = session.pop('loyalty_scan_token', None)
@@ -197,7 +211,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     @portal.post('/logout')
     def logout():
         check_csrf()
-        for key in ['client_id', 'client_signed_in', 'client_challenge', 'client_csrf']:
+        for key in ['client_id', 'client_signed_in', 'client_challenge', 'client_csrf', 'client_remember', 'client_pending_remember']:
             session.pop(key, None)
         return redirect(url_for('client.login'))
 

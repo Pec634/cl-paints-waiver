@@ -2595,3 +2595,8 @@ label.moodboard-admin-card > div {
     .client-summary article { padding: 16px; }
     .client-auth { padding: 24px 20px; margin-top: 12px; }
 }
+
+.client-session-timer { margin: 12px 16px; text-align: center; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.client-form .client-remember-choice { display: flex; align-items: center; gap: 10px; }
+.client-form .client-remember-choice input { width: 20px; height: 20px; margin: 0; accent-color: var(--pink); }
