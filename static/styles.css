@@ -2432,6 +2432,43 @@ label.moodboard-admin-card > div {
 .availability-month { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; margin: 18px 0; }
 .availability-day { padding: 10px; min-height: 90px; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: white; overflow-wrap: anywhere; }
 .availability-day.outside { opacity: .5; }
+.booking-calendar-panel > summary { cursor: pointer; font-weight: 800; padding: 8px 0; }
+.booking-calendar-frame { display: block; width: 100%; height: 650px; border: 0; margin: 16px 0; }
+.client-availability { max-width: 1100px; margin: auto; padding: 20px; }
+.client-availability h1 { font-size: 1.4rem; margin: 0 0 8px; }
+.client-availability header p, .client-calendar-note { color: var(--muted); line-height: 1.55; }
+.client-calendar-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 16px; }
+.client-calendar-nav h2 { margin: 0; font-size: 1.2rem; text-align: center; }
+.client-calendar-key { display: flex; flex-wrap: wrap; gap: 12px; font-size: .85rem; }
+.client-calendar-key span { padding: 8px 12px; border-radius: 8px; }
+.client-calendar-free, .client-calendar-open { background: #eafaf2; color: #176344; }
+.client-calendar-busy, .client-calendar-time { background: #fff0f6; color: #9b2457; }
+.client-calendar-note { font-size: .85rem; margin: 12px 0 20px; }
+.client-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.client-calendar-weekday { text-align: center; padding: 8px; color: var(--muted); font-size: .85rem; }
+.client-calendar-day { min-width: 0; min-height: 120px; border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: #fff; }
+.client-calendar-date { font-weight: 800; font-size: 1.1rem; }
+.client-calendar-day-name { display: none; }
+.client-calendar-day-details { display: grid; gap: 6px; margin-top: 10px; font-size: .8rem; line-height: 1.45; }
+.client-calendar-open, .client-calendar-time { padding: 6px 8px; border-radius: 7px; }
+.client-calendar-time { font-variant-numeric: tabular-nums; }
+.client-calendar-status { font-size: .8rem; }
+.client-calendar-outside { background: #f1f3f7; color: #788397; }
+@media (max-width: 700px) {
+    .client-availability { padding: 12px; }
+    .client-calendar-nav { flex-wrap: wrap; gap: 10px; }
+    .client-calendar-nav h2 { order: -1; flex-basis: 100%; font-size: 1.2rem; }
+    .client-calendar-nav .btn { padding: 10px 14px; }
+    .client-calendar-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .client-calendar-weekday, .client-calendar-outside { display: none; }
+    .client-calendar-day { min-height: 0; display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: start; gap: 12px; padding: 14px; }
+    .client-calendar-day time { display: grid; gap: 4px; }
+    .client-calendar-day-name { display: block; font-size: .8rem; color: var(--muted); }
+    .client-calendar-date { font-size: 1.3rem; }
+    .client-calendar-day-details { margin: 0; font-size: .9rem; }
+    .client-calendar-status { font-size: .9rem; }
+    .booking-calendar-frame { height: 620px; }
+}
 .availability-day a, .availability-day span { display: block; font-size: .75rem; margin-top: 6px; border-radius: 6px; background: #fff0f6; padding: 4px; }
 @media(max-width:650px) { .availability-day { padding: 5px; min-height: 65px; } .availability-day a, .availability-day span { font-size: .65rem; padding: 2px; } }
 .client-booking-updates { border: 2px solid #e3ad39 !important; background: #fff9e8; }

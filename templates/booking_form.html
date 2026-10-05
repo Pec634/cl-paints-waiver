@@ -32,7 +32,7 @@ Client Booking Request | CL Paints
     {% endif %}
 
     <form class="booking-form" method="post" action="{{ url_for('booking_request') }}">
-        <details class="panel"><summary>View our availability calendar</summary><iframe title="CL Paints availability calendar" src="{{ url_for('client_availability_calendar') }}" loading="lazy" style="width:100%;height:560px;border:0"></iframe><a href="{{ url_for('client_availability_calendar') }}" target="_blank" rel="noopener">Open calendar in a separate tab</a></details>
+        <details class="panel booking-calendar-panel"><summary>View our availability calendar</summary><iframe class="booking-calendar-frame" title="CL Paints availability calendar" src="{{ url_for('client_availability_calendar') }}" loading="lazy"></iframe><a href="{{ url_for('client_availability_calendar') }}" target="_blank" rel="noopener">Open calendar in a separate tab</a></details>
         <div class="booking-error" id="bookingValidationError" role="alert" tabindex="-1" hidden></div>
         {% if portal_account %}<input type="hidden" name="csrf_token" value="{{ session.get('client_csrf', '') }}">{% endif %}
         <section class="booking-section">
@@ -40,53 +40,11 @@ Client Booking Request | CL Paints
                 <span>01</span>
                 <div>
                     <h2>Your request</h2>
-                    <p>Tell us whether you are checking a date or ready to book.</p>
+                    <p>Check the calendar above, then send your booking details for review.</p>
                 </div>
             </div>
 
-            <fieldset class="booking-fieldset">
-                <legend>What would you like to do?</legend>
-                <div class="booking-choice-grid">
-                    <label class="booking-choice">
-                        <input type="radio" name="request_type" value="availability" required {% if form_data.get('request_type') == 'availability' %}checked{% endif %}>
-                        <span>Check availability</span>
-                    </label>
-                    <label class="booking-choice">
-                        <input type="radio" name="request_type" value="booking" required {% if form_data.get('request_type') == 'booking' %}checked{% endif %}>
-                        <span>Make a booking</span>
-                    </label>
-                </div>
-            </fieldset>
-
-            <div class="availability-check-panel" id="availabilityCheckPanel" hidden>
-                <h3>Quick availability check</h3>
-                <p>Enter the event details only. We will check accepted bookings for an overlap.</p>
-                <div class="booking-fields">
-                    <label class="booking-field">
-                        <span>Event date</span>
-                        <input type="date" name="availability_date" required>
-                    </label>
-                    <label class="booking-field">
-                        <span>Event type</span>
-                        <input name="availability_event_type" required placeholder="Birthday, festival, school fair...">
-                    </label>
-                    <label class="booking-field">
-                        <span>Start time</span>
-                        <input type="time" name="availability_start_time" required>
-                    </label>
-                    <label class="booking-field">
-                        <span>Finish time</span>
-                        <input type="time" name="availability_finish_time" required>
-                    </label>
-                    <label class="booking-field booking-field-wide">
-                        <span>Event address</span>
-                        <input class="address-autocomplete" name="availability_address" autocomplete="street-address" required>
-                        <small>{% if google_maps_api_key %}Google Maps address suggestions are enabled.{% else %}Enter the address manually; suggestions need a Google Maps API key.{% endif %}</small>
-                    </label>
-                </div>
-                <button class="btn primary" type="button" id="availabilityCheckButton">Check availability</button>
-                <p id="availabilityCheckResult" class="availability-check-result" role="status" aria-live="polite"></p>
-            </div>
+            <input type="hidden" name="request_type" value="booking">
 
             <div class="booking-rate-note" data-full-booking>
                 <strong>Pricing options</strong>
@@ -512,11 +470,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const form = document.querySelector(".booking-form");
     if (!form) return;
 
-    const requestTypeInputs = form.querySelectorAll('[name="request_type"]');
-    const fullBookingSections = form.querySelectorAll("[data-full-booking]");
-    const availabilityPanel = document.getElementById("availabilityCheckPanel");
-    const availabilityButton = document.getElementById("availabilityCheckButton");
-    const availabilityResult = document.getElementById("availabilityCheckResult");
     const businessType = form.querySelector('[name="client_type"]');
     const jobTitleField = document.getElementById("businessJobTitleField");
     const jobTitleInput = form.querySelector('[name="job_title"]');
@@ -558,43 +511,6 @@ document.addEventListener("DOMContentLoaded", () => {
         "White": ["English, Welsh, Scottish, Northern Irish or British", "Irish", "Gypsy or Irish Traveller", "Roma", "Other White background"],
         "Other ethnic group": ["Arab", "Any other ethnic group"]
     };
-
-    function setRequiredWithin(element, enabled) {
-        element.querySelectorAll("input, select, textarea").forEach((control) => {
-            if (control.dataset.bookingRequired === "true") {
-                control.required = enabled;
-            } else if (control.required) {
-                control.dataset.bookingRequired = "true";
-                control.required = enabled;
-            }
-        });
-    }
-
-    function syncRequestMode() {
-        const requestType = form.querySelector('[name="request_type"]:checked')?.value;
-        const availabilityMode = requestType === "availability";
-        const bookingMode = requestType === "booking";
-        availabilityPanel.hidden = !availabilityMode;
-        fullBookingSections.forEach((section) => {
-            section.hidden = !bookingMode;
-            section.querySelectorAll("input, select, textarea").forEach((control) => {
-                control.disabled = !bookingMode;
-            });
-        });
-        setRequiredWithin(availabilityPanel, availabilityMode);
-        dateCountInput.disabled = !bookingMode || isSingleDate();
-        dayList.querySelectorAll('[data-day-details]').forEach((details) => {
-            if (details.hidden) details.querySelectorAll('input, select, textarea').forEach((control) => {
-                control.disabled = true;
-            });
-        });
-        availabilityResult.textContent = "";
-        syncPitchFees();
-        syncHolidayPreferences();
-    }
-
-    requestTypeInputs.forEach((input) => input.addEventListener("change", syncRequestMode));
-    syncRequestMode();
 
     function syncBusinessType() {
         const isBusiness = businessType.value === "business";
@@ -682,8 +598,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const label = card.querySelector("[data-pitch-fee-field]");
             const input = label.querySelector("input");
             label.hidden = !applies;
-            input.disabled = !applies || card.querySelector("[data-day-details]").hidden ||
-                form.querySelector('[name="request_type"]:checked')?.value !== "booking";
+            input.disabled = !applies || card.querySelector("[data-day-details]").hidden;
             input.required = applies && !input.disabled;
         });
     }
@@ -695,8 +610,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const select = label.querySelector("select");
             label.hidden = !isPrivate;
             if (!isPrivate) select.value = "";
-            select.disabled = !isPrivate || card.querySelector("[data-day-details]").hidden ||
-                form.querySelector('[name="request_type"]:checked')?.value !== "booking";
+            select.disabled = !isPrivate || card.querySelector("[data-day-details]").hidden;
         });
     }
 
@@ -766,7 +680,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ? 1
             : Math.max(2, Math.min(Number({{ business_settings.max_event_dates|tojson }}), Number(dateCountInput.value) || 2));
         dateCountField.hidden = isSingleDate();
-        dateCountInput.disabled = isSingleDate() || form.querySelector('[name="request_type"]:checked')?.value !== 'booking';
+        dateCountInput.disabled = isSingleDate();
         sameDetailsField.hidden = isSingleDate() || dayCount < 2;
         dayList.replaceChildren();
 
@@ -824,48 +738,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }, true);
     form.addEventListener("submit", (event) => {
         validationError.hidden = true;
-        if (form.querySelector('[name="request_type"]:checked')?.value === "availability") {
-            event.preventDefault();
-            checkAvailability();
-            return;
-        }
         scheduleInput.value = JSON.stringify({
             same_details: sameDetailsInput.checked,
             events: readSchedule()
         });
     });
-
-    async function checkAvailability() {
-        if (!availabilityPanel.querySelector("input:invalid")) {
-            availabilityButton.disabled = true;
-            availabilityButton.textContent = "Checking...";
-            try {
-                const response = await fetch("/api/bookings/availability-check", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        date: form.elements.availability_date.value,
-                        start_time: form.elements.availability_start_time.value,
-                        finish_time: form.elements.availability_finish_time.value,
-                        address: form.elements.availability_address.value,
-                        event_type: form.elements.availability_event_type.value
-                    })
-                });
-                const result = await response.json();
-                availabilityResult.textContent = result.message || result.error;
-                availabilityResult.dataset.available = String(result.available ?? "");
-            } catch (error) {
-                availabilityResult.textContent = "We could not check availability right now. Please try again.";
-            } finally {
-                availabilityButton.disabled = false;
-                availabilityButton.textContent = "Check availability";
-            }
-        } else {
-            availabilityPanel.querySelector(":invalid")?.reportValidity();
-        }
-    }
-
-    availabilityButton.addEventListener("click", checkAvailability);
 
     referralButton.addEventListener("click", async () => {
         const code = referralInput.value.trim();
