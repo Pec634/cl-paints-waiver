@@ -218,7 +218,7 @@
         </label>
     </div>
 
-<h2>Consent &amp; Acknowledgements</h2>
+<h2>Consent &amp; Acknowledgements</h2>{% if kiosk_item %}<details class="waiver-terms"><summary>Privacy policy</summary><div class="waiver-terms-content">{% include '_privacy_policy_content.html' %}</div></details>{% else %}<p>Read our <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener">Privacy policy</a> for how we handle your information.</p>{% endif %}
 
 <label class="check">
     <input id="responsibleAuthority" type="checkbox">

@@ -2416,8 +2416,11 @@ label.moodboard-admin-card > div {
     .events-table td .btn.small { width: 100%; min-height: 44px; }
 }
 .dashboard-tools { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; margin-top: 18px; }
-.dashboard-tools-folder { display: contents; }
-.dashboard-tools-folder > summary { display: none; }
+.dashboard-tools-folder { display: block; }
+.dashboard-tools-folder > summary { display: list-item; cursor: pointer; font-weight: 800; padding: 8px 0; }
+.dashboard-folder-hint { display: block; margin-top: 6px; font-size: .8rem; font-weight: 400; color: var(--muted); }
+.dashboard-tools-folder .panel-heading { margin-top: 16px; }
+.dashboard-tools-folder .panel-heading h2 { display: none; }
 @media (max-width: 800px) {
     .dashboard-tools-folder { display: block; }
     .dashboard-tools-folder > summary { display: list-item; cursor: pointer; font-weight: 800; padding: 8px 0; }
@@ -2657,3 +2660,9 @@ label.moodboard-admin-card > div {
 .rota-shift-details { margin-top: 16px; overflow-wrap: anywhere; }
 .rota-shift-details summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
 .rota-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.rota-staff-filter { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0; }
+.rota-staff-filter label { display: grid; gap: 6px; flex: 1 1 220px; }
+.rota-staff-filter select { width: 100%; min-height: 44px; }
+.privacy-page { max-width: 900px; margin: 24px auto; padding: 24px; line-height: 1.7; overflow-wrap: anywhere; }
+.privacy-page h2 { margin-top: 32px; font-size: 1.3rem; }
+@media (max-width: 600px) { .privacy-page { margin: 12px; padding: 18px; } }

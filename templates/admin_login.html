@@ -28,6 +28,7 @@ Admin Login | CL Paints
         {% endif %}
 
         <form method="POST" class="login-form">
+            <input type="hidden" name="csrf_token" value="{{ login_csrf }}">
             <label for="password">
                 <strong>Password</strong>
             </label>

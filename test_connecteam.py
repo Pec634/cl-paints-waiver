@@ -76,5 +76,26 @@ class ConnecteamTest(unittest.TestCase):
             enrich_shifts(shifts)
         self.assertEqual(shifts[0]['staff_names'], ['Staff ID 12'])
 
+    def test_staff_filter_and_unassigned_shifts(self):
+        main.db.session.add(main.BusinessSetting(key='connecteam_scheduler_id', value='123')); main.db.session.commit()
+        def response(path, payload=None):
+            if path == '/scheduler/v1/schedulers': return self.schedules
+            if path.startswith('/users/'):
+                return {'users':[{'userId':12,'firstName':'Alex','lastName':'Painter'}, {'userId':13,'firstName':'Sam','lastName':'Painter'}]}
+            return {'shifts':[dict(id='one',title='Alex event',startTime=1782896400,endTime=1782903600,assignedUserIds=[12]),
+                              dict(id='two',title='Sam event',startTime=1782896400,endTime=1782903600,assignedUserIds=[13]),
+                              dict(id='three',title='Unassigned event',startTime=1782896400,endTime=1782903600,assignedUserIds=[])]}
+        with patch('connecteam_rota.api', side_effect=response):
+            page = self.admin.get('/admin/connecteam?staff=12')
+            self.assertIn(b'Alex event', page.data)
+            self.assertNotIn(b'Sam event', page.data)
+            self.assertIn(b'Sam Painter', page.data)
+            self.assertIn(b'Showing 1 of 3', page.data)
+            page = self.admin.get('/admin/connecteam?staff=unassigned')
+            self.assertIn(b'Unassigned event', page.data)
+            self.assertNotIn(b'Alex event', page.data)
+            self.assertIn(b'No shifts match', self.admin.get('/admin/connecteam?staff=99').data)
+            self.assertEqual(self.admin.get('/admin/connecteam?staff=bad').status_code, 400)
+
 
 if __name__ == '__main__': unittest.main()

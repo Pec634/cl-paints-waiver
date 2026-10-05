@@ -6,11 +6,12 @@ Client Booking Request | CL Paints
 
 {% block body %}
 <main class="booking-public">
+{% if booking_offer %}<p class="client-booking-banner"><strong>{{ booking_offer.title }}</strong> ? Save ?{{ booking_offer.saving }} per hour. Offer applies when your request is submitted during the promotion period; travel and minimum duration still apply.</p>{% endif %}
     {% if portal_account %}<p class="client-booking-banner"><a href="{{ url_for('client.bookings') }}">← My bookings</a> · Signed in as {{ portal_account.email }}</p>{% endif %}
     <header class="booking-public-header">
         <a class="brand" href="/">{{ business_settings.business_name }}</a>
         <small>CLIENT BOOKING REQUEST</small>
-        <h1>Let's plan your event.</h1>
+        <h1>Let's plan your event.</h1><p>Read our <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener">Privacy policy</a> for how we handle your information.</p>
         <p>Send us your details and we will review availability and costs with you.</p><p><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% if business_settings.phone %} · {{ business_settings.phone }}{% endif %}{% if business_settings.website %} · <a href="{{ business_settings.website }}" target="_blank" rel="noopener">Website</a>{% endif %}</p>
     </header>
 
@@ -49,7 +50,7 @@ Client Booking Request | CL Paints
             <div class="booking-rate-note" data-full-booking>
                 <strong>Pricing options</strong>
                 <ul>
-                    <li>£{{ business_settings.hourly_rate }} per hour, charged to the client.</li>
+                    <li>£{{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate) }} per hour, charged to the client.</li>
                     <li>Customers pay directly; no charge to the client.</li>
                     <li>CL Paints pays a pitch or stall fee.</li>
                     <li>Revenue sharing by separate agreement.</li>
@@ -280,7 +281,7 @@ Client Booking Request | CL Paints
                 <div><span>Estimated event cost</span><strong id="estimatedEventCost">£0.00</strong></div>
                 <div id="depositEstimateRow" hidden><span>Estimated 50% deposit</span><strong id="depositEstimateAmount">£0.00</strong></div>
                 <p>Pitch / stall fees are costs to CL Paints and are not included in your event cost or deposit.</p>
-                <p>£{{ business_settings.hourly_rate }} per hour, excluding dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
+                <p>£{{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate) }} per hour, excluding dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
                 <p id="paymentEstimate">Choose a payment arrangement to see the estimated amount.</p>
             </div>
 
@@ -652,7 +653,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             totalMinutes += minutes;
             if (eventDay.pitch_fee_required !== "yes") {
-                totalCost += (minutes / 60) * Number({{ business_settings.hourly_rate|tojson }});
+                totalCost += (minutes / 60) * Number({{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate)|tojson }});
             }
         });
 

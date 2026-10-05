@@ -172,3 +172,21 @@ reversed visits; waivers are matched by their saved event name and date and
 are explicitly not an attendance count. Loading the selected Connecteam rota
 is optional and read-only, showing up to 100 shifts and assignment counts for
 the selected UK day. This page never creates shifts or awards loyalty points.
+
+
+## Forms, giveaway and scheduled offers
+
+Client and admin Rewards link to the quarterly giveaway and photo/video
+consent form. Staff incident and road-traffic reports are linked only from
+Dashboard > Business Tools > Forms & seasonal offers. External submissions
+stay in Cognito Forms and are not imported automatically. Create seasonal
+forms in Cognito, then publish their HTTPS links through Forms & seasonal
+offers; client Bookings and Rewards display enabled links alongside Halloween.
+
+Scheduled hourly discounts apply to new internal booking requests submitted
+within the configured UK-time start-inclusive, end-exclusive interval. The
+largest active saving wins; discounts do not stack and rates never fall below
+zero. The saved quote stores the promotion and effective hourly rate. Existing
+bookings keep their prices, travel and pitch-fee rules remain, and external
+Cognito forms require separate pricing configuration. An estimate opened
+before an offer starts or ends is recalculated on submission.

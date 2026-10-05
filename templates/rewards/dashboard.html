@@ -1,6 +1,7 @@
 {% extends 'rewards/base.html' %}
 {% block content %}
 <div class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Rewards</h1><p>Refer a friend and earn {{ reward_text }} after their qualifying booking is attended.</p></div></div>
+{% include '_community_rewards.html' %}<p><a class="btn" href="{{ url_for('forms_offers') }}">Manage forms &amp; seasonal offers</a></p>
 <section class="panel"><h2>Public-event face-paint loyalty</h2><p>Each scanned, selected waiver member earns one point per public event. After three points, their fourth visit claims a free moodboard face paint and resets their points. Points stay with the member during responsibility transfers.</p><a class="btn" href="{{ url_for('admin_events') }}">Events: loyalty QR codes &amp; visit records</a></section>
 <div class="actions rewards-toolbar">
     <a class="btn primary" href="{{ url_for('rewards.create_referral') }}">Create referral code</a>

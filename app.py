@@ -66,6 +66,13 @@ def admin_required(view_function):
     def wrapped_view(*args, **kwargs):
         if not session.get("admin_authenticated"):
             return redirect(url_for("admin_login"))
+        now = datetime.utcnow().timestamp()
+        previous = session.get('admin_last_activity', now)
+        if now - previous > 1800:
+            session.pop('admin_authenticated', None)
+            session.pop('admin_last_activity', None)
+            return redirect(url_for('admin_login', expired=1))
+        session['admin_last_activity'] = now
         return view_function(*args, **kwargs)
 
     return wrapped_view
@@ -73,6 +80,8 @@ def admin_required(view_function):
 app = Flask(__name__)
 
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
+                  SESSION_COOKIE_SECURE=os.getenv('RENDER', '').lower() == 'true')
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -495,6 +504,10 @@ BookingRequest = define_booking_request_model(db)
 from kiosk import define_model as define_kiosk_model, ensure_schema as ensure_kiosk_schema
 from marketing import define_models as define_marketing_models, define_design_models
 marketing_models = define_marketing_models(db)
+from business_promotions import define_models as define_promotion_models
+promotion_models = define_promotion_models(db)
+from admin_security import define_models as define_admin_security_models
+admin_security_models = define_admin_security_models(db)
 from connecteam_rota import define_model as define_rota_model
 ConnecteamShiftLink = define_rota_model(db)
 app.extensions['marketing_design_models'] = define_design_models(db)
@@ -1176,10 +1189,13 @@ info@clpaints.com
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
-    error = None
+    error = 'Your admin session expired after 30 minutes without activity. Please sign in again.' if request.args.get('expired') else None
+    token = session.setdefault('admin_login_csrf', secrets.token_urlsafe(32))
     credential = AdminCredential.query.order_by(AdminCredential.id.asc()).first()
 
     if request.method == "POST":
+        if not app.extensions['admin_login_check']():
+            return render_template('admin_login.html', error='Too many sign-in attempts. Wait 15 minutes before trying again.', login_csrf=token), 429
         password = request.form.get("password", "")
         password_is_valid = (
             check_password_hash(credential.password_hash, password)
@@ -1190,8 +1206,13 @@ def admin_login():
         if not credential and not ADMIN_PASSWORD:
             error = "Admin password has not been configured."
         elif password_is_valid:
+            if os.getenv('ADMIN_EMAIL_VERIFICATION', '').lower() == 'true':
+                if app.extensions['admin_start_verification']():
+                    return redirect(url_for('admin_verify'))
+                return render_template('admin_login.html', error='Admin verification could not be sent. Check the recovery email and Resend configuration.', login_csrf=token), 503
             session.clear()
             session["admin_authenticated"] = True
+            session['admin_last_activity'] = datetime.utcnow().timestamp()
             return redirect(url_for("admin_dashboard"))
         else:
             error = "Incorrect password."
@@ -1199,6 +1220,7 @@ def admin_login():
     return render_template(
         "admin_login.html",
         error=error,
+        login_csrf=token,
         reset_success=request.args.get("reset") == "success",
     )
 
@@ -1507,6 +1529,9 @@ def send_booking_request_confirmation(booking):
 def booking_request():
     settings = get_business_settings()
     pricing_rules = {key: settings[key] for key in ['hourly_rate', 'minimum_hours', 'max_event_dates', 'free_miles', 'mile_rate', 'travel_cap']}
+    offer = app.extensions['active_hourly_discount'](pricing_rules['hourly_rate'])
+    if offer:
+        pricing_rules.update(hourly_rate=offer['hourly_rate'], promotion=offer)
     portal_account = get_current_client()
     if portal_account and request.method == 'POST':
         import hmac
@@ -2499,6 +2524,11 @@ from marketing import register as register_marketing
 register_marketing(app, db, marketing_models, Waiver, admin_required, lambda *args: send_client_email(*args))
 from connecteam_rota import register as register_connecteam
 register_connecteam(app, db, ConnecteamShiftLink, BusinessSetting, Booking, booking_schedule_events, admin_required)
+from business_promotions import register as register_promotions
+register_promotions(app, db, promotion_models, admin_required, get_business_settings)
+from admin_security import register as register_admin_security
+register_admin_security(app, db, admin_security_models, lambda *args: send_client_email(*args),
+    lambda: get_business_settings()['recovery_email'] or ADMIN_EMAIL)
 from event_day import register as register_event_day
 register_event_day(app, db, Event, Booking, Waiver, BusinessSetting, loyalty_models, booking_schedule_events, admin_required)
 
@@ -2530,5 +2560,9 @@ from kiosk import register as register_kiosk
 register_kiosk(app, db, KioskSession, BusinessSetting, Event, Waiver, get_current_client,
     admin_required, waiver_event, create_waiver)
 
+@app.get('/privacy')
+def privacy_policy():
+    return render_template('privacy_policy.html')
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

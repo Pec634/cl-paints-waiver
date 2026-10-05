@@ -164,6 +164,18 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
                 enrich_shifts(shifts)
             except (ValueError, KeyError, TypeError, OverflowError) as exc:
                 error = str(exc) if isinstance(exc, ValueError) else 'Could not read the shift times.'
+        staff_options = {}
+        for shift in shifts:
+            for user, name in zip(shift.get('assignedUserIds') or [], shift.get('staff_names') or []):
+                staff_options[str(user)] = name
+        staff_filter = request.args.get('staff', '').strip()
+        if staff_filter and staff_filter != 'unassigned' and not staff_filter.isdigit():
+            abort(400)
+        total_shifts = len(shifts)
+        if staff_filter == 'unassigned':
+            shifts = [shift for shift in shifts if not shift.get('assignedUserIds')]
+        elif staff_filter:
+            shifts = [shift for shift in shifts if staff_filter in {str(user) for user in (shift.get('assignedUserIds') or [])}]
         rows = []
         links = {(item.booking_id, item.event_index): item for item in Link.query.all()}
         for booking in Booking.query.filter_by(status='Accepted').order_by(Booking.event_date).all():
@@ -174,4 +186,5 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
                     except (ValueError, KeyError, TypeError): changed = True
                 rows.append(dict(booking=booking, index=index, event=event, link=link, changed=changed))
         return render_template('admin_connecteam.html', schedules=schedules, selected_id=selected_id,
-                               shifts=shifts, rows=rows, error=error, csrf=token)
+                               shifts=shifts, rows=rows, error=error, csrf=token, staff_filter=staff_filter,
+                               staff_options=sorted(staff_options.items(), key=lambda item: item[1].casefold()), total_shifts=total_shifts)
