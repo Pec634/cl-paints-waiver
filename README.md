@@ -201,8 +201,8 @@ Seasonal forms reuse the full booking form and save their additional questions,
 title and wording in the booking's event_schedule. Requests appear in Bookings
 and the native form's submissions view. Existing booking prices, promotions,
 payment workflows and status notifications continue to apply. Native submissions
-do not automatically import historic Cognito entries. Incident/collision links
-remain external. Screenshot-based draft templates are available for Quarterly
+do not automatically import historic Cognito entries. Incident and collision
+reports are now native admin-only forms. Screenshot-based draft templates are available for Quarterly
 VIP Give-away, Photography consent and Halloween promotion. Review dates and
 travel wording before publishing: the supplied giveaway refers to Doncaster,
 while the portal business address is London. The editor supports text, textarea,
@@ -229,8 +229,13 @@ Preview form submissions still write to the local database. Remove the preview
 flag and restart when finished.
 
 Client and admin Rewards now display published native giveaway and photo/video
-consent forms. Staff incident and road-traffic reports are linked only from
-Dashboard > Business Tools > Forms & seasonal offers. External submissions
+consent forms. Native staff incident and road-traffic reports are available from
+Dashboard > Business Tools > Forms & seasonal offers. Reports have server-side
+required-field validation, CSRF protection, immutable submitted details, typed
+signature fields and private evidence downloads. Up to six JPG/PNG/WebP images
+are stored per report, at most 15 MB each. Reports and media require admin access;
+database backups include the evidence. The road collision fields are a new
+template rather than a transcription of the original form. Historical submissions
 stay in Cognito Forms and are not imported automatically. Older external form
 definitions are retained, but client seasonal links now use native forms.
 
@@ -241,3 +246,18 @@ zero. The saved quote stores the promotion and effective hourly rate. Existing
 bookings keep their prices, travel and pitch-fee rules remain, and external
 Cognito forms require separate pricing configuration. An estimate opened
 before an offer starts or ends is recalculated on submission.
+
+
+The studio Community gallery is available to signed-in clients at
+`/client/community-gallery`. Sharing is optional: submissions begin as pending
+and show a chosen display name or "Anonymous painter", never the account email.
+Admins review submissions and reports at `/admin/studio-gallery` (also linked
+from the dashboard). Creators can withdraw their own designs; favourites and
+reports are account-scoped. PNG photographs are validated, bounded, and stored
+in the application database alongside account ownership and moderation status.
+Database backups therefore include gallery images. Restart the application to
+create the three new gallery tables through the existing `db.create_all()` setup.
+No historical browser-saved designs are uploaded automatically. Studio sharing
+uses supplied templates and the illustrated character; there is no photo-upload
+control. Admins should inspect the image, title and display name before approval.
+The separate local design gallery still saves only on the current browser.

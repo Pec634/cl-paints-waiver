@@ -2667,3 +2667,5 @@ label.moodboard-admin-card > div {
 .privacy-page { max-width: 900px; margin: 24px auto; padding: 24px; line-height: 1.7; overflow-wrap: anywhere; }
 .privacy-page h2 { margin-top: 32px; font-size: 1.3rem; }
 @media (max-width: 600px) { .privacy-page { margin: 12px; padding: 18px; } }
+
+.staff-report-divider { border-top:2px solid #e9d5ff; padding-top:22px; margin-top:22px; color:#172554; width:100%; }

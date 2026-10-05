@@ -49,7 +49,7 @@ class PromotionTest(unittest.TestCase):
         client=self.fixture.client.get('/client/rewards').data
         self.assertIn(b'Quarterly giveaway',client);self.assertIn(b'Share your painted smiles',client)
         self.assertNotIn(b'RoadTrafficCollision',client)
-        self.assertIn(b'RoadTrafficCollision',self.admin.get(path).data)
+        self.assertIn(b'/admin/staff-reports/new/collision',self.admin.get(path).data)
 
     def test_new_booking_saves_discounted_price_and_offer(self):
         now=datetime.utcnow()

@@ -377,5 +377,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         clients = Account.query.order_by(Account.first_name, Account.last_name).all()
         return render_template('admin_clients.html', clients=clients, enquiries=Enquiry.query.order_by(Enquiry.created_at.desc()).limit(50).all(),
                                accounts={a.id: a for a in clients}, owners=Owner.query.all(), client_csrf=csrf())
+    from studio_community import register as register_studio_community
+    register_studio_community(app, portal, db, app.extensions['studio_community_models'], Account, client_required, check_csrf, admin_required)
     app.register_blueprint(portal)
     return current_account

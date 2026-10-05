@@ -324,6 +324,11 @@ class BusinessSetting(db.Model):
     value = db.Column(db.Text, nullable=False)
 
 
+from studio_community import models as studio_community_models
+StudioDesign, StudioReport, StudioFavourite = studio_community_models(db)
+app.extensions['studio_community_models'] = (StudioDesign, StudioReport, StudioFavourite)
+
+
 class ClientAccount(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False, unique=True)
@@ -510,6 +515,8 @@ from admin_security import define_models as define_admin_security_models
 admin_security_models = define_admin_security_models(db)
 from native_forms import define_models as define_native_form_models
 native_form_models = define_native_form_models(db)
+from staff_reports import define_models as define_staff_report_models
+staff_report_models = define_staff_report_models(db)
 from connecteam_rota import define_model as define_rota_model
 ConnecteamShiftLink = define_rota_model(db)
 app.extensions['marketing_design_models'] = define_design_models(db)
@@ -2581,10 +2588,13 @@ register_kiosk(app, db, KioskSession, BusinessSetting, Event, Waiver, get_curren
     admin_required, waiver_event, create_waiver)
 
 register_native_forms(app, db, native_form_models, ClientAccount, Booking, get_current_client, admin_required, lambda *args: send_client_email(*args))
+from staff_reports import register as register_staff_reports
+register_staff_reports(app, db, staff_report_models, admin_required)
 
 @app.get('/privacy')
 def privacy_policy():
     return render_template('privacy_policy.html')
+
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))
