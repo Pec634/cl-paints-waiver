@@ -462,6 +462,7 @@ Client Booking Request | CL Paints
             <button class="btn primary booking-submit" type="submit">Send booking request</button>
         </section>
     </form>
+    <dialog id="bookingReviewDialog" class="booking-review-dialog" aria-labelledby="bookingReviewTitle"><h2 id="bookingReviewTitle">Review your booking request</h2><p>Check the details below. Sending this request does not confirm availability or take payment.</p><div id="bookingReviewContent"></div><div class="nav"><button class="btn" type="button" id="bookingReviewEdit">Back to editing</button><button class="btn primary" type="button" id="bookingReviewSend">Confirm and send request</button></div></dialog>
     {% endif %}
 </main>
 
@@ -719,6 +720,44 @@ document.addEventListener("DOMContentLoaded", () => {
     renderEventDays();
 
     const validationError = document.getElementById('bookingValidationError');
+    const reviewDialog = document.getElementById('bookingReviewDialog');
+    const reviewContent = document.getElementById('bookingReviewContent');
+    const submitButton = form.querySelector('.booking-submit');
+    submitButton.textContent = 'Review booking request';
+    let reviewConfirmed = false;
+    window.addEventListener('pageshow', () => {
+        reviewConfirmed = false;
+        submitButton.disabled = false;
+        submitButton.textContent = 'Review booking request';
+    });
+    form.addEventListener('input', () => { reviewConfirmed = false; });
+    form.addEventListener('change', () => { reviewConfirmed = false; });
+    document.getElementById('bookingReviewEdit').addEventListener('click', () => reviewDialog.close());
+    document.getElementById('bookingReviewSend').addEventListener('click', () => {
+        reviewConfirmed = true;
+        reviewDialog.close();
+        form.requestSubmit(submitButton);
+    });
+    const reviewSection = (title, lines, target) => {
+        const section = document.createElement('section');
+        section.className = 'panel';
+        const heading = document.createElement('h3');
+        heading.textContent = title;
+        section.append(heading);
+        lines.forEach(line => {
+            const paragraph = document.createElement('p');
+            paragraph.textContent = line;
+            section.append(paragraph);
+        });
+        const edit = document.createElement('button');
+        edit.type = 'button'; edit.className = 'btn'; edit.textContent = `Edit ${title.toLowerCase()}`;
+        edit.addEventListener('click', () => {
+            reviewConfirmed = false; reviewDialog.close();
+            target.scrollIntoView({block: 'start'});
+            target.querySelector('input:not([type=hidden]):not(:disabled), select:not(:disabled)')?.focus({preventScroll: true});
+        });
+        section.append(edit); reviewContent.append(section);
+    };
     let validationQueued = false;
     form.addEventListener('invalid', () => {
         if (validationQueued) return;
@@ -742,6 +781,29 @@ document.addEventListener("DOMContentLoaded", () => {
             same_details: sameDetailsInput.checked,
             events: readSchedule()
         });
+        if (!reviewConfirmed) {
+            event.preventDefault();
+            reviewContent.replaceChildren();
+            const value = name => form.elements.namedItem(name)?.value || '';
+            const sections = Array.from(form.querySelectorAll('.booking-section'));
+            reviewSection('Client details', [
+                `${value('title')} ${value('first_name')} ${value('last_name')}`.trim(),
+                `${value('client_type')}${value('job_title') ? ' · '+value('job_title') : ''}`,
+                `${value('email')} · ${value('phone')}`,
+                ['address_property','address_street','address_city','address_postcode','address_country'].map(value).join(', '),
+                `Date of birth: ${value('date_of_birth')}`,
+                `Ethnicity: ${value('ethnicity')} · ${value('ethnicity_detail')}; Religion: ${value('religion')}`
+            ], sections[1]);
+            reviewSection('Event details', readSchedule().map((day, index) =>
+                `Day ${index+1}: ${day.date}, ${day.start_time}–${day.finish_time} · ${day.event_type} · ${day.event_address} · ${day.publicity_type} · ${day.charge_type} · Theme: ${day.theme}${day.additional_info ? ' · '+day.additional_info : ''}`), sections[2]);
+            reviewSection('Payment preference', [value('payment_preference'),
+                `Estimated event cost: ${totalCostOutput.textContent}. Travel charges are confirmed after review.`,
+                `Referral code: ${value('promo_code') || 'None'}`], paymentChoice.closest('.booking-section'));
+            reviewDialog.showModal();
+        } else {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Sending your request…';
+        }
     });
 
     referralButton.addEventListener("click", async () => {

@@ -484,12 +484,21 @@ from loyalty import define_models
 loyalty_models = define_models(db)
 from client_notifications import define_notification_models
 notification_models = define_notification_models(db)
+from client_notifications import define_read_model
+app.extensions['notification_read_model'] = define_read_model(db)
 from business_tools import define_models as define_tool_models
 tool_models = define_tool_models(db)
 from sumup_invoices import define_model as define_invoice_model
 BookingInvoice = define_invoice_model(db)
 from booking_requests import define_model as define_booking_request_model
 BookingRequest = define_booking_request_model(db)
+from kiosk import define_model as define_kiosk_model, ensure_schema as ensure_kiosk_schema
+from marketing import define_models as define_marketing_models, define_design_models
+marketing_models = define_marketing_models(db)
+from connecteam_rota import define_model as define_rota_model
+ConnecteamShiftLink = define_rota_model(db)
+app.extensions['marketing_design_models'] = define_design_models(db)
+KioskSession = define_kiosk_model(db)
 from client_addresses import define_model as define_address_model, FIELDS as BILLING_ADDRESS_FIELDS, read_address, format_address
 ClientBillingAddress = define_address_model(db)
 app.extensions['client_billing_address_model'] = ClientBillingAddress
@@ -501,6 +510,7 @@ def billing_address_context():
 
 with app.app_context():
     db.create_all()
+    ensure_kiosk_schema(db)
     event_columns = {
         column["name"]
         for column in inspect(db.engine).get_columns("event")
@@ -1873,6 +1883,15 @@ def admin_waivers():
 @admin_required
 def admin_bookings():
     bookings = Booking.query.order_by(Booking.submitted_at.desc()).all()
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo('Europe/London')).date()
+    filters = [('all','All bookings'),('review','Awaiting review'),('upcoming','Upcoming confirmed'),
+               ('deposit','Deposits due'),('balance','Balances outstanding'),
+               ('requests','Change / cancellation requests'),('cancelled','Cancelled'),('declined','Declined')]
+    active_filter = request.args.get('filter', 'all')
+    if active_filter not in dict(filters): abort(400)
+    pending_ids = {item.booking_id for item in BookingRequest.query.filter_by(status='Pending').all()}
+    filter_counts = dict.fromkeys(dict(filters), 0)
     booking_rows = []
     for booking in bookings:
         try:
@@ -1894,6 +1913,19 @@ def admin_bookings():
                 "estimated_cost": str(booking.total_event_cost or 0),
             }]
         hours = sum(float(event.get("duration_hours", 0)) for event in events)
+        payment = app.extensions['payment_summary'](booking)
+        dates = []
+        for event in events:
+            try: dates.append(datetime.strptime(event.get('date',''), '%Y-%m-%d').date())
+            except (ValueError,TypeError): pass
+        active = booking.status in ('Accepted','Under Review')
+        flags = dict(all=True, review=booking.status == 'Under Review',
+            upcoming=booking.status == 'Accepted' and any(date >= today for date in dates),
+            deposit=active and payment['deposit'] > payment['paid'] and bool(payment['deposit_due']) and payment['deposit_due'] <= today,
+            balance=active and payment['outstanding'] > 0,
+            requests=booking.id in pending_ids, cancelled=booking.status == 'Cancelled', declined=booking.status == 'Declined')
+        for key, matches in flags.items(): filter_counts[key] += int(matches)
+        if not flags[active_filter]: continue
         booking_rows.append({
             "booking": booking,
             "events": events,
@@ -1911,6 +1943,7 @@ def admin_bookings():
         bookings=bookings,
         booking_rows=booking_rows,
         referral_codes=referral_codes,
+        booking_filters=filters, active_booking_filter=active_filter, booking_filter_counts=filter_counts,
         booking_count=len(bookings),
         new_booking_count=sum(booking.status == "Under Review" for booking in bookings),
         accepted_booking_count=sum(booking.status == "Accepted" for booking in bookings),
@@ -2462,6 +2495,13 @@ def send_client_email(to, subject, body, html_body=None):
         return False
 
 
+from marketing import register as register_marketing
+register_marketing(app, db, marketing_models, Waiver, admin_required, lambda *args: send_client_email(*args))
+from connecteam_rota import register as register_connecteam
+register_connecteam(app, db, ConnecteamShiftLink, BusinessSetting, Booking, booking_schedule_events, admin_required)
+from event_day import register as register_event_day
+register_event_day(app, db, Event, Booking, Waiver, BusinessSetting, loyalty_models, booking_schedule_events, admin_required)
+
 from client_portal import register_client_portal
 get_current_client = register_client_portal(app, db, ClientAccount, ClientLoginCode, ClientRewardOwner, ClientEnquiry,
     Booking, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events, admin_required)
@@ -2485,6 +2525,10 @@ register_sumup_invoices(app, db, BookingInvoice, Booking, admin_required, get_cu
 from booking_requests import register as register_booking_requests
 register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_current_client,
     admin_required, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events)
+
+from kiosk import register as register_kiosk
+register_kiosk(app, db, KioskSession, BusinessSetting, Event, Waiver, get_current_client,
+    admin_required, waiver_event, create_waiver)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ campaign.subject }}</title></head>
+<body style="margin:0;padding:20px 8px;background:{{ '#f5f7fc' if design.layout == 'card' else '#ffffff' }};font-family:Arial,sans-serif;color:#17233b">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">{{ design.preheader }}</div>
+<table role="presentation" style="width:100%;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;border-top:6px solid {{ design.colour }}"><tr><td style="padding:24px">
+<h1 style="font-size:28px;color:{{ design.colour }}">{{ design.heading }}</h1>
+{% macro gallery() %}{% for image in images %}<p><img src="{{ image.image_url }}" alt="{{ image.alt }}" width="552" style="display:block;width:100%;max-width:552px;height:auto;border:0;border-radius:8px"></p>{% endfor %}{% endmacro %}
+{% if design.image_position == 'above' %}{{ gallery() }}{% endif %}
+{% for paragraph in campaign.body.split('\n') %}<p style="margin:0 0 12px;font-size:16px;line-height:1.65;overflow-wrap:anywhere">{{ paragraph }}</p>{% endfor %}
+{% if design.image_position == 'below' %}{{ gallery() }}{% endif %}
+{% if design.button_url %}<p style="margin:24px 0"><a href="{{ design.button_url }}" style="display:inline-block;padding:14px 22px;background:{{ design.colour }};color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold">{{ design.button_label }}</a></p>{% endif %}
+<p style="font-size:14px;line-height:1.6">{{ design.footer }}</p>
+{% if design.footer != 'Bringing colour to life - One face at time' %}<p style="font-size:14px">Bringing colour to life - One face at time</p>{% endif %}
+<hr style="border:0;border-top:1px solid #dce2ed"><p style="font-size:12px;line-height:1.6">CL Paints · Company number 16615959<br>Suite 53c Abbey Road, London, England, NW10 7TR</p><p><a href="{{ unsubscribe }}" style="font-size:13px;color:#445575">Unsubscribe from marketing emails</a></p>
+</td></tr></table></body></html>

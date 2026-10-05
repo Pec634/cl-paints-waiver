@@ -63,9 +63,33 @@ class LoyaltyTest(unittest.TestCase):
         self.assertEqual(self.admin.post(f'/admin/waivers/{self.waiver.id}/delete').status_code, 409)
         self.post_scan(path)
         self.assertEqual(Visit.query.count(), 1)
+
         self.assertEqual(main.notification_models[1].query.count(), 1)
         self.assertEqual(main.db.session.get(Balance, self.person.id).points, 1)
         self.assertEqual(self.client.get('/client/rewards').status_code, 200)
+
+    def test_admin_check_in_validity_claims_and_exact_ids(self):
+        event, path = self.event()
+        query = dict(event_id=event.id, q=self.waiver.public_reference)
+        response = self.admin.get('/admin/check-in', query_string=query)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Alex Client', response.data)
+        self.assertIn(b'Sam Client', response.data)
+        self.assertEqual(self.client.get('/admin/check-in', query_string=query).status_code, 302)
+        main.db.session.add(Balance(participant_id=self.person.id, points=3))
+        main.db.session.commit()
+        response = self.admin.get('/admin/check-in', query_string=dict(event_id=event.id,q=self.person.loyalty_reference))
+        self.assertIn(b'Free paint eligible', response.data)
+        self.assertNotIn(b'Sam Client', response.data)
+        main.db.session.add(Visit(participant_id=self.person.id,event_id=event.id,client_id=self.account.id,status='free'))
+        main.db.session.commit()
+        response = self.admin.get('/admin/check-in', query_string=dict(event_id=event.id,q=self.person.loyalty_reference))
+        self.assertIn(b'Free paint already claimed', response.data)
+        self.waiver.expiry_date = datetime.utcnow()-timedelta(days=1)
+        main.db.session.commit()
+        self.assertIn(b'not valid', self.admin.get('/admin/check-in', query_string=query).data)
+        self.assertEqual(Balance.query.count(), 1)
+        self.assertEqual(Visit.query.count(), 1)
 
     def test_fourth_free_requires_event_moodboard_resets_and_repeats(self):
         for _ in range(3):

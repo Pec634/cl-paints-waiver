@@ -338,6 +338,25 @@ class ClientPortalTest(unittest.TestCase):
             self.assertNotIn('client_id', session)
             self.assertNotIn('client_remember', session)
 
+    def test_unread_notifications_owned_acknowledgement(self):
+        account = self.signup()
+        Notice = main.notification_models[1]
+        mine = Notice(email=account.email, kind='reward', reference='Test reward', details='Your reward is ready.')
+        other = Notice(email='someone@example.com', kind='reward', reference='Private reward', details='PRIVATE')
+        main.db.session.add_all([mine, other])
+        main.db.session.commit()
+        page = self.client.get('/client/').data
+        self.assertIn(b'1 unread', page)
+        self.assertNotIn(b'PRIVATE', page)
+        self.assertEqual(self.client.post('/client/notifications/read', data=dict(csrf_token='bad', notice_id=mine.id)).status_code, 400)
+        self.assertEqual(self.client.post('/client/notifications/read', data=dict(csrf_token=self.csrf(), notice_id=other.id)).status_code, 404)
+        self.assertEqual(self.client.post('/client/notifications/read', data=dict(csrf_token=self.csrf(), notice_id=mine.id)).status_code, 302)
+        self.assertNotIn(b'1 unread', self.client.get('/client/').data)
+        main.db.session.add(Notice(email=account.email, kind='booking', reference='New update', details='New details'))
+        main.db.session.commit()
+        self.client.post('/client/notifications/read', data=dict(csrf_token=self.csrf(), notice_id=mine.id))
+        self.assertIn(b'1 unread', self.client.get('/client/').data)
+
     def test_enquiry_survives_notification_failure(self):
         self.signup()
         with patch.object(main, 'send_client_email', return_value=False) as send:

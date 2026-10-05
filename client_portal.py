@@ -78,7 +78,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         recent = Code.query.filter(Code.email == email, Code.created_at > now-timedelta(seconds=60)).first()
         email_count = Code.query.filter(Code.email == email, Code.created_at > now-timedelta(minutes=15)).count()
         ip_count = Code.query.filter(Code.ip_hash == ip, Code.created_at > now-timedelta(hours=1)).count()
-        if recent or email_count >= 3 or ip_count >= 20:
+        if recent or email_count >= 3 or ip_count >= (200 if session.get('kiosk_id') else 20):
             raise ValueError('Please wait before requesting another code. Check your inbox and spam folder.')
         account = Account.query.filter_by(email=email).first()
         # Keep the same response for unknown sign-in addresses.
@@ -185,8 +185,9 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
             deadlines.append(email_window[2].created_at + timedelta(minutes=15))
         ip = digest(request.remote_addr or 'unknown')
         ip_window = Code.query.filter(Code.ip_hash == ip, Code.created_at > now - timedelta(hours=1)).order_by(Code.created_at.desc()).all()
-        if len(ip_window) >= 20:
-            deadlines.append(ip_window[19].created_at + timedelta(hours=1))
+        ip_limit = 200 if session.get('kiosk_id') else 20
+        if len(ip_window) >= ip_limit:
+            deadlines.append(ip_window[ip_limit-1].created_at + timedelta(hours=1))
         import math
         return max(0, math.ceil((max(deadlines) - now).total_seconds())) if deadlines else 0
 

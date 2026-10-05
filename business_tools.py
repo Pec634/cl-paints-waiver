@@ -55,6 +55,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
     Plan, Entry, Block, Workflow, Reminder, Correction = models
     _, Balance, Visit, Custodian, _ = loyalty_models
     _, Notice = notification_models
+    app.extensions['loyalty_correction_model'] = Correction
     def csrf():
         return session.setdefault('client_csrf', secrets.token_urlsafe(32))
     def check():
@@ -155,6 +156,28 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
         token = secrets.token_urlsafe(32)
         session[f'payment_entry_{booking.id}'] = token
         return render_template('admin_payments.html',booking=booking,payment=summary(booking),client_csrf=csrf(),entry_token=token,today=datetime.now(ZoneInfo('Europe/London')).date())
+
+    @app.get('/admin/payments')
+    @admin_required
+    def payments_overview():
+        today = datetime.now(ZoneInfo('Europe/London')).date()
+        selected = request.args.get('filter', 'outstanding')
+        if selected not in ('all','outstanding','deposit','overdue'): abort(400)
+        rows = []
+        totals = dict(received=Decimal(0), outstanding=Decimal(0), deposits=Decimal(0), overdue=Decimal(0))
+        for booking in Booking.query.order_by(Booking.submitted_at.desc()).all():
+            payment = summary(booking)
+            active = booking.status in ('Accepted', 'Under Review')
+            remaining = min(payment['outstanding'], max(Decimal(0), payment['deposit']-payment['paid'])) if active else Decimal(0)
+            deposit_due = bool(remaining and payment['deposit_due'] and payment['deposit_due'] <= today)
+            overdue = active and payment['outstanding'] > 0 and bool(payment['balance_due']) and payment['balance_due'] < today
+            totals['received'] += payment['paid']
+            if active: totals['outstanding'] += payment['outstanding']
+            if deposit_due: totals['deposits'] += remaining
+            if overdue: totals['overdue'] += payment['outstanding']
+            match = selected == 'all' or (selected == 'outstanding' and active and payment['outstanding'] > 0) or (selected == 'deposit' and deposit_due) or (selected == 'overdue' and overdue)
+            if match: rows.append(dict(booking=booking, payment=payment, deposit_remaining=remaining, overdue=overdue, deposit_due=deposit_due))
+        return render_template('admin_payments_overview.html', rows=rows, totals=totals, selected=selected)
 
     def calendar_rows():
         buffer = int(settings().get('calendar_buffer_minutes','60'))

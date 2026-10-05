@@ -99,6 +99,41 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
         return booking and booking.status == 'Accepted' and 0 <= index < len(days) and days[index].get('publicity_type') == 'Public'
     def open_event(event):
         return public_event(event) and event.status in ['Open', 'Closing Soon'] and event.event_date == today()
+    app.extensions['kiosk_public_event'] = public_event
+
+    @bp.get('/admin/check-in')
+    @admin_required
+    def check_in():
+        from record_ids import reference_record_id
+        events = [event for event in Event.query.order_by(Event.event_date.desc()).all() if public_event(event)]
+        event_id = request.args.get('event_id', type=int)
+        event = db.session.get(Event, event_id) if event_id else None
+        if event_id and not public_event(event): abort(404)
+        query = request.args.get('q', '').strip()
+        if len(query) > 100: abort(400)
+        people = []
+        if query:
+            member_id = reference_record_id(query.upper(), 'L')
+            waiver_id = reference_record_id(query.upper(), 'W')
+            if member_id:
+                person = db.session.get(Participant, member_id)
+                if person and person.loyalty_reference == query.upper(): people = [person]
+            else:
+                waiver = db.session.get(Waiver, waiver_id) if waiver_id else Waiver.query.filter_by(waiver_reference=query).first()
+                if waiver and (not waiver_id or waiver.public_reference == query.upper()):
+                    originals = Participant.query.filter_by(waiver_id=waiver.id).all()
+                    transferred = Participant.query.join(Custodian, Custodian.participant_id == Participant.id).filter(Custodian.waiver_id == waiver.id).all()
+                    people = [person for person in {p.id:p for p in originals+transferred}.values() if current_waiver(person).id == waiver.id]
+        rows = []
+        for person in people:
+            waiver = current_waiver(person)
+            balance = db.session.get(Balance, person.id)
+            visit = Visit.query.filter_by(participant_id=person.id, event_id=event.id).first() if event else None
+            correction = db.session.get(app.extensions['loyalty_correction_model'], visit.id) if visit else None
+            rows.append(dict(person=person, waiver=waiver, valid=valid_waiver(waiver), points=balance.points if balance else 0,
+                visit=visit, corrected=bool(correction)))
+        return render_template('admin_check_in.html', events=events, event=event, query=query, rows=rows,
+            event_open=open_event(event) if event else False)
     def digest(value):
         return hmac.new(str(app.secret_key).encode(), value.encode(), hashlib.sha256).hexdigest()
     @app.context_processor

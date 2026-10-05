@@ -51,6 +51,24 @@ class BusinessToolsTest(unittest.TestCase):
         self.assertEqual(main.db.session.get(Plan,self.booking.id).deposit,Decimal('30'))
         self.assertEqual(main.app.test_client().get(path).status_code,302)
 
+    def test_booking_filters_use_balance_due_date_and_all_event_days(self):
+        self.booking.status = 'Accepted'
+        self.booking.event_schedule = '{"events":[{"date":"2000-01-01"},{"date":"2099-01-01"}]}'
+        main.db.session.add(Plan(booking_id=self.booking.id, deposit=Decimal('30'), deposit_due=datetime.now().date()))
+        main.db.session.commit()
+        marker = f'id="booking-{self.booking.id}"'.encode()
+        for filter_name in ['upcoming','deposit','balance']:
+            page = self.admin.get(f'/admin/bookings?filter={filter_name}')
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(marker, page.data)
+        self.assertNotIn(marker, self.admin.get('/admin/bookings?filter=review').data)
+        self.booking.status = 'Cancelled'
+        main.db.session.commit()
+        self.assertIn(marker, self.admin.get('/admin/bookings?filter=cancelled').data)
+        self.assertNotIn(marker, self.admin.get('/admin/bookings?filter=balance').data)
+        self.assertNotIn(marker, self.admin.get('/admin/bookings?filter=upcoming').data)
+        self.assertEqual(self.admin.get('/admin/bookings?filter=invalid').status_code, 400)
+
     def test_calendar_buffers_and_unavailability(self):
         self.booking.status='Accepted'
         other=self.fixture.fixture.booking('other@example.com',status='Accepted',start_time='12:30',finish_time='14:00')
@@ -61,11 +79,26 @@ class BusinessToolsTest(unittest.TestCase):
         self.assertEqual(Block.query.count(),1)
         self.assertEqual(self.admin.get('/admin/calendar?month=2099-01').status_code,200)
         self.assertEqual(self.admin.get('/admin/calendar?month=bad').status_code,400)
+
         block=Block.query.one()
         self.assertEqual(self.admin.post(f'/admin/calendar/blocks/{block.id}/delete',data={}).status_code,400)
         self.admin.post(f'/admin/calendar/blocks/{block.id}/delete',data={'csrf_token':'admin-token'})
         self.assertEqual(Block.query.count(),0)
 
+    def test_payments_overview_due_filters_and_access(self):
+        today = datetime.now().date()
+        main.db.session.add(Plan(booking_id=self.booking.id, deposit=Decimal('30'), deposit_due=today, balance_due=today-timedelta(days=1)))
+        main.db.session.commit()
+        for filter_name in ['outstanding','deposit','overdue']:
+            response = self.admin.get('/admin/payments', query_string={'filter':filter_name})
+            self.assertEqual(response.status_code,200)
+            self.assertIn(self.booking.public_reference.encode(),response.data)
+        self.assertEqual(self.client.get('/admin/payments').status_code,302)
+        self.booking.status='Cancelled'
+        main.db.session.commit()
+        self.assertNotIn(self.booking.public_reference.encode(),self.admin.get('/admin/payments?filter=outstanding').data)
+        self.assertIn(self.booking.public_reference.encode(),self.admin.get('/admin/payments?filter=all').data)
+        self.assertEqual(self.admin.get('/admin/payments?filter=invalid').status_code,400)
     def test_enquiry_status_reply_saved_and_emailed_once(self):
         self.client.post('/client/contact',data={'csrf_token':self.fixture.fixture.csrf(),'subject':'Access','message':'Where do we meet?'})
         enquiry=main.ClientEnquiry.query.one()

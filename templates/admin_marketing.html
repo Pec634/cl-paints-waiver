@@ -1,0 +1,19 @@
+{% extends 'rewards/base.html' %}{% block title %}Marketing | CL Paints{% endblock %}{% block content %}
+<h1>Marketing emails</h1><p>News, offers and event announcements for customers who opted in on their latest waiver. Unsubscribed customers are excluded. Booking and waiver emails are separate.</p>
+<section class="panel"><h2>Create a campaign</h2><p><strong>{{ recipients|length }}</strong> eligible email addresses.</p>
+<form method="post" enctype="multipart/form-data" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><label>Subject<input name="subject" maxlength="200" required></label><label>Message<textarea name="body" rows="10" maxlength="10000" required></textarea></label><h3>Email design</h3><div class="booking-fields">
+<label>Email heading<input name="heading" value="CL Paints" maxlength="500"></label>
+<label>Inbox preview text<input name="preheader" maxlength="500" placeholder="A little colour for your inbox"></label>
+<label>Accent colour<input type="color" name="colour" value="#f52f83"></label>
+<label>Layout<select name="layout"><option value="card">Branded card</option><option value="simple">Simple letter</option></select></label>
+<label>Image position<select name="image_position"><option value="above">Above the message</option><option value="below">Below the message</option></select></label>
+<label>Button label<input name="button_label" maxlength="500" placeholder="Book your event"></label>
+<label>Button link<input type="url" name="button_url" maxlength="500" placeholder="https://..."></label></div>
+<label>Footer message<input name="footer" value="Bringing colour to life - One face at time" maxlength="500"></label>
+<h3>Add an image</h3><p>Optional JPG, PNG or WebP, smaller than 2 MB. You can add up to four images in the campaign editor.</p>
+<label>Image<input type="file" name="image" accept="image/jpeg,image/png,image/webp"></label>
+<label>Image description<input name="alt" maxlength="200" placeholder="Colourful butterfly face painting"></label>
+<button class="btn primary">Save design and preview</button><p>Your campaign is saved as a draft. Nothing is sent until you confirm recipients and choose to send.</p></form></section>
+<details class="panel"><summary>View opted-in recipients ({{ recipients|length }})</summary>{% for email in recipients %}<p>{{ email }}</p>{% else %}<p>No opted-in customers yet.</p>{% endfor %}</details>
+<section class="panel"><h2>Campaigns and sending history</h2>{% for campaign in campaigns %}<p><a href="{{ url_for('marketing_campaign', campaign_id=campaign.id) }}">{{ campaign.subject }}</a> · {{ 'Started' if campaign.started_at else 'Draft' }}</p>{% else %}<p>No campaigns yet.</p>{% endfor %}</section>
+{% endblock %}

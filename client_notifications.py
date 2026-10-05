@@ -59,6 +59,12 @@ def define_notification_models(db):
         email_sent = db.Column(db.Boolean, nullable=False, default=False)
     return BookingChange, ClientNotification
 
+def define_read_model(db):
+    class NotificationRead(db.Model):
+        client_id = db.Column(db.Integer, db.ForeignKey('client_account.id'), primary_key=True)
+        last_notice_id = db.Column(db.Integer, nullable=False, default=0)
+    return NotificationRead
+
 def booking_snapshot(booking, schedule):
     result = {'Status': booking.status, 'Travel charge': f'£{booking.travel_charge:.2f}',
         'Estimated event cost': f'£{booking.total_event_cost:.2f}',
@@ -122,11 +128,33 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         if not account:
             return {}
         result = {'client_notifications': Notice.query.filter(db.func.lower(Notice.email) == account.email).order_by(Notice.id.desc()).limit(10).all()}
+        Read = app.extensions['notification_read_model']
+        marker = db.session.get(Read, account.id)
+        last_read = marker.last_notice_id if marker else 0
+        result['client_unread_count'] = Notice.query.filter(db.func.lower(Notice.email) == account.email, Notice.id > last_read).count()
+        result['client_last_notice_id'] = max((notice.id for notice in result['client_notifications']), default=0)
         if request.endpoint == 'client.booking_detail':
             changes = Change.query.filter_by(booking_id=request.view_args['booking_id'], acknowledged_at=None).order_by(Change.id.desc()).all()
             fields = {key for change in changes for key in change.changes}
             result.update(booking_changes=changes, changed_booking_fields=fields, booking_event_changed=any(key.startswith('Event ') for key in fields))
         return result
+    @app.post('/client/notifications/read')
+    def mark_notifications_read():
+        account = current_client()
+        if not account: abort(401)
+        if not session.get('client_csrf') or not secrets.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
+            abort(400)
+        requested = request.form.get('notice_id', type=int)
+        notice = Notice.query.filter(db.func.lower(Notice.email) == account.email, Notice.id == requested).first()
+        if not notice: abort(404)
+        Read = app.extensions['notification_read_model']
+        marker = db.session.get(Read, account.id)
+        if not marker:
+            marker = Read(client_id=account.id, last_notice_id=notice.id)
+            db.session.add(marker)
+        else: marker.last_notice_id = max(marker.last_notice_id, notice.id)
+        db.session.commit()
+        return redirect(url_for('client.dashboard') + '#recent-updates')
     @app.post('/client/bookings/<int:booking_id>/acknowledge-updates')
     def acknowledge(booking_id):
         account = current_client()

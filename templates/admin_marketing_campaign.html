@@ -1,0 +1,36 @@
+{% extends 'rewards/base.html' %}{% block title %}Campaign | CL Paints{% endblock %}{% block content %}
+<a href="{{ url_for('marketing_dashboard') }}">Back to Marketing</a><h1>{{ campaign.subject }}</h1>
+{% if not campaign.started_at %}
+<details class="panel" open><summary>Edit content and design</summary><form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="edit">
+<label>Subject<input name="subject" value="{{ campaign.subject }}" maxlength="200" required></label>
+<label>Inbox preview text<input name="preheader" value="{{ design.preheader }}" maxlength="500"></label>
+<label>Email heading<input name="heading" value="{{ design.heading }}" maxlength="500"></label>
+<label>Message<textarea name="body" rows="10" maxlength="10000" required>{{ campaign.body }}</textarea></label>
+<div class="booking-fields"><label>Accent colour<input type="color" name="colour" value="{{ design.colour }}"></label>
+<label>Layout<select name="layout"><option value="card" {% if design.layout == 'card' %}selected{% endif %}>Branded card</option><option value="simple" {% if design.layout == 'simple' %}selected{% endif %}>Simple letter</option></select></label>
+<label>Images<select name="image_position"><option value="above" {% if design.image_position == 'above' %}selected{% endif %}>Above the message</option><option value="below" {% if design.image_position == 'below' %}selected{% endif %}>Below the message</option></select></label>
+<label>Button label<input name="button_label" value="{{ design.button_label }}" maxlength="500" placeholder="Book your event"></label>
+<label>Button link<input type="url" name="button_url" value="{{ design.button_url }}" maxlength="500" placeholder="https://..."></label></div>
+<label>Footer message<input name="footer" value="{{ design.footer }}" maxlength="500"></label><button class="btn primary">Save content and design</button></form></details>
+<section class="panel"><h2>Images</h2><p>Add up to four JPG, PNG or WebP images, each smaller than 2 MB. Images appear inside the email in upload order. Save any content changes before uploading.</p>
+<form method="post" enctype="multipart/form-data" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="upload"><label>Image<input type="file" name="image" accept="image/jpeg,image/png,image/webp" required></label><label>Image description<input name="alt" maxlength="200" placeholder="Colourful butterfly face painting"></label><button class="btn">Upload image</button></form>
+{% for image in images %}<div style="margin-top:16px"><img src="{{ image.image_url }}" alt="{{ image.alt }}" style="width:100%;max-width:240px;height:auto"><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="image_id" value="{{ image.id }}"><button class="btn" name="action" value="remove_image">Remove image</button></form></div>{% endfor %}</section>
+{% else %}<p>Content and images are locked because this campaign has started.</p>{% endif %}
+<section class="panel"><h2>Email preview</h2><p>This uses the same layout as the sent email. Send a test to check it in your inbox.</p><iframe title="Marketing email preview" sandbox="" src="{{ url_for('marketing_email_preview', campaign_id=campaign.id) }}" style="width:100%;height:650px;border:1px solid #dce2ed;border-radius:12px;background:white"></iframe></section>
+<section class="panel"><h2>Send a test</h2><form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="test"><label>Test email address<input type="email" name="test_email" maxlength="255" required></label><button class="btn">Send test email</button></form></section>
+<section class="panel"><h2>Send campaign</h2>
+{% if not campaign.started_at %}<p>Send to {{ eligible }} opted-in customers. The recipient list is saved when you start; consent is checked again before each email.</p><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn primary" name="action" value="start">Confirm recipient list</button></form>
+{% else %}<p id="marketingProgress" role="status">{{ pending }} emails remaining.</p>{% if pending %}<form method="post" id="marketingSendForm"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="send"><button class="btn primary" id="marketingSend">Send remaining emails</button><button type="button" class="btn" id="marketingPause" hidden>Pause after this email</button></form>{% endif %}{% endif %}
+<p>Accepted means Resend accepted the email for sending. Check Resend for delivery or bounce outcomes. Failed or interrupted attempts are recorded and are not automatically sent again.</p></section>
+<section class="panel"><h2>Sending history</h2>{% for delivery in deliveries %}<p>{{ delivery.email }} · {{ delivery.status }}{% if delivery.attempted_at %} · {{ delivery.attempted_at.strftime('%d/%m/%Y %H:%M') }} UTC{% endif %}</p>{% else %}<p>No sending attempts yet.</p>{% endfor %}</section>
+<script>
+(() => {
+const form=document.getElementById('marketingSendForm'); if(!form)return;
+let paused=false;const pause=document.getElementById('marketingPause');pause.onclick=()=>{paused=true;pause.disabled=true;};
+form.addEventListener('submit',async event=>{
+event.preventDefault(); document.getElementById('marketingSend').disabled=true;pause.hidden=false;
+let remaining={{ pending }};
+try {while(remaining>0&&!paused){const response=await fetch(form.action||window.location.href,{method:'POST',body:new FormData(form)});if(!response.ok||response.url.includes('/login'))throw new Error('Sending stopped. Refresh to review history.');remaining--;document.getElementById('marketingProgress').textContent=`${remaining} emails remaining. Keep this page open while sending.`;if(remaining&&!paused)await new Promise(resolve=>setTimeout(resolve,750));}window.location.reload();}
+catch(error){document.getElementById('marketingProgress').textContent=error.message;pause.hidden=true;}
+});})();
+</script>{% endblock %}

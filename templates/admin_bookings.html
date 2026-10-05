@@ -76,6 +76,7 @@ Bookings | CL Paints
             </div>
 
             <div class="waiver-tools">
+                <form method="get" class="booking-filter-form"><label for="bookingStatusFilter">Show bookings</label><select name="filter" id="bookingStatusFilter">{% for value, label in booking_filters %}<option value="{{ value }}" {% if active_booking_filter == value %}selected{% endif %}>{{ label }} ({{ booking_filter_counts[value] }})</option>{% endfor %}</select><button class="btn" type="submit">Apply filter</button></form>
                 <select id="bookingSearchType" aria-label="Search by">
                     <option value="client">Client</option>
                     <option value="email">Email</option>
@@ -113,7 +114,7 @@ Bookings | CL Paints
                             <td>
                                 <details class="booking-detail">
                                     <summary>View</summary>
-                                    <p><a class="btn small" href="{{ url_for('admin_payments',booking_id=booking.id) }}">Payments &amp; deposit</a></p>
+                                    <p><a class="btn small" href="{{ url_for('admin_payments',booking_id=booking.id) }}">Payments &amp; deposit</a> {% if booking.status == 'Accepted' %}<a class="btn small" href="{{ url_for('connecteam_rota') }}">Staff rota</a>{% endif %}</p>
                                     <dl>
                                         <dt>Request type</dt><dd>{{ "Availability" if booking.request_type == "availability" else "Booking" }}</dd>
                                         <dt>Scheduled hours</dt><dd>{{ "%.2f"|format(row.total_hours) }} hours</dd>
@@ -195,7 +196,7 @@ Bookings | CL Paints
                         </tr>
                     {% else %}
                         <tr>
-                            <td class="booking-empty" colspan="8">No booking requests have been submitted yet.</td>
+                            <td class="booking-empty" colspan="8">No bookings match this filter.</td>
                         </tr>
                     {% endfor %}
                     </tbody>

@@ -97,3 +97,78 @@ is required. Attaching an invoice does not charge a card, email the client or
 mark it paid. Confirm receipt in SumUp, then record the payment in the booking
 ledger using SumUp as the method and the invoice number in the internal note.
 The existing booking update notification then reports the changed balance.
+
+## Public-event waiver kiosk
+
+Open Dashboard ? Business Tools ? Event waiver kiosk, select an open public event
+and enter the staff PIN. The first launch sets a 4?8 digit PIN stored as a hash.
+Customers complete the normal waiver without creating an account or verifying
+their email. Confirmation emails use the existing waiver workflow. If they later
+create an account and verify the same email, their waiver and members appear
+in their portal. Customers are signed out immediately
+after saving; the completion screen resets after 30 seconds, including when
+reloaded. Only exiting needs the staff PIN. Five incorrect PIN attempts lock
+exit controls for five minutes. Use the Full screen button on the kiosk screen.
+
+To prevent browser navigation, device buttons or exiting full screen, configure
+the device's OS kiosk mode or Guided Access. A website cannot enforce those
+restrictions. Test email delivery and the complete flow on the actual event
+connection/device before use. Kiosk setup requires an authenticated admin.
+
+
+## Marketing campaigns
+
+Open Dashboard > Business Tools > Marketing emails, or Settings > Email
+configuration > Marketing campaigns. Save a subject and plain-text message,
+review the preview and send a test before confirming the recipient list.
+Draft campaigns support editable subjects, headings, inbox preview text, accent
+colours, card or simple layouts, footer text and an optional HTTPS action button.
+Upload up to four JPG/PNG/WebP images (2 MB each) using the existing Cloudinary
+configuration. Images appear above or below the message, in upload order, with
+an editable description for each upload. Images are embedded as hosted images,
+not downloadable file attachments. The preview uses the actual email template;
+send a test to check rendering in the recipient's mail app. Campaign content and
+images are locked once its recipient list is confirmed.
+Recipients are deduplicated by email and must have opted in on their latest
+waiver. An unsubscribe always excludes the address from future marketing,
+even if an older or subsequent waiver is opted in. Essential emails are separate.
+
+Send remaining emails sends one recipient per request, with a pause between
+requests. Keep the page open; pause or reopen the campaign to continue pending
+recipients. Consent is checked immediately before sending. Accepted means the
+existing Resend API accepted the request; inspect Resend for delivery/bounces.
+Failed or interrupted (sending) attempts are retained and are not automatically
+retried, to avoid duplicate emails. Test links are previews and change no consent.
+No campaign sends automatically on creation, deployment or startup.
+
+## Connecteam staff rota
+
+Set CONNECTEAM_API_KEY in the server environment (local .env or Render's
+environment settings), then open Dashboard > Business Tools > Staff rota.
+Choose an active Connecteam schedule. The page reads up to 100 shifts for the
+next 30 days and shows UK times. Accepted bookings have a Staff rota shortcut.
+Each accepted booking date can be explicitly exported as one unpublished,
+unassigned draft shift, with the booking reference, event times, venue and theme.
+Assign staff and publish in Connecteam. No live shift is created by opening a
+page, accepting a booking or running tests.
+
+Export records prevent duplicate submissions. An uncertain/failed response is
+marked check_required and blocked from automatic retry; inspect Connecteam
+before resolving it. Booking changes are flagged against the saved export,
+but changes and cancellations must be applied manually in Connecteam. This
+initial integration does not automatically update/delete shifts or sync staff
+names. API write access is only verified when an administrator exports a real
+booking. Keep API keys out of Git.
+
+## Event-day dashboard
+
+Open Dashboard > Business Tools > Event day. It defaults to today's UK date,
+with a date picker for other days. Event cards bring together kiosk launch,
+waiver links, member lookup, moodboards and existing loyalty QR codes. Only
+public events show waiver and loyalty tools; closed events cannot launch a
+kiosk. Accepted booking dates include details, payments and staff-rota links.
+Cancelled/nonaccepted linked events are excluded. Loyalty totals exclude
+reversed visits; waivers are matched by their saved event name and date and
+are explicitly not an attendance count. Loading the selected Connecteam rota
+is optional and read-only, showing up to 100 shifts and assignment counts for
+the selected UK day. This page never creates shifts or awards loyalty points.

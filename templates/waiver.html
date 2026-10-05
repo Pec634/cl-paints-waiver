@@ -3,8 +3,8 @@
     class="waiver"
     id="waiverApp"
     data-event-id="{{ current_event.id if current_event else '' }}"
-    data-submit-url="{{ url_for('create_waiver') if account_waiver else url_for('create_waiver', event_id=current_event.id) }}"
-    data-csrf-token="{{ client_csrf if account_waiver else '' }}">
+    data-submit-url="{{ url_for('kiosk_submit') if kiosk_item else (url_for('create_waiver') if account_waiver else url_for('create_waiver', event_id=current_event.id)) }}"
+    data-csrf-token="{{ kiosk_item.csrf if kiosk_item else (client_csrf if account_waiver else '') }}">
     <header>
         <div class="brand">CL <span>Paints</span></div>
         <small>Bringing colour to life, one face at a time!</small>
@@ -19,7 +19,7 @@
 
     <strong>
     Please complete this waiver before receiving face painting at a public event. You can complete it in advance without selecting an event.
-    Read the information below, then scrolll down to select 'I confirm' to continue to the next step.
+    Open the Terms &amp; Conditions below and read them, then select 'I confirm' to continue to the next step.
     </strong>
 
 <div class="event">
@@ -54,9 +54,12 @@
 
 <hr class="section-divider">
 
-{% include "terms_and_liability.html" %}
-
-</ol>
+<details class="waiver-terms">
+    <summary>Terms &amp; Conditions and Liability Statement</summary>
+    <div class="waiver-terms-content">
+        {% include "terms_and_liability.html" %}
+    </div>
+</details>
 
 <label class="check">
     <input id="liability" type="checkbox">
@@ -314,22 +317,6 @@
 
     <div class="notice">
         <strong>Please show this screen to a member of CL Paints staff before face painting.</strong>
-    </div>
-    <div class="staff-reset-area">
-        <p class="staff-reset-label">STAFF USE ONLY</p>
-
-        <button
-            type="button"
-            id="staffResetButton"
-            class="staff-reset-button"
-        >
-            Hold to reset for next customer -
-            For CL Paints staff only.
-        </button>
-
-        <p id="staffResetStatus" class="staff-reset-status">
-            Press and hold for 1 second
-        </p>
     </div>
     <p class="muted center">
         This waiver is valid for 12 months from the date completed, subject to the CL Paints Terms &amp; Conditions.

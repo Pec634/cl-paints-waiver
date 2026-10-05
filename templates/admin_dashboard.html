@@ -30,15 +30,18 @@
         </section>
         <div class="dashboard-grid">
             <section class="panel dashboard-upcoming dashboard-tools-panel"><details class="dashboard-tools-folder" open><summary><span aria-hidden="true">📁</span> Business tools <span class="dashboard-folder-hint">Tap to open or close</span></summary><div class="panel-heading"><div><h2>Business tools</h2><p>Manage your diary, payments and client communication.</p></div></div><div class="dashboard-tools">
+                <a class="dashboard-tool" href="{{ url_for('event_day_dashboard') }}"><strong>Event day</strong><span>Today's events, kiosk, check-in, loyalty QR and staff rota.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_calendar') }}"><strong>Availability calendar</strong><span>Check bookings, overlaps and unavailable time.</span></a>
-                <a class="dashboard-tool" href="{{ url_for('admin_bookings') }}"><strong>Payments &amp; deposits</strong><span>Open a booking to record payments or refunds.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('payments_overview') }}"><strong>Payments &amp; deposits</strong><span>View deposits due, outstanding balances and received payments.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_clients') }}#recent-enquiries"><strong>Client enquiries</strong><span>Reply to messages and track their status.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_settings', tab='email') }}"><strong>Email configuration</strong><span>Edit booking and reward emails and preview layouts.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('connecteam_rota') }}"><strong>Staff rota</strong><span>View Connecteam shifts and export accepted bookings.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('marketing_dashboard') }}"><strong>Marketing emails</strong><span>Create campaigns for opted-in customers and review sending history.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('email_history') }}"><strong>Email sending history</strong><span>Check notification attempts and sending failures.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('backups') }}"><strong>Backup &amp; recovery</strong><span>Protect your records and view recovery instructions.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_settings') }}"><strong>Booking reminders</strong><span>Configure reminder timing and the public app URL.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_events') }}"><strong>Loyalty visits</strong><span>Open an event to view scans or correct an award.</span></a>
-            </div></details></section>
+            <a class="dashboard-tool" href="{{ url_for('loyalty.check_in') }}"><strong>Public-event check-in</strong><span>Find waiver members and check loyalty eligibility.</span></a><a class="dashboard-tool" href="{{ url_for('kiosk_setup') }}"><strong>Event waiver kiosk</strong><span>Full-screen signup and waivers with PIN-protected exit.</span></a></div></details></section>
             <section class="panel dashboard-upcoming" aria-label="Recent correspondence">
                 <div class="panel-heading"><div><h2>Recent correspondence</h2><p>Client portal messages · {{ correspondence_week_count }} received in the last 7 days.</p></div><a class="btn" href="{{ url_for('admin_clients') }}#recent-enquiries">View messages</a></div>
                 {% for enquiry, client in recent_correspondence %}
