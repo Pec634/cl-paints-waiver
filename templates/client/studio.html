@@ -1,0 +1,25 @@
+{% extends 'client/base.html' %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='face-studio.css') }}">
+<header class="panel"><small>LET YOUR IMAGINATION ADD THE COLOUR</small><h1>Face Paint Studio</h1><p>Create a butterfly, tiger, superhero or a design of your own. Choose a face, pick your colours and paint with your finger, mouse or pen.</p></header>
+<section class="panel paint-studio" aria-label="Face painting game">
+  <div class="paint-controls">
+    <label>Face shape<select id="paint-face"><option value="oval">Oval</option><option value="round">Round</option><option value="long">Long</option></select></label>
+    <label>Skin tone<select id="paint-skin"><option value="#f7d7bd">Light</option><option value="#deb08b">Medium light</option><option value="#b77d55">Medium</option><option value="#825137">Deep</option><option value="#513224">Very deep</option></select></label>
+    <label>Hair style<select id="paint-hair"><option value="short">Short</option><option value="long">Long</option><option value="curly">Curly</option><option value="pigtails">Pigtails</option><option value="mohawk">Mohawk</option><option value="none">No hair</option></select></label>
+    <label>Hair colour<input id="paint-hair-colour" type="color" value="#49322c"></label>
+    <label>Facial hair<select id="paint-facial-hair"><option value="none">None</option><option value="moustache">Moustache</option><option value="handlebar">Curly moustache</option><option value="beard">Beard and moustache</option></select></label>
+    <label>Expression<select id="paint-expression"><option value="smile">Happy</option><option value="wink">Winking</option><option value="surprise">Surprised</option></select></label>
+    <button type="button" class="btn" id="paint-surprise">Surprise character</button>
+    <label>Paint colour<input id="paint-colour" type="color" value="#f52f83"></label>
+    <div class="paint-palette" aria-label="Quick paint colours">{% for colour,name in [('#f52f83','Pink'),('#7c3aed','Purple'),('#2563eb','Blue'),('#14b8a6','Teal'),('#facc15','Yellow'),('#f97316','Orange'),('#ffffff','White'),('#111827','Black')] %}<button type="button" data-colour="{{ colour }}" style="--swatch:{{ colour }}" aria-label="{{ name }} paint"></button>{% endfor %}</div>
+    <label>Brush size <output id="paint-size-value">12</output><input id="paint-size" type="range" min="2" max="50" value="12"></label>
+    <label>Tool<select id="paint-tool"><option value="brush">Paintbrush</option><option value="dots">Dot stamps</option><option value="stars">Star stamps</option><option value="eraser">Eraser</option></select></label>
+    <label class="paint-mirror"><input id="paint-mirror" type="checkbox"> Mirror both sides</label>
+    <div class="paint-actions"><button type="button" class="btn" id="paint-undo" disabled>Undo</button><button type="button" class="btn" id="paint-redo" disabled>Redo</button><button type="button" class="btn" id="paint-clear">Clear paint</button><button type="button" class="btn primary" id="paint-download">Download design</button></div>
+  </div>
+  <div><div class="paint-board"><canvas id="paint-base" width="600" height="720" aria-hidden="true"></canvas><canvas id="paint-canvas" width="600" height="720" aria-label="Drawing area. Use a finger, mouse or pen to paint the face."></canvas></div><p id="paint-status" role="status">Ready to paint!</p><p>Your design stays in this page until you leave or refresh. Download it to keep a copy. It is not sent to CL Paints automatically.</p></div>
+</section>
+<section class="panel paint-game"><h2>Your creative mission</h2><p id="paint-challenge">Create a butterfly with matching wings on both cheeks.</p><p>Complete the painting tasks below in any style you like. Stars celebrate trying tools and colours, rather than judging your artwork.</p><ul id="paint-tasks"></ul><label for="paint-progress">Mission progress</label><progress id="paint-progress" max="3" value="0"></progress><p id="paint-achievements" role="status" aria-live="polite">Your first creative star is waiting!</p><p id="paint-game-score">0 missions completed this session</p><button class="btn" id="paint-new-challenge" type="button">Next mission</button></section>
+<script src="{{ url_for('static', filename='face-studio.js') }}" defer></script>
+{% endblock %}

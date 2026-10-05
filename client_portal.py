@@ -4,6 +4,9 @@ from functools import wraps
 import hashlib
 import hmac
 import secrets
+import os
+import ipaddress
+from urllib.parse import urlsplit
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, abort
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -18,6 +21,13 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     def client_session_seconds():
         return remembered_seconds if session.get('client_remember') is True else session_seconds
     portal = Blueprint('client', __name__, url_prefix='/client')
+    def local_preview_enabled():
+        if not app.debug or os.getenv('CLIENT_LOCAL_PREVIEW', '').lower() not in ('1','true') or os.getenv('RENDER'):
+            return False
+        try:
+            return ipaddress.ip_address(request.remote_addr or '').is_loopback and urlsplit(request.host_url).hostname in ('localhost','127.0.0.1','::1')
+        except ValueError:
+            return False
     def digest(value):
         return hmac.new(str(app.secret_key).encode(), value.encode(), hashlib.sha256).hexdigest()
     def current_account():
@@ -56,7 +66,22 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         return records
     @portal.context_processor
     def context():
-        return dict(client_account=current_account(), client_csrf=csrf())
+        return dict(client_account=current_account(), client_csrf=csrf(),client_local_preview=local_preview_enabled())
+
+    @portal.post('/local-preview')
+    def local_preview():
+        if not local_preview_enabled():abort(404)
+        check_csrf()
+        account=Account.query.filter_by(email='portal-preview@example.invalid').first()
+        if account is None:
+            account=Account(email='portal-preview@example.invalid',first_name='Preview',last_name='Client')
+            db.session.add(account);db.session.commit()
+        session['client_id']=account.id
+        session['client_signed_in']=datetime.now().timestamp()
+        session['client_remember']=False
+        session.permanent=False
+        flash('Local preview account: no email verification required.','success')
+        return redirect(url_for('client.dashboard'))
 
     @app.context_processor
     def client_session_context():
@@ -237,6 +262,11 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         upcoming.sort(key=lambda item: (item['event']['date'], item['event'].get('start_time', '')))
         return render_template('client/dashboard.html', bookings=bookings[:3], upcoming=upcoming[:3],
                                pending=sum(b.status == 'Under Review' for b in bookings), rewards=owned_rewards(account))
+
+    @portal.get('/face-paint-studio')
+    @client_required
+    def studio(account):
+        return render_template('client/studio.html')
 
     @portal.get('/bookings')
     @client_required

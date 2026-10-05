@@ -216,6 +216,18 @@ admin-only downloads from their native submissions view.
 
 ### Legacy external forms and promotions
 
+### Local client portal preview
+
+To preview without sending an email verification code, set `FLASK_DEBUG=1` and
+`CLIENT_LOCAL_PREVIEW=true` in your local `.env`, restart the app, and visit
+`http://127.0.0.1:5000/client/login`. Choose **Preview portal locally**. This
+creates a separate `portal-preview@example.invalid` test account in your local
+database; it does not sign in as an existing customer. The option requires debug
+mode, a loopback connection and a localhost host, and is disabled whenever the
+`RENDER` environment variable is present. Do not enable these flags on the server.
+Preview form submissions still write to the local database. Remove the preview
+flag and restart when finished.
+
 Client and admin Rewards now display published native giveaway and photo/video
 consent forms. Staff incident and road-traffic reports are linked only from
 Dashboard > Business Tools > Forms & seasonal offers. External submissions
