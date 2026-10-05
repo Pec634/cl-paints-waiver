@@ -4,6 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import test_business_tools as fixtures
 from connecteam_rota import shift_payload
+from connecteam_rota import enrich_shifts, note_text
 
 main = fixtures.main
 
@@ -61,6 +62,19 @@ class ConnecteamTest(unittest.TestCase):
         self.assertEqual(datetime.fromtimestamp(payload['startTime'], ZoneInfo('UTC')).hour, 9)
         event['finish_time']='09:00'
         with self.assertRaises(ValueError): shift_payload(self.booking, event, 0)
+
+    def test_shift_details_names_and_safe_notes(self):
+        shifts = [dict(id='example', startTime=1782896400, endTime=1782903600, assignedUserIds=[12],
+                       locationData={'gps':{'address':'Example venue'}}, notes=[{'html':'<p>Bring paints</p><script>bad()</script><p>Arrive early</p>'}])]
+        with patch('connecteam_rota.api', return_value={'users':[{'userId':12, 'firstName':'Alex', 'lastName':'Painter'}]}):
+            enrich_shifts(shifts)
+        self.assertEqual(shifts[0]['staff_names'], ['Alex Painter'])
+        self.assertEqual(shifts[0]['venue'], 'Example venue')
+        self.assertEqual(shifts[0]['duration'], 2)
+        self.assertEqual(shifts[0]['plain_notes'], ['Bring paints\nArrive early'])
+        with patch('connecteam_rota.api', side_effect=ValueError('No directory access')):
+            enrich_shifts(shifts)
+        self.assertEqual(shifts[0]['staff_names'], ['Staff ID 12'])
 
 
 if __name__ == '__main__': unittest.main()

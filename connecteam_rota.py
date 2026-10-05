@@ -5,11 +5,48 @@ import html
 import json
 import os
 import secrets
+from html.parser import HTMLParser
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.exc import IntegrityError
+
+
+def note_text(value):
+    class NoteParser(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.parts = []; self.suppressed = 0
+        def handle_starttag(self, tag, attrs):
+            if tag in ('script', 'style'): self.suppressed += 1
+            if tag in ('br', 'p', 'div', 'li'): self.parts.append('\n')
+        def handle_endtag(self, tag):
+            if tag in ('script', 'style') and self.suppressed: self.suppressed -= 1
+            if tag in ('p', 'div', 'li'): self.parts.append('\n')
+        def handle_data(self, data):
+            if not self.suppressed: self.parts.append(data)
+    parser = NoteParser(); parser.feed(value or '')
+    return '\n'.join(line.strip() for line in ''.join(parser.parts).splitlines() if line.strip())
+
+
+def enrich_shifts(shifts):
+    ids = sorted({int(user) for shift in shifts for user in (shift.get('assignedUserIds') or [])})
+    names = {}
+    if ids:
+        try:
+            for offset in range(0, len(ids), 100):
+                query = urlencode({'userIds': ids[offset:offset+100], 'limit': 100, 'userStatus': 'all'}, doseq=True)
+                for user in api('/users/v1/users?' + query).get('users', []):
+                    names[int(user['userId'])] = (str(user.get('firstName', '')) + ' ' + str(user.get('lastName', ''))).strip()
+        except (ValueError, TypeError, KeyError):
+            pass  # Shift details remain usable when user-directory permission is unavailable.
+    for shift in shifts:
+        shift['staff_names'] = [names.get(int(user)) or f'Staff ID {user}' for user in (shift.get('assignedUserIds') or [])]
+        location = shift.get('locationData') or {}
+        shift['venue'] = (location.get('gps') or {}).get('address', '')
+        shift['plain_notes'] = [note_text(note.get('html') or note.get('text', '')) for note in (shift.get('notes') or []) if isinstance(note, dict)]
+        shift['display_end_date'] = datetime.fromtimestamp(shift['endTime'], ZoneInfo('Europe/London')).strftime('%d/%m/%Y %H:%M')
+        shift['duration'] = round((shift['endTime'] - shift['startTime']) / 3600, 2)
 
 
 def api(path, payload=None):
@@ -124,6 +161,7 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
                 for shift in shifts:
                     shift['display_start'] = datetime.fromtimestamp(shift['startTime'], ZoneInfo('Europe/London')).strftime('%d/%m/%Y %H:%M')
                     shift['display_finish'] = datetime.fromtimestamp(shift['endTime'], ZoneInfo('Europe/London')).strftime('%H:%M')
+                enrich_shifts(shifts)
             except (ValueError, KeyError, TypeError, OverflowError) as exc:
                 error = str(exc) if isinstance(exc, ValueError) else 'Could not read the shift times.'
         rows = []

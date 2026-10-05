@@ -2654,3 +2654,6 @@ label.moodboard-admin-card > div {
 .event-day-qr summary { padding: 12px 0; cursor: pointer; font-weight: 700; }
 .event-day-qr img { width: 260px; max-width: 100%; height: auto; background: white; }
 @media (max-width: 600px) { .event-day-actions .btn { flex: 1 1 100%; text-align: center; } }
+.rota-shift-details { margin-top: 16px; overflow-wrap: anywhere; }
+.rota-shift-details summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
+.rota-note { white-space: pre-wrap; overflow-wrap: anywhere; }
