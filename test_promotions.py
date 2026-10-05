@@ -37,7 +37,7 @@ class PromotionTest(unittest.TestCase):
         self.assertEqual(self.admin.post(path,data={}).status_code,400)
         self.admin.post(path,data=dict(csrf_token='admin-token',action='form',title='Christmas',url='https://www.cognitoforms.com/CLPaints/Christmas',description='Festive faces'))
         self.assertEqual(Form.query.count(),1)
-        self.assertIn(b'Christmas',self.fixture.client.get('/client/bookings').data)
+        self.assertTrue(Form.query.one().enabled)
         self.admin.post(path,data=dict(csrf_token='admin-token',action='toggle_form',id=Form.query.one().id))
         self.assertNotIn(b'Festive faces',self.fixture.client.get('/client/bookings').data)
         self.admin.post(path,data=dict(csrf_token='admin-token',action='form',title='Bad',url='javascript:alert(1)'))
@@ -47,7 +47,7 @@ class PromotionTest(unittest.TestCase):
         self.admin.post(path,data=dict(csrf_token='admin-token',action='offer',title='Bad',reduction='NaN',starts_at='2026-07-01T10:00',ends_at='2026-07-02T10:00'))
         self.assertEqual(Offer.query.count(),1)
         client=self.fixture.client.get('/client/rewards').data
-        self.assertIn(b'Give-away',client);self.assertIn(b'/CLPaints/Photo',client)
+        self.assertIn(b'Quarterly giveaway',client);self.assertIn(b'Share your painted smiles',client)
         self.assertNotIn(b'RoadTrafficCollision',client)
         self.assertIn(b'RoadTrafficCollision',self.admin.get(path).data)
 

@@ -100,8 +100,15 @@ def register(app, db, models, Waiver, admin_required, send_email):
         for waiver in Waiver.query.order_by(Waiver.signed_date.desc(), Waiver.id.desc()).all():
             latest.setdefault(waiver.responsible_email.strip().casefold(), waiver)
         excluded = {p.email for p in Preference.query.filter(Preference.unsubscribed_at.isnot(None)).all()}
-        return sorted(email for email, waiver in latest.items()
-                      if waiver.marketing_consent and email not in excluded and '@' in email)
+        consent={email:(waiver.signed_date, bool(waiver.marketing_consent)) for email,waiver in latest.items()}
+        native_models=app.extensions.get('native_form_models')
+        if native_models:
+            for entry in native_models[1].query.order_by(native_models[1].created_at.desc()).all():
+                choice=json.loads(entry.answers_json).get('I would like marketing updates and news from CL Paints by email')
+                email=entry.email.strip().casefold()
+                if choice in ('Yes','No') and (email not in consent or entry.created_at>consent[email][0]):
+                    consent[email]=(entry.created_at,choice=='Yes')
+        return sorted(email for email,(_,allowed) in consent.items() if allowed and email not in excluded and '@' in email)
 
     def preference(email):
         item = db.session.get(Preference, email)

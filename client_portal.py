@@ -166,6 +166,9 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 scan_token = session.pop('loyalty_scan_token', None)
                 if scan_token:
                     return redirect(url_for('loyalty.scan', token=scan_token))
+                native_form_id = session.pop('native_return_form', None)
+                if native_form_id:
+                    return redirect(url_for('native_form_open', form_id=native_form_id))
                 return redirect(url_for('client.account' if not account.phone or not account.address else 'client.dashboard'))
             except ValueError as problem:
                 db.session.rollback()

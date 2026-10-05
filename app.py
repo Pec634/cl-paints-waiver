@@ -508,6 +508,8 @@ from business_promotions import define_models as define_promotion_models
 promotion_models = define_promotion_models(db)
 from admin_security import define_models as define_admin_security_models
 admin_security_models = define_admin_security_models(db)
+from native_forms import define_models as define_native_form_models
+native_form_models = define_native_form_models(db)
 from connecteam_rota import define_model as define_rota_model
 ConnecteamShiftLink = define_rota_model(db)
 app.extensions['marketing_design_models'] = define_design_models(db)
@@ -1527,6 +1529,12 @@ def send_booking_request_confirmation(booking):
 
 @app.route("/booking", methods=["GET", "POST"])
 def booking_request():
+    from native_forms import available as native_available, answers as native_answers, design_uploads
+    NativeForm = native_form_models[0]
+    seasonal_id = request.form.get('seasonal_id', type=int) if request.method == 'POST' else request.args.get('seasonal', type=int)
+    seasonal_form = db.session.get(NativeForm, seasonal_id) if seasonal_id else None
+    if seasonal_id and (not seasonal_form or seasonal_form.kind != 'booking' or not native_available(seasonal_form)):
+        abort(404)
     settings = get_business_settings()
     pricing_rules = {key: settings[key] for key in ['hourly_rate', 'minimum_hours', 'max_event_dates', 'free_miles', 'mile_rate', 'travel_cap']}
     offer = app.extensions['active_hourly_discount'](pricing_rules['hourly_rate'])
@@ -1553,6 +1561,10 @@ def booking_request():
     if request.method == "POST":
         try:
             request_type = request.form.get("request_type", "")
+            seasonal_answers = native_answers(seasonal_form, request.form) if seasonal_form else {}
+            seasonal_uploads = design_uploads(request.files.getlist('design_images')) if seasonal_form else []
+            if seasonal_form and seasonal_form.terms and request.form.get('seasonal_agree') != 'yes':
+                raise ValueError('Accept the seasonal booking information to continue.')
             if request_type != "booking":
                 raise ValueError("Use the quick availability checker for availability requests.")
 
@@ -1758,6 +1770,7 @@ def booking_request():
                 additional_event_dates=", ".join(item["date"] for item in normalized_schedule[1:]) or None,
                 event_schedule=json.dumps({
                     "pricing_rules": pricing_rules,
+                    "seasonal_form": {'id': seasonal_form.id, 'title': seasonal_form.title, 'terms': seasonal_form.terms, 'answers': seasonal_answers} if seasonal_form else None,
                     "same_details": all_dates_same_details,
                     "events": normalized_schedule,
                 }),
@@ -1788,6 +1801,10 @@ def booking_request():
                 status="Under Review",
             )
             db.session.add(booking)
+            if seasonal_uploads:
+                db.session.flush()
+                for upload in seasonal_uploads:
+                    db.session.add(app.extensions['native_booking_media'](booking_id=booking.id,**upload))
             db.session.commit()
             email_sent = send_booking_request_confirmation(booking)
             if booking.promo_code and booking.referral_verified:
@@ -1812,6 +1829,7 @@ def booking_request():
         "booking_form.html",
         error=error,
         form_data=form_data,
+        seasonal_form=seasonal_form,
         submitted=request.args.get("submitted"),
         portal_account=portal_account,
         google_maps_api_key=GOOGLE_MAPS_API_KEY,
@@ -2526,6 +2544,8 @@ from connecteam_rota import register as register_connecteam
 register_connecteam(app, db, ConnecteamShiftLink, BusinessSetting, Booking, booking_schedule_events, admin_required)
 from business_promotions import register as register_promotions
 register_promotions(app, db, promotion_models, admin_required, get_business_settings)
+from native_forms import register as register_native_forms
+
 from admin_security import register as register_admin_security
 register_admin_security(app, db, admin_security_models, lambda *args: send_client_email(*args),
     lambda: get_business_settings()['recovery_email'] or ADMIN_EMAIL)
@@ -2559,6 +2579,8 @@ register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_c
 from kiosk import register as register_kiosk
 register_kiosk(app, db, KioskSession, BusinessSetting, Event, Waiver, get_current_client,
     admin_required, waiver_event, create_waiver)
+
+register_native_forms(app, db, native_form_models, ClientAccount, Booking, get_current_client, admin_required, lambda *args: send_client_email(*args))
 
 @app.get('/privacy')
 def privacy_policy():

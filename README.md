@@ -176,12 +176,51 @@ the selected UK day. This page never creates shifts or awards loyalty points.
 
 ## Forms, giveaway and scheduled offers
 
-Client and admin Rewards link to the quarterly giveaway and photo/video
-consent form. Staff incident and road-traffic reports are linked only from
+### Native forms (replaces the client Cognito links)
+
+Open Forms & seasonal offers > Create and manage native forms. Create giveaway,
+photo/video consent or seasonal booking drafts. Set actual rules/permissions,
+optional UK opening and closing times and up to ten extra questions. Drafts can
+be edited; unpublish before changing an existing form. Publish when ready.
+Published/open forms appear in client and admin Rewards and seasonal Bookings.
+No giveaway rules or photography permissions are guessed or auto-published.
+
+Giveaway/media submissions require verified client sign-in. Giveaway entries are
+limited to one per account per form, not guaranteed one per person. Media forms
+require authority declarations and consent to the saved wording, accept one to
+three JPG/PNG/WebP/MP4 files under 10 MB each, and store uploads in the database.
+Photo submissions have a 32 MB request limit; the overall upload limit is 100 MB
+to accommodate seasonal design uploads. Media downloads require the submitting
+client or an authenticated, unexpired admin session; uploads are not public or
+automatically published. Database backups include these private files.
+Customers can view their submissions from Rewards; admins view entries from
+the form editor. Every submission preserves its accepted wording and answers.
+Consent withdrawal enquiries use Contact us with the submission reference.
+
+Seasonal forms reuse the full booking form and save their additional questions,
+title and wording in the booking's event_schedule. Requests appear in Bookings
+and the native form's submissions view. Existing booking prices, promotions,
+payment workflows and status notifications continue to apply. Native submissions
+do not automatically import historic Cognito entries. Incident/collision links
+remain external. Screenshot-based draft templates are available for Quarterly
+VIP Give-away, Photography consent and Halloween promotion. Review dates and
+travel wording before publishing: the supplied giveaway refers to Doncaster,
+while the portal business address is London. The editor supports text, textarea,
+number, date, checkbox and select questions. Photo templates collect repeatable
+participant permissions, event details, acknowledgements and a typed signature.
+The giveaway template captures age and eligibility declarations and a separate
+Yes/No marketing preference; the latest recorded preference is used for marketing
+recipients, and an unsubscribe continues to override opt-ins. Seasonal bookings
+accept up to six private JPG/PNG/WebP design images, at most 15 MB each, with
+admin-only downloads from their native submissions view.
+
+### Legacy external forms and promotions
+
+Client and admin Rewards now display published native giveaway and photo/video
+consent forms. Staff incident and road-traffic reports are linked only from
 Dashboard > Business Tools > Forms & seasonal offers. External submissions
-stay in Cognito Forms and are not imported automatically. Create seasonal
-forms in Cognito, then publish their HTTPS links through Forms & seasonal
-offers; client Bookings and Rewards display enabled links alongside Halloween.
+stay in Cognito Forms and are not imported automatically. Older external form
+definitions are retained, but client seasonal links now use native forms.
 
 Scheduled hourly discounts apply to new internal booking requests submitted
 within the configured UK-time start-inclusive, end-exclusive interval. The
