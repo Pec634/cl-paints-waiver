@@ -136,6 +136,8 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
                     if kind == 'refund' and amount > summary(booking)['paid']:
                         raise ValueError('A refund cannot exceed payments received.')
                     method = request.form.get('method','').strip()
+                    if method not in ('SumUp', 'Cash'):
+                        raise ValueError('Choose SumUp or Cash as the payment method.')
                     note = request.form.get('note','').strip()
                     paid_date = parse_date(request.form.get('paid_date',''))
                     if not method or len(method)>100 or len(note)>500 or not paid_date or paid_date>datetime.now(ZoneInfo('Europe/London')).date():

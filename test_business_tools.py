@@ -32,7 +32,7 @@ class BusinessToolsTest(unittest.TestCase):
     def test_payment_deposit_refund_idempotency_and_client_privacy(self):
         path=f'/admin/bookings/{self.booking.id}/payments'
         token=self.payment_form()
-        data=dict(token,action='entry',kind='payment',amount='25.00',method='Bank transfer',note='INTERNAL PAYMENT NOTE',paid_date=datetime.now(ZoneInfo('Europe/London')).date().isoformat())
+        data=dict(token,action='entry',kind='payment',amount='25.00',method='SumUp',note='INTERNAL PAYMENT NOTE',paid_date=datetime.now(ZoneInfo('Europe/London')).date().isoformat())
         self.assertEqual(self.admin.post(path,data=data).status_code,302)
         self.admin.post(path,data=data)
         self.assertEqual(Entry.query.count(),1)
@@ -42,10 +42,10 @@ class BusinessToolsTest(unittest.TestCase):
         self.assertIn(b'75.00',detail.data)
         self.assertNotIn(b'INTERNAL PAYMENT NOTE',detail.data)
         token=self.payment_form()
-        self.admin.post(path,data=dict(token,action='entry',kind='refund',amount='26',method='Bank',paid_date=data['paid_date']))
+        self.admin.post(path,data=dict(token,action='entry',kind='refund',amount='26',method='Cash',paid_date=data['paid_date']))
         self.assertEqual(Entry.query.count(),1)
         token=self.payment_form()
-        self.admin.post(path,data=dict(token,action='entry',kind='refund',amount='5',method='Bank',paid_date=data['paid_date']))
+        self.admin.post(path,data=dict(token,action='entry',kind='refund',amount='5',method='Cash',paid_date=data['paid_date']))
         self.assertEqual(main.app.extensions['payment_summary'](self.booking)['paid'],Decimal('20'))
         self.admin.post(path,data={'csrf_token':'admin-token','action':'plan','deposit':'30','deposit_due':'2099-01-01','balance_due':'2099-01-02'})
         self.assertEqual(main.db.session.get(Plan,self.booking.id).deposit,Decimal('30'))
