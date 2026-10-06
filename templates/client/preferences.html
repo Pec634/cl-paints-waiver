@@ -1,0 +1,8 @@
+{% extends 'client/base.html' %}{% block content %}
+<section class="panel client-account"><h1>Email preferences</h1><p>Choose the optional updates you receive by email. Updates will still appear in your portal.</p>
+<form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+<label class="client-remember-choice"><input type="checkbox" name="booking_updates" value="yes" {% if preference is none or preference.booking_updates %}checked{% endif %}><span>Booking update emails</span></label>
+<label class="client-remember-choice"><input type="checkbox" name="reward_updates" value="yes" {% if preference is none or preference.reward_updates %}checked{% endif %}><span>Reward update emails</span></label>
+<p>Verification codes, booking request decisions and essential payment reminders continue. Marketing email consent is managed separately using the unsubscribe link in marketing emails.</p>
+<button class="btn primary" type="submit">Save email preferences</button></form></section>
+{% endblock %}

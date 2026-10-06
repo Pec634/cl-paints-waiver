@@ -506,6 +506,9 @@ from sumup_invoices import define_model as define_invoice_model
 BookingInvoice = define_invoice_model(db)
 from booking_requests import define_model as define_booking_request_model
 BookingRequest = define_booking_request_model(db)
+from client_features import define_model as define_client_preference_model
+ClientEmailPreference = define_client_preference_model(db)
+app.extensions['client_email_preference_model'] = ClientEmailPreference
 from kiosk import define_model as define_kiosk_model, ensure_schema as ensure_kiosk_schema
 from marketing import define_models as define_marketing_models, define_design_models
 marketing_models = define_marketing_models(db)
@@ -2582,6 +2585,9 @@ register_sumup_invoices(app, db, BookingInvoice, Booking, admin_required, get_cu
 from booking_requests import register as register_booking_requests
 register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_current_client,
     admin_required, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events)
+from client_features import register as register_client_features
+register_client_features(app, db, ClientEmailPreference, Booking, BookingInvoice, BookingRequest,
+    get_current_client, booking_schedule_events)
 
 from kiosk import register as register_kiosk
 register_kiosk(app, db, KioskSession, BusinessSetting, Event, Waiver, get_current_client,

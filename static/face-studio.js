@@ -283,9 +283,18 @@
   function cakePreview(){const colours=cakes[get('colour-mode').value]||[get('colour').value];get('cake-preview').style.background=`linear-gradient(90deg,${colours.flatMap((c,i)=>[`${c} ${i*100/colours.length}%`,`${c} ${(i+1)*100/colours.length}%`]).join(',')})`;}
   get('colour-mode').addEventListener('change',()=>{if(get('colour-mode').value!=='solid'){get('tool').value='flat';get('size').value=40;get('size-value').value=40;}cakePreview();});get('colour').addEventListener('input',()=>{get('colour-mode').value='solid';cakePreview();});cakePreview();
   const viewport=get('viewport');let boardWidth=viewport.clientWidth;
-  function zoom(){const value=Number(get('zoom').value);get('board').style.width=`${boardWidth*value/100}px`;get('zoom-value').value=`${value}%`;}
-  get('zoom').addEventListener('input',zoom);get('zoom-reset').addEventListener('click',()=>{get('zoom').value=100;zoom();viewport.scrollTo(0,0);});
-  window.addEventListener('resize',()=>{boardWidth=viewport.clientWidth;zoom();});zoom();
+  function zoom(center=true){
+    const value=Number(get('zoom').value);
+    get('board').style.width=`${boardWidth*value/100}px`;
+    get('zoom-value').value=`${value}%`;
+    if(center){
+      // Read the resized scroll area so the centre of the face stays in view.
+      viewport.scrollLeft=Math.max(0,(viewport.scrollWidth-viewport.clientWidth)/2);
+      viewport.scrollTop=Math.max(0,(viewport.scrollHeight-viewport.clientHeight)/2);
+    }
+  }
+  get('zoom').addEventListener('input',()=>zoom());get('zoom-reset').addEventListener('click',()=>{get('zoom').value=100;zoom(false);viewport.scrollTo(0,0);});
+  window.addEventListener('resize',()=>{boardWidth=viewport.clientWidth;zoom();});zoom(false);
   const photoEffect=document.createElement('div');
   photoEffect.className='paint-photo-effect';photoEffect.hidden=true;
   photoEffect.setAttribute('aria-hidden','true');
@@ -347,6 +356,40 @@
     get('new-challenge').textContent=mode==='customer'?'Next customer':mode==='follow'?'Next design':'Next mission';
     updateMission();updateReference();
   }
+  const missionPicker=document.createElement('select');missionPicker.id='paint-mission-picker';
+  const pickerLabel=document.createElement('label');pickerLabel.htmlFor=missionPicker.id;pickerLabel.textContent='Choose an unlocked mission';pickerLabel.append(missionPicker);
+  get('new-challenge').before(pickerLabel);
+  const unlockHint=document.createElement('p');unlockHint.id='paint-unlock-hint';get('new-challenge').after(unlockHint);
+  const sessionCleared=new Set();
+  const challengeLimit=mode=>['customer','follow'].includes(mode)?customers.length:missions.length;
+  const isCompleted=(mode,index)=>sessionCleared.has(`${mode}:${index}`)||Boolean(window.CLStudioProgress?.isCompleted(mode,index));
+  const isUnlocked=(mode,index)=>isCompleted(mode,index)||Array.from({length:index},(_,previous)=>previous).every(previous=>isCompleted(mode,previous));
+  let navigationState='';
+  function updateMissionNavigation(){
+    const mode=get('game-mode').value,limit=challengeLimit(mode);
+    const state=`${mode}:${mission}:`+Array.from({length:limit},(_,index)=>isCompleted(mode,index)?'1':'0').join('');
+    if(state===navigationState){missionPicker.value=String(mission);return;}
+    navigationState=state;
+    missionPicker.replaceChildren(...Array.from({length:limit},(_,index)=>{
+      const title=['customer','follow'].includes(mode)?customers[index].name:['Butterfly','Tiger','Galaxy','Superhero','Rainbow dragon'][index];
+      const option=new Option(`${index+1}. ${title} — ${isCompleted(mode,index)?'Completed':isUnlocked(mode,index)?'Unlocked':'Locked'}`,String(index));
+      option.disabled=!isUnlocked(mode,index);return option;
+    }));
+    missionPicker.value=String(mission);missionPicker.disabled=mode==='free';
+    get('new-challenge').disabled=mode==='free'||mission+1>=limit||!isUnlocked(mode,mission+1);
+    unlockHint.textContent=mode==='free'?'Choose a challenge mode to progress through missions.':
+      mission+1>=limit&&isCompleted(mode,mission)?'All missions in this mode are complete. Replay any unlocked mission!':
+      isCompleted(mode,mission)?'Pick any unlocked mission, or continue to the next one.':'Complete all three tasks to unlock the next mission. You can revisit unlocked missions at any time.';
+  }
+  function chooseMission(index){
+    const mode=get('game-mode').value;
+    if(active||mode==='free'||!Number.isInteger(index)||index<0||index>=challengeLimit(mode)||!isUnlocked(mode,index)){
+      updateMissionNavigation();return;
+    }
+    mission=index;missionRound++;won=false;
+    if(mode==='timed'){deadline=null;timedFinished=false;get('timer').textContent='Start a timed round for this mission when you are ready.';}
+    loadGamePrompt();
+  }
   function updateMission() {
     const task=missions[mission],painted=strokes.filter(s=>s.round===missionRound && s.tool!=='eraser');
     const used=new Set(painted.flatMap(s=>s.cake?(s.cakeColours||cakes[s.cake]):[s.colour]));
@@ -357,14 +400,18 @@
     get('tasks').replaceChildren(...labels.map((label,i)=>{const item=document.createElement('li');item.textContent=(checks[i]?'\u2713 ':'\u25cb ')+label;if(checks[i])item.className='paint-task-done';return item;}));
     const count=checks.filter(Boolean).length;get('progress').value=count;
     get('achievements').textContent=count===3?'\u2605\u2605\u2605 Mission complete! Download your creation or try the next mission.':`${'\u2605'.repeat(count)}${'\u2606'.repeat(3-count)} ${count} of 3 creative tasks complete`;
-    if(count===3 && !won){won=true;completed++;const panel=document.querySelector('.paint-game');panel.classList.remove('paint-celebrate');void panel.offsetWidth;panel.classList.add('paint-celebrate');}
+    const mode=get('game-mode').value;
+    const canEarn=mode!=='free' && (mode!=='timed' || (deadline && Date.now()<deadline && !timedFinished));
+    if(count===3 && !won && canEarn && isUnlocked(mode,mission)){won=true;completed++;sessionCleared.add(`${mode}:${mission}`);window.CLStudioProgress?.complete(mode,mission);const panel=document.querySelector('.paint-game');panel.classList.remove('paint-celebrate');void panel.offsetWidth;panel.classList.add('paint-celebrate');}
     get('game-score').textContent=`${completed} mission${completed===1?'':'s'} completed this session`;
+    updateMissionNavigation();
   }
-  get('new-challenge').addEventListener('click',()=>{const limit=['customer','follow'].includes(get('game-mode').value)?customers.length:missions.length;mission=(mission+1)%limit;missionRound++;won=false;loadGamePrompt();});
+  get('new-challenge').addEventListener('click',()=>chooseMission(mission+1));
+  missionPicker.addEventListener('change',()=>chooseMission(Number(missionPicker.value)));
   get('game-mode').addEventListener('change',()=>{deadline=null;timedFinished=false;mission=0;missionRound++;won=false;get('tasks').hidden=get('game-mode').value==='free';get('progress').hidden=get('game-mode').value==='free';get('timer').textContent=get('game-mode').value==='free'?'Free play: take your time and enjoy creating.':'Start a timed round when you are ready.';loadGamePrompt();});
   get('show-guide').addEventListener('change',updateReference);
   get('request-colours').addEventListener('click',()=>{const c=customers[mission%customers.length];get('colour-mode').value='solid';get('colour').value=c.colours[0];cakePreview();get('status').textContent='First requested colour loaded. Use the two highlighted palette colours.';document.querySelectorAll('.paint-palette button').forEach(button=>button.setAttribute('aria-pressed',String(c.colours.includes(button.getAttribute('aria-label').replace('Paint colour ','')))));});
-  get('start-timer').addEventListener('click',()=>{get('game-mode').value='timed';get('tasks').hidden=false;get('progress').hidden=false;deadline=Date.now()+120000;timedFinished=false;missionRound++;won=false;loadGamePrompt();});
+  get('start-timer').addEventListener('click',()=>{if(active)return;if(get('game-mode').value!=='timed')mission=0;get('game-mode').value='timed';get('tasks').hidden=false;get('progress').hidden=false;deadline=Date.now()+120000;timedFinished=false;missionRound++;won=false;loadGamePrompt();});
   setInterval(()=>{if(!deadline)return;const seconds=Math.max(0,Math.ceil((deadline-Date.now())/1000));get('timer').textContent=`Time left: ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;if(!seconds){deadline=null;timedFinished=true;if(active)finish({pointerId:active.pointer});get('timer').textContent='Round complete! Download your design, start again or switch to free play.';}},250);
   window.CLStudioCore={strokes,render,drawFace,cakes,canvas,base,point,mirrorPoint,
     renderPreview(target,previewStrokes){const previous=ctx;try{ctx=target.getContext('2d');ctx.clearRect(0,0,600,720);for(const stroke of previewStrokes){draw(stroke);if(stroke.mirror)draw(stroke,true);}}finally{ctx=previous;}}

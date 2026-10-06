@@ -86,3 +86,52 @@
 .paint-stencil-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}.paint-stencil-overlay[hidden]{display:none}#library-stencil-preview{width:180px;max-width:100%;height:160px;background:#fff;border:1px solid #ddd6fe;border-radius:12px;align-self:center}
 
 #custom-stencil-pad{width:240px;max-width:100%;height:auto;aspect-ratio:1;background:white;border:1px solid #c4b5fd;border-radius:12px;touch-action:none;align-self:center;cursor:crosshair}
+
+/* Missions and progress flank the drawing area; tools stay below. */
+.paint-studio { display:grid; grid-template-columns:minmax(180px, 210px) minmax(0, 1fr) minmax(180px, 210px); grid-template-areas:'journey journey journey' 'mission canvas progress' 'tools tools tools'; gap:20px; align-items:start; }
+.paint-mission-sidebar { grid-area:mission; }
+.paint-progress-sidebar { grid-area:progress; }
+.paint-studio > .paint-workspace { grid-area:canvas; width:100%; }
+.paint-studio > .paint-controls { grid-area:tools; }
+.client-main .paint-studio > .paint-mission-sidebar, .client-main .paint-studio > .paint-progress-sidebar { margin:0; padding:18px; min-width:0; border-radius:18px; }
+.paint-mission-sidebar h2, .paint-progress-sidebar h2 { margin:0 0 16px; font-size:1.1rem; line-height:1.4; }
+.paint-mission-sidebar label { display:grid; gap:8px; font-weight:600; }
+.paint-mission-sidebar select { width:100%; min-width:0; min-height:44px; padding:8px; border:1px solid #e9d5ff; border-radius:10px; background:white; font:inherit; }
+.paint-mission-sidebar .btn { width:100%; white-space:normal; min-height:44px; }
+.paint-progress-sidebar { background:linear-gradient(135deg,#fff7ed,#f5f3ff); }
+.paint-progress-sidebar progress { display:block; width:100%; height:22px; accent-color:#f52f83; margin:12px 0; }
+.paint-progress-sidebar ul { padding-left:20px; }
+.paint-progress-sidebar li { padding:6px 0; line-height:1.5; }
+.paint-progress-sidebar .paint-task-done { color:#166534; font-weight:700; }
+.paint-progress-sidebar [hidden] { display:none; }
+@media(max-width:1000px) {
+    .paint-studio { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-areas:'journey journey' 'canvas canvas' 'mission progress' 'tools tools'; }
+}
+@media(max-width:560px) {
+    .paint-studio { grid-template-columns:minmax(0,1fr); grid-template-areas:'journey' 'canvas' 'mission' 'progress' 'tools'; }
+}
+.paint-studio.paint-fullscreen { display:flex; flex-direction:column; align-items:center; }
+.paint-fullscreen > .paint-mission-sidebar, .paint-fullscreen > .paint-progress-sidebar { display:none; }
+.paint-fullscreen .paint-fullscreen-bar { width:100%; }
+
+.paint-player-progress { grid-area:journey; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 24px; min-width:0; padding:20px; border:1px solid #e9d5ff; border-radius:18px; background:linear-gradient(120deg,#fff7ed,#f5f3ff); }
+.paint-journey-summary, .paint-journey-rewards { min-width:0; }
+.paint-player-progress > .paint-reward-reveal, .paint-player-progress > .paint-progress-note, .paint-player-progress > .paint-progress-storage { grid-column:1/-1; margin:0; }
+.paint-player-progress progress { display:block; width:100%; height:22px; accent-color:#f52f83; margin:12px 0; }
+.paint-player-progress [hidden] { display:none; }
+.paint-player-progress .paint-reward-collection { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.paint-fullscreen > .paint-player-progress { display:none; }
+@media(max-width:560px) { .paint-player-progress { grid-template-columns:minmax(0,1fr); padding:16px; } }
+.paint-player-progress h3 { font-size:1rem; margin:0 0 12px; }
+#paint-player-rank { display:block; padding:10px; border-radius:12px; background:#ede9fe; color:#6d28d9; }
+.paint-player-progress label, .paint-progress-note, .paint-progress-storage { font-size:.8rem; line-height:1.5; }
+.paint-reward-collection { display:grid; gap:10px; }
+.paint-unlock-card { display:grid; gap:8px; width:100%; padding:10px; border:1px solid #d8b4fe; border-radius:12px; background:white; text-align:left; font:inherit; font-size:.8rem; cursor:pointer; min-height:44px; }
+.paint-unlock-card:disabled { opacity:.55; cursor:default; border-style:dashed; }
+.paint-unlock-card:not(:disabled):hover { border-color:#f52f83; background:#fff0f7; }
+.paint-unlock-card:focus-visible { outline:3px solid #7c3aed; outline-offset:3px; }
+.paint-unlock-swatch { height:18px; border-radius:6px; }
+.paint-reward-reveal { padding:14px; margin:16px 0; border:1px solid #facc15; border-radius:14px; background:#fef9c3; color:#713f12; font-weight:700; line-height:1.5; }
+.paint-reward-reveal.is-revealing { animation:paint-reward-arrive .7s ease-out both; }
+@keyframes paint-reward-arrive { from { opacity:0; transform:translateY(10px) scale(.95); } to { opacity:1; transform:none; } }
+@media(prefers-reduced-motion:reduce) { .paint-reward-reveal.is-revealing { animation:none; } }

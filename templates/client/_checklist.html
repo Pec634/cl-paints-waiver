@@ -1,0 +1,10 @@
+<section class="panel client-checklist">
+  <h2>Your booking checklist</h2>
+  <p>Booking {{ checklist_booking.public_reference if checklist_booking else booking.public_reference }} &middot; Review these arrangements before your event.</p>
+  <ul class="client-checklist-items">
+    {% for item in booking_checklist %}
+    <li><span class="client-checklist-state {{ 'complete' if item.done else '' }}">{{ 'Complete' if item.done else ('To review' if item.done is none else 'Next step') }}</span><div><a href="{{ item.link }}"><strong>{{ item.label }}</strong></a><p>{{ item.detail }}</p></div></li>
+    {% endfor %}
+  </ul>
+  <p>Visiting a public event? <a class="client-text-link" href="{{ url_for('loyalty.waivers') }}">Check your waivers and members</a>, or <a class="client-text-link" href="{{ url_for('loyalty.new_waiver') }}">complete a waiver</a> before painting. Waivers are managed separately from private bookings.</p>
+</section>

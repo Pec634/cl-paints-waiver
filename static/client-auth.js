@@ -1,4 +1,34 @@
 (() => {
+    const navigation = document.querySelector('.client-navigation');
+    const menuToggle = document.querySelector('.client-menu-toggle');
+    if (navigation && menuToggle) {
+        menuToggle.hidden = false;
+        navigation.classList.add('client-nav-enhanced');
+        menuToggle.addEventListener('click', () => {
+            const expanded = menuToggle.getAttribute('aria-expanded') !== 'true';
+            menuToggle.setAttribute('aria-expanded', String(expanded));
+            navigation.classList.toggle('is-expanded', expanded);
+        });
+        const groups = [...navigation.querySelectorAll('details')];
+        groups.forEach(group => group.addEventListener('toggle', () => {
+            if (group.open) groups.forEach(other => { if (other !== group) other.open = false; });
+        }));
+        document.addEventListener('click', event => {
+            if (!navigation.contains(event.target)) groups.forEach(group => { group.open = false; });
+        });
+        navigation.addEventListener('keydown', event => {
+            if (event.key !== 'Escape') return;
+            const group = event.target.closest('details');
+            if (group && group.open) {
+                group.open = false;
+                group.querySelector('summary').focus();
+            } else {
+                menuToggle.setAttribute('aria-expanded', 'false');
+                navigation.classList.remove('is-expanded');
+                menuToggle.focus();
+            }
+        });
+    }
     const resendForm = document.querySelector('[data-resend-seconds]');
     if (resendForm) {
         const resendButton = resendForm.querySelector('[data-resend-button]');
@@ -24,6 +54,11 @@
         window.setInterval(updateCountdown, 1000);
     }
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    document.querySelectorAll('.client-main > .panel, .client-main > .client-welcome, .client-summary > .panel, .client-grid > .panel').forEach((card, index) => {
+        if (card.classList.contains('client-auth')) return;
+        card.classList.add('client-animated-card');
+        card.style.setProperty('--arrival-delay', `${Math.min(index, 5) * 100}ms`);
+    });
     const colours = ['#f52f83', '#a379df', '#ffb43f', '#40c9bf'];
     const welcome = document.querySelector('.client-login-celebration');
     if (welcome && !reducedMotion.matches) {
@@ -107,8 +142,15 @@
         status.before(envelope);
     }
     let sending = false;
+    let completing = false;
+    let submitTimer;
     form.addEventListener('submit', (event) => {
+        if (completing) return;
         if (sending) { event.preventDefault(); return; }
+        // Keep native validation, CSRF fields and the normal server redirect.
+        // The short pause lets the paint animation finish before navigation.
+        event.preventDefault();
+        const submitter = event.submitter;
         sending = true;
         panel.classList.add('client-auth-sending');
         form.setAttribute('aria-busy', 'true');
@@ -128,8 +170,23 @@
                 drop.addEventListener('animationend', () => drop.remove(), {once: true});
             }
         }
+        submitTimer = window.setTimeout(() => {
+            completing = true;
+            button.disabled = false;
+            try {
+                form.requestSubmit(submitter || button);
+            } finally {
+                completing = false;
+                sending = false;
+                panel.classList.remove('client-auth-sending');
+                form.removeAttribute('aria-busy');
+                status.textContent = '';
+            }
+        }, reducedMotion.matches ? 0 : 1600);
     });
     window.addEventListener('pageshow', () => {
+        window.clearTimeout(submitTimer);
+        completing = false;
         sending = false;
         panel.classList.remove('client-auth-sending');
         form.removeAttribute('aria-busy');

@@ -95,15 +95,19 @@ def render_notification(config, name, kind, reference, details, link):
 
 def register_notifications(app, db, models, Booking, Account, Owner, current_client, settings, send):
     Change, Notice = models
-    def notify(email, name, kind, reference, details, link):
+    def notify(email, name, kind, reference, details, link, essential=False):
         config = settings()
         subject, body, footer, message = render_notification(config, name, kind, reference, details, link)
         notice = Notice(email=email, kind=kind, reference=reference, details=details)
         db.session.add(notice)
         db.session.commit()
-        notice.email_sent = send(email, subject, body + '\n\n' + link + '\n\n' + footer, message)
+        account = Account.query.filter(db.func.lower(Account.email) == email.strip().casefold()).first()
+        Preference = app.extensions.get('client_email_preference_model')
+        preference = db.session.get(Preference, account.id) if Preference and account else None
+        enabled = essential or preference is None or (preference.booking_updates if kind == 'booking' else preference.reward_updates)
+        notice.email_sent = send(email, subject, body + '\n\n' + link + '\n\n' + footer, message) if enabled else False
         db.session.commit()
-        return notice.email_sent
+        return notice.email_sent if enabled else None
     def booking_updated(booking, before, schedule):
         after = booking_snapshot(booking, schedule)
         changes = {key: {'before': before.get(key, 'Not set'), 'after': after.get(key, 'Removed')}
@@ -114,7 +118,7 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         db.session.commit()
         details = '\n'.join(f'{key}: {value["before"]} → {value["after"]}' for key, value in changes.items())
         return notify(booking.email, booking.first_name, 'booking', booking.public_reference, details,
-                      url_for('client.booking_detail', booking_id=booking.id, _external=True))
+                      url_for('client.booking_detail', booking_id=booking.id, _external=True), essential='Status' in changes)
     def reward(email, name, reference, details):
         return notify(email, name, 'reward', reference, details, url_for('client.rewards', _external=True))
     def reward_code(code, details):
