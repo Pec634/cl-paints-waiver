@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% block body %}
+<main class="kiosk-customer panel kiosk-welcome">
+  <h1>Welcome to CL Paints</h1><p>Already completed a waiver? Find your members below. New here? Complete a waiver before painting.</p>
+  {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
+  {% if awaiting_code %}
+  <section class="kiosk-choice"><h2>Check your email</h2><p>Enter your six-digit code. Check your spam folder too. This opens only your waiver members on this kiosk.</p>
+    <form class="client-form" method="post" action="{{ url_for('kiosk_verify_email') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><label>Verification code<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label><button class="btn primary">Verify and find my members</button></form>
+    <form method="post" action="{{ url_for('kiosk_start_over') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><button class="btn">Use another method</button></form>
+  </section>
+  {% else %}
+  <div class="kiosk-choice-grid">
+    <section class="kiosk-choice"><h2>I already have a waiver</h2><p>Use the waiver ID from your confirmation email for a quick member check. This does not sign you into your client account.</p>
+      <form class="client-form" method="post" action="{{ url_for('kiosk_lookup_id') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><label>Waiver ID<input name="reference" maxlength="100" autocomplete="off" placeholder="DD/MM/YYYY - W - 0001" required></label><button class="btn primary">Find my waiver members</button></form>
+      <details><summary>Find my waiver by email</summary><p>We will email you a code to verify access to your waiver members. No client account is required.</p>
+        <form class="client-form" method="post" action="{{ url_for('kiosk_email_code') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><label>Email used on your waiver<input type="email" name="email" maxlength="255" autocomplete="off" required></label><button class="btn">Email me a verification code</button></form>
+      </details>
+    </section>
+    <section class="kiosk-choice"><h2>Complete a waiver</h2><p>Complete the waiver for yourself and the people you are responsible for. No account or email verification is needed to complete a new waiver.</p>
+      <form method="post" action="{{ url_for('kiosk_new_waiver') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><button class="btn primary">Start a new waiver</button></form>
+    </section>
+  </div>
+  {% endif %}
+  <p>Please ask CL Paints staff if you need help. This is a shared device; your member screen clears automatically.</p>
+</main>{% endblock %}{% block brand_footer %}{% endblock %}

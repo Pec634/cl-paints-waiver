@@ -27,7 +27,8 @@ def define_model(db):
     return KioskSession
 
 
-def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_required, render_waiver, create_waiver):
+def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_required, render_waiver, create_waiver,
+             Participant, Account, Code, Custodian, send_email):
     def active():
         kiosk_id = session.get('kiosk_id')
         if not kiosk_id:
@@ -35,6 +36,7 @@ def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_requi
         item = db.session.get(Kiosk, kiosk_id)
         if item and item.phase == 'complete' and item.completed_at and datetime.utcnow() >= item.completed_at + timedelta(seconds=30):
             clear_client()
+            clear_lookup()
             item.phase='signup'; item.waiver_id=None; item.completed_at=None
             db.session.commit()
         return item if item and item.phase != 'closed' else None
@@ -47,7 +49,8 @@ def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_requi
     def kiosk_guard():
         item = active()
         if not item: return
-        allowed = {'static','kiosk_screen','kiosk_customer','kiosk_submit','kiosk_staff'}
+        allowed = {'static','kiosk_screen','kiosk_customer','kiosk_submit','kiosk_staff',
+                   'kiosk_new_waiver','kiosk_lookup_id','kiosk_email_code','kiosk_verify_email','kiosk_confirm_members','kiosk_start_over'}
         if request.endpoint not in allowed:
             if request.method == 'GET': return redirect(url_for('kiosk_customer'))
             abort(403, 'This device is in kiosk mode. Staff must unlock it.')
@@ -90,8 +93,10 @@ def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_requi
             import math
             remaining=max(0,math.ceil((item.completed_at+timedelta(seconds=30)-datetime.utcnow()).total_seconds()))
             return render_template('kiosk_complete.html', waiver=db.get_or_404(Waiver,item.waiver_id), reset_seconds=remaining)
+        if item.phase == 'members': return member_page(item)
         clear_client()
-        if item.phase == 'signup': item.phase='waiver'; db.session.commit()
+        if item.phase == 'signup':
+            return render_template('kiosk_start.html', item=item, awaiting_code=bool(session.get('kiosk_code')))
         # Reuse the full signed waiver, terms, declarations and participants form.
         return render_waiver(item.event_id)
 
@@ -143,6 +148,11 @@ def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_requi
         if action != 'exit': abort(400)
         item.pin_attempts=0; item.locked_until=None
         clear_client()
+        clear_lookup()
         item.phase='closed'; session.pop('kiosk_id',None)
         db.session.commit()
         return redirect(url_for('admin_dashboard' if action == 'exit' else 'kiosk_screen'))
+
+    from kiosk_existing import register as register_existing
+    member_page, clear_lookup = register_existing(app, db, Waiver, Participant, Account, Code, Custodian,
+        active, clear_client, send_email)

@@ -136,10 +136,17 @@
     status.setAttribute('role', 'status');
     form.append(status);
     if (!form.querySelector('[name="code"]')) {
-        const envelope = document.createElement('span');
-        envelope.className = 'client-mail-animation';
-        envelope.setAttribute('aria-hidden', 'true');
-        status.before(envelope);
+        const mailScene = document.createElement('div');
+        mailScene.className = 'client-wax-scene';
+        mailScene.setAttribute('aria-hidden', 'true');
+        mailScene.innerHTML = '<span class="client-wax-letter"><span class="client-wax-paper"></span>' +
+            '<span class="client-wax-envelope"></span><span class="client-wax-flap"></span>' +
+            '<span class="client-wax-seal"><span>CL</span></span></span>' +
+            '<span class="client-wax-stamp"><span class="client-wax-handle"></span><span class="client-wax-stamp-base"></span></span>' +
+            '<span class="client-post-road"></span><span class="client-post-van"><span class="client-van-body">POST</span>' +
+            '<span class="client-van-cab"><span class="client-van-window"></span></span><span class="client-van-door"></span>' +
+            '<span class="client-van-wheel client-van-wheel-back"></span><span class="client-van-wheel client-van-wheel-front"></span></span>';
+        status.before(mailScene);
     }
     let sending = false;
     let completing = false;
@@ -182,7 +189,7 @@
                 form.removeAttribute('aria-busy');
                 status.textContent = '';
             }
-        }, reducedMotion.matches ? 0 : 1600);
+        }, reducedMotion.matches ? 0 : codeInput ? 1600 : 4000);
     });
     window.addEventListener('pageshow', () => {
         window.clearTimeout(submitTimer);

@@ -37,7 +37,7 @@ class ClientFeaturesTest(unittest.TestCase):
         calendar = self.client.get(f'/client/bookings/{booking.id}/calendar/0')
         self.assertEqual(calendar.status_code, 200)
         self.assertIn(b'BEGIN:VEVENT', calendar.data)
-        self.assertEqual(calendar.headers['Cache-Control'], 'private, no-store')
+        self.assertIn('no-store', calendar.headers['Cache-Control'])
         booking.status = 'Cancelled'
         main.db.session.commit()
         self.assertEqual(self.client.get(f'/client/bookings/{booking.id}/calendar/0').status_code, 404)

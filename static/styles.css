@@ -2669,3 +2669,14 @@ label.moodboard-admin-card > div {
 @media (max-width: 600px) { .privacy-page { margin: 12px; padding: 18px; } }
 
 .staff-report-divider { border-top:2px solid #e9d5ff; padding-top:22px; margin-top:22px; color:#172554; width:100%; }
+
+.kiosk-choice-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin:24px 0; }
+.kiosk-choice { min-width:0; padding:24px; border:1px solid var(--border); border-radius:18px; background:#fffafc; }
+.kiosk-choice h2 { margin-top:0; }
+.kiosk-choice details { margin-top:24px; padding-top:20px; border-top:1px solid var(--border); }
+.kiosk-choice summary { cursor:pointer; font-weight:700; min-height:44px; }
+.kiosk-choice .btn { min-height:48px; }
+.kiosk-choice form + form { margin-top:20px; }
+.kiosk-customer .client-remember-choice { display:flex; align-items:center; gap:12px; min-height:48px; }
+.kiosk-customer .client-remember-choice input { width:22px; height:22px; flex-shrink:0; }
+@media(max-width:650px) { .kiosk-choice-grid { grid-template-columns:minmax(0,1fr); } .kiosk-choice { padding:20px; } }

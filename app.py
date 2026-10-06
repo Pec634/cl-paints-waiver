@@ -2591,7 +2591,8 @@ register_client_features(app, db, ClientEmailPreference, Booking, BookingInvoice
 
 from kiosk import register as register_kiosk
 register_kiosk(app, db, KioskSession, BusinessSetting, Event, Waiver, get_current_client,
-    admin_required, waiver_event, create_waiver)
+    admin_required, waiver_event, create_waiver, Participant, ClientAccount, ClientLoginCode, loyalty_models[3],
+    lambda *args: send_client_email(*args))
 
 register_native_forms(app, db, native_form_models, ClientAccount, Booking, get_current_client, admin_required, lambda *args: send_client_email(*args))
 from staff_reports import register as register_staff_reports

@@ -34,6 +34,10 @@ class KioskTest(unittest.TestCase):
 
     def test_guest_waiver_auto_reset_and_later_account_link(self):
         page = self.admin.get('/kiosk/customer')
+        self.assertIn(b'I already have a waiver', page.data)
+        item = main.db.session.get(main.KioskSession,self.kiosk_id)
+        self.admin.post('/kiosk/new-waiver', data={'csrf_token':item.csrf})
+        page = self.admin.get('/kiosk/customer')
         self.assertIn(b'id="responsibleEmail"', page.data)
         self.assertNotIn(b'Email my verification code', page.data)
         self.assertEqual(self.admin.post('/client/signup', data={}).status_code, 403)
@@ -55,9 +59,82 @@ class KioskTest(unittest.TestCase):
         self.assertIn(main.db.session.get(main.Waiver,item.waiver_id).public_reference.encode(), portal.data)
         item.completed_at=datetime.utcnow()-timedelta(seconds=31)
         main.db.session.commit()
-        self.assertIn(b'id="responsibleEmail"',self.admin.get('/kiosk/customer').data)
-        self.assertEqual(item.phase,'waiver')
+        self.assertIn(b'I already have a waiver',self.admin.get('/kiosk/customer').data)
+        self.assertEqual(item.phase,'signup')
         self.assertIsNone(item.waiver_id)
+
+    def test_id_lookup_is_member_only_and_rejects_wrong_or_expired_ids(self):
+        item = main.db.session.get(main.KioskSession,self.kiosk_id)
+        path = '/kiosk/lookup-id'
+        self.assertEqual(self.admin.post(path, data={'reference':self.fixture.waiver.public_reference}).status_code,400)
+        self.admin.post(path, data={'csrf_token':item.csrf,'reference':self.fixture.waiver.public_reference})
+        page = self.admin.get('/kiosk/customer')
+        self.assertIn(b'Alex Client',page.data)
+        self.assertIn(b'Sam Client',page.data)
+        self.assertNotIn(self.fixture.account.email.encode(),page.data)
+        self.assertNotIn(b'Original signature',page.data)
+        with self.admin.session_transaction() as state:
+            self.assertNotIn('client_id',state)
+        self.assertEqual(self.admin.get('/client/account').status_code,302)
+        self.assertEqual(self.admin.post('/kiosk/confirm-members',data={'csrf_token':item.csrf,'member_id':'999999'}).status_code,400)
+        self.admin.post('/kiosk/confirm-members',data={'csrf_token':item.csrf,'member_id':self.fixture.person.id})
+        complete=self.admin.get('/kiosk/customer')
+        self.assertIn(b'Waiver members confirmed',complete.data)
+        self.assertIn(b'Alex Client',complete.data)
+        self.assertNotIn(b'Sam Client',complete.data)
+        item.completed_at=datetime.utcnow()-timedelta(seconds=31);main.db.session.commit()
+        self.admin.get('/kiosk/customer')
+        with self.admin.session_transaction() as state:
+            self.assertNotIn('kiosk_waivers',state)
+            self.assertNotIn('kiosk_selected_members',state)
+        self.fixture.waiver.expiry_date=datetime.utcnow()-timedelta(days=1);main.db.session.commit()
+        self.admin.post(path,data={'csrf_token':item.csrf,'reference':self.fixture.waiver.public_reference})
+        self.assertEqual(item.phase,'signup')
+        self.assertNotIn(b'Alex Client',self.admin.get('/kiosk/customer').data)
+
+    def test_forged_reference_dates_and_archived_waivers_are_rejected(self):
+        item=main.db.session.get(main.KioskSession,self.kiosk_id)
+        reference=self.fixture.waiver.public_reference
+        wrong_date=('01/01/2000' if not reference.startswith('01/01/2000') else '02/01/2000')+reference[10:]
+        for value in (wrong_date, str(self.fixture.waiver.id)):
+            self.admin.post('/kiosk/lookup-id',data={'csrf_token':item.csrf,'reference':value})
+            self.assertEqual(item.phase,'signup')
+        self.fixture.waiver.is_archived=True;main.db.session.commit()
+        self.admin.post('/kiosk/lookup-id',data={'csrf_token':item.csrf,'reference':reference})
+        self.assertEqual(item.phase,'signup')
+
+    def test_email_lookup_verifies_without_portal_signin_and_members_timeout(self):
+        item=main.db.session.get(main.KioskSession,self.kiosk_id)
+        main.ClientLoginCode.query.filter_by(email=self.fixture.account.email).delete();main.db.session.commit()
+        with patch.object(main,'send_client_email',return_value=True) as send:
+            self.admin.post('/kiosk/email-code',data={'csrf_token':item.csrf,'email':self.fixture.account.email})
+            raw=re.search(r'code is (\d{6})',send.call_args.args[2]).group(1)
+        self.assertIn(b'Check your email',self.admin.get('/kiosk/customer').data)
+        self.admin.post('/kiosk/verify-email',data={'csrf_token':item.csrf,'code':'WRONG'})
+        self.assertEqual(item.phase,'signup')
+        self.admin.post('/kiosk/verify-email',data={'csrf_token':item.csrf,'code':raw})
+        self.assertIn(b'Alex Client',self.admin.get('/kiosk/customer').data)
+        with self.admin.session_transaction() as state:
+            self.assertNotIn('client_id',state)
+            state['kiosk_lookup_expires']=0
+        self.assertEqual(self.admin.get('/kiosk/customer').status_code,302)
+        self.assertEqual(item.phase,'signup')
+
+    def test_transferred_members_and_lookup_throttle(self):
+        item=main.db.session.get(main.KioskSession,self.kiosk_id)
+        Custodian=main.loyalty_models[3]
+        target=self.fixture.make_waiver('someone@example.com','TARGET-KIOSK')
+        main.db.session.add(Custodian(participant_id=self.fixture.person.id,client_id=self.fixture.account.id,waiver_id=target.id));main.db.session.commit()
+        self.admin.post('/kiosk/lookup-id',data={'csrf_token':item.csrf,'reference':self.fixture.waiver.public_reference})
+        page=self.admin.get('/kiosk/customer')
+        self.assertNotIn(b'Alex Client',page.data)
+        self.assertIn(b'Sam Client',page.data)
+        self.admin.post('/kiosk/start-over',data={'csrf_token':item.csrf})
+        for _ in range(10):
+            self.admin.post('/kiosk/lookup-id',data={'csrf_token':item.csrf,'reference':'NOT-FOUND'})
+        self.admin.post('/kiosk/lookup-id',data={'csrf_token':item.csrf,'reference':self.fixture.waiver.public_reference})
+        self.assertEqual(item.phase,'signup')
+        self.assertIn(b'Please wait a minute',self.admin.get('/kiosk/customer').data)
 
     def test_pin_exit_route_guard_lockout_and_reset_removed(self):
         item = main.db.session.get(main.KioskSession,self.kiosk_id)

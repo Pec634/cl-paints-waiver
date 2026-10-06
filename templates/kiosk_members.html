@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% block body %}
+<main class="kiosk-customer panel">
+  <h1>Who is being painted?</h1><p>These members have a current waiver. Select only the people being painted, then show the next screen to staff.</p>
+  {% for category, message in get_flashed_messages(with_categories=true) %}<p role="status">{{ message }}</p>{% endfor %}
+  <form class="client-form" method="post" action="{{ url_for('kiosk_confirm_members') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}">
+    {% for row in rows %}<fieldset class="kiosk-choice"><legend>Waiver {{ row.reference }}</legend>
+      {% for person in row.members %}<label class="client-remember-choice"><input type="checkbox" name="member_id" value="{{ person.id }}"><span>{{ person.first_name }} {{ person.last_name }}</span></label>{% endfor %}
+    </fieldset>{% endfor %}
+    <button class="btn primary" {% if not rows %}disabled{% endif %}>Confirm selected members</button>
+  </form>
+  <p>This check does not award loyalty points. Use the event loyalty QR on your own device for points.</p>
+  <form id="kioskStartOver" method="post" action="{{ url_for('kiosk_start_over') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><button class="btn">Start over / next customer</button></form>
+  <p id="kioskMemberTimeout" role="status">This screen clears automatically after two minutes.</p>
+</main>
+<script>
+const lookupExpires={{ session.get('kiosk_lookup_expires', 0)|tojson }}*1000;
+const memberTimeout=()=>{if(Date.now()>=lookupExpires)document.getElementById('kioskStartOver').requestSubmit();};
+setInterval(memberTimeout,1000);document.addEventListener('visibilitychange',memberTimeout);memberTimeout();
+</script>{% endblock %}{% block brand_footer %}{% endblock %}
