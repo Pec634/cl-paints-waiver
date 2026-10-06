@@ -656,7 +656,7 @@ def admin_dashboard():
         client_signup_count=ClientAccount.query.count(),
         client_signup_month_count=ClientAccount.query.filter(
             ClientAccount.created_at >= datetime.combine(today.replace(day=1), datetime.min.time())).count(),
-        upcoming_event_count=Event.query.filter(Event.event_date >= today, Event.status != "Closed").count(),
+        upcoming_event_count=Event.query.filter(Event.event_date >= today, Event.status.notin_(["Closed", "Archived"])).count(),
         valid_waiver_count=valid_waivers.count(), reward_count=reward_count,
         pending_bookings=pending_query.order_by(Booking.submitted_at.asc()).limit(5).all(),
         expiring_count=expiring_query.count(),
@@ -687,6 +687,9 @@ def waiver_event(event_id):
 
     if event is None:
         return "Event not found.", 404
+
+    if event.status == 'Archived':
+        return 'This event has finished. Its waiver link is closed.', 410
 
     moodboard_rows = EventMoodboardImage.query.filter_by(
         event_id=event.id
@@ -928,7 +931,7 @@ def create_waiver(event_id=None):
             "error": "Event not found."
         }), 404
 
-    if current_event and current_event.status == "Closed":
+    if current_event and current_event.status in ("Closed", "Archived"):
         return jsonify({
             "success": False,
             "error": "New waiver submissions are currently closed."
@@ -2422,7 +2425,8 @@ def delete_waiver(waiver_id):
 @app.get("/admin/events")
 @admin_required
 def admin_events():
-    events = Event.query.order_by(Event.id.desc()).all()
+    archived_view = request.args.get('view') == 'archived'
+    events = Event.query.filter(Event.status == 'Archived' if archived_view else Event.status != 'Archived').order_by(Event.id.desc()).all()
 
     current_event = Event.query.filter_by(
         is_current=True
@@ -2431,7 +2435,8 @@ def admin_events():
     return render_template(
         "admin_events.html",
         events=events,
-        current_event=current_event
+        current_event=current_event, archived_view=archived_view,
+        client_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32))
     )
 
 
@@ -2489,11 +2494,33 @@ def admin_set_event_status(event_id):
 
     new_status = request.form.get("status", "")
 
-    if new_status in ["Open", "Closing Soon", "Closed"]:
+    if event.status != 'Archived' and new_status in ["Open", "Closing Soon", "Closed"]:
         event.status = new_status
         db.session.commit()
 
     return redirect(url_for("admin_events"))
+
+@app.post('/admin/events/<int:event_id>/archive')
+@admin_required
+def admin_archive_event(event_id):
+    if not session.get('client_csrf') or not secrets.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
+        abort(400)
+    event = db.get_or_404(Event, event_id)
+    if KioskSession.query.filter(KioskSession.event_id == event.id, KioskSession.phase != 'closed').first():
+        return redirect(url_for('admin_events', deletion_error='kiosk'))
+    event.status = 'Archived'; event.is_current = False
+    db.session.commit()
+    return redirect(url_for('admin_events', archived='yes'))
+
+@app.post('/admin/events/<int:event_id>/restore')
+@admin_required
+def admin_restore_event(event_id):
+    if not session.get('client_csrf') or not secrets.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
+        abort(400)
+    event = db.get_or_404(Event, event_id)
+    if event.status == 'Archived':
+        event.status = 'Closed'; db.session.commit()
+    return redirect(url_for('admin_events', restored='yes'))
 
 @app.post("/admin/events/<int:event_id>/delete")
 @admin_required
@@ -2503,10 +2530,23 @@ def admin_delete_event(event_id):
     if event is None:
         return redirect(url_for("admin_events"))
 
-    db.session.delete(event)
-    db.session.commit()
-
-    return redirect(url_for("admin_events"))
+    EventCode, _, Visit, _, _ = loyalty_models
+    if Visit.query.filter_by(event_id=event.id).first():
+        return redirect(url_for('admin_events', deletion_error='visits'))
+    if KioskSession.query.filter(KioskSession.event_id == event.id, KioskSession.phase != 'closed').first():
+        return redirect(url_for('admin_events', deletion_error='kiosk'))
+    try:
+        # Remove event-only links, preserving waivers, artwork and loyalty history.
+        EventMoodboardImage.query.filter_by(event_id=event.id).delete(synchronize_session=False)
+        EventCode.query.filter_by(event_id=event.id).delete(synchronize_session=False)
+        KioskSession.query.filter_by(event_id=event.id, phase='closed').delete(synchronize_session=False)
+        db.session.delete(event)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        app.logger.exception('Event %s could not be deleted.', event_id)
+        return redirect(url_for('admin_events', deletion_error='linked'))
+    return redirect(url_for('admin_events', deleted='yes'))
 
 @app.get("/admin/waivers/<int:waiver_id>")
 @admin_required

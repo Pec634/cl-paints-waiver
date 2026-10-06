@@ -30,6 +30,9 @@ Event Management | CL Paints
     </aside>
 
     <main>
+        {% if request.args.get('deletion_error') %}
+        <p class="booking-admin-error" role="alert">{% if request.args.get('deletion_error') == 'visits' %}This event has recorded loyalty visits and cannot be deleted. Archive the event instead to preserve customer points and visit history.{% elif request.args.get('deletion_error') == 'kiosk' %}This event has an active kiosk. Exit that kiosk using the staff PIN before archiving or deleting the event.{% else %}This event could not be deleted because linked records must be retained. No changes were saved. Archive the event instead, or check the server log.{% endif %}</p>
+        {% elif request.args.get('deleted') == 'yes' %}<p class="booking-admin-notice" role="status">Event deleted. Existing waiver records and saved artwork have been retained.</p>{% endif %}
 
         <div class="top">
             <div>
@@ -40,6 +43,19 @@ Event Management | CL Paints
 
         </div>
 
+        <nav class="paint-actions" aria-label="Event lists" style="margin-bottom:24px">
+            <a class="btn" href="{{ url_for('admin_events') }}" {% if not archived_view %}aria-current="page"{% endif %}>Active events</a>
+            <a class="btn" href="{{ url_for('admin_events', view='archived') }}" {% if archived_view %}aria-current="page"{% endif %}>Archived events</a>
+        </nav>
+        {% if request.args.get('archived') == 'yes' %}<p class="booking-admin-notice" role="status">Event archived. Loyalty visits, points and waiver history are preserved. Public links are closed.</p>{% endif %}
+        {% if request.args.get('restored') == 'yes' %}<p class="booking-admin-notice" role="status">Event restored as Closed. Open it when you are ready to accept visitors.</p>{% endif %}
+        {% if archived_view %}
+        <section class="panel"><h2>Archived events</h2><p>Past events are retained for loyalty history and reporting.</p>
+        {% for event in events %}<article class="client-record"><strong>{{ event.name }}</strong><span>{{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; Archived</span>
+        <div class="paint-actions"><a class="btn" href="{{ url_for('loyalty.event_admin', event_id=event.id) }}">View loyalty history</a>
+        <form method="post" action="{{ url_for('admin_restore_event', event_id=event.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn">Restore as closed</button></form></div></article>
+        {% else %}<p>No archived events yet.</p>{% endfor %}</section>
+        {% else %}
         <section class="panel">
 
             <div class="panel-heading">
@@ -100,7 +116,7 @@ Event Management | CL Paints
                             <th>Waiver Status</th>
                             <th>Waiver Link</th>
                             <th>Moodboard &amp; loyalty</th>
-                            <th>Delete</th>
+                            <th>Archive / delete</th>
                         </tr>
                     </thead>
 
@@ -222,7 +238,10 @@ Event Management | CL Paints
                                 <a class="btn small" href="{{ url_for('loyalty.event_admin', event_id=event.id) }}">Loyalty QR &amp; visits</a>
                             </td>
 
-                            <td data-label="Delete">
+                            <td data-label="Archive / delete">
+                                <form method="post" action="{{ url_for('admin_archive_event', event_id=event.id) }}" onsubmit="return confirm('Archive this event? Public links close and loyalty history is retained.');">
+                                    <input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn small" type="submit">Archive</button>
+                                </form>
                                 <form
                                     method="post"
                                     action="/admin/events/{{ event.id }}/delete"
@@ -256,6 +275,7 @@ Event Management | CL Paints
 
         </section>
 
+        {% endif %}
     </main>
 
 </div>
