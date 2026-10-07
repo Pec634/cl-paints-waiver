@@ -2,11 +2,40 @@
   const get = id => document.getElementById(`paint-${id}`);
   const canvas = get('canvas'), base = get('base');
   if (!canvas) return;
+  const featureControls=document.querySelector('.paint-controls');
+  let keyboardControls=false,mouseControls=false;
+  document.addEventListener('keydown',()=>{keyboardControls=true;});
+  document.addEventListener('pointerdown',event=>{keyboardControls=false;mouseControls=event.pointerType==='mouse';},true);
+  featureControls?.addEventListener('pointerover',event=>{mouseControls=event.pointerType==='mouse';});
+  function closeUnusedFeatures(){
+    if(!featureControls||!mouseControls)return;
+    featureControls.querySelectorAll(':scope > details[open]').forEach(group=>{
+      if(group.matches(':hover')||(keyboardControls&&group.contains(document.activeElement)))return;
+      // Native colour/select popups can temporarily move the pointer outside.
+      const focused=document.activeElement;
+      if(group.contains(focused)&&(focused.matches('select,input[type="color"]'))&&document.hasFocus())return;
+      group.open=false;
+      group.querySelectorAll('details[open]').forEach(nested=>{nested.open=false;});
+    });
+  }
+  featureControls?.addEventListener('pointerout',event=>{
+    if(event.pointerType!=='mouse'||event.buttons)return;
+    const group=event.target.closest('.paint-option-group');
+    if(!group||group.contains(event.relatedTarget))return;
+    window.setTimeout(closeUnusedFeatures,120);
+  });
+  featureControls?.addEventListener('focusout',()=>window.setTimeout(closeUnusedFeatures,0));
+  featureControls?.addEventListener('change',()=>{
+    // Once a native picker closes, allow its panel to collapse on mouse exit.
+    if(mouseControls&&!keyboardControls&&document.activeElement?.matches('select,input[type="color"]'))document.activeElement.blur();
+    closeUnusedFeatures();
+  });
   let ctx = canvas.getContext('2d');const bg = base.getContext('2d');
   const strokes = []; let redo = [], active = null;
   const cakes={custom:['#f52f83','#9333ea','#0ea5e9','#ffffff'],rainbow:['#ef4444','#f97316','#facc15','#22c55e','#2563eb','#9333ea'],sunset:['#fff7ad','#fbbf24','#f97316','#db2777'],ocean:['#ffffff','#67e8f9','#0ea5e9','#1e3a8a'],forest:['#fef08a','#a3e635','#16a34a','#14532d'],berry:['#ffffff','#f9a8d4','#ec4899','#7e22ce']};
   let deadline=null,timedFinished=false;
   let blinking=false,gazeX=0,gazeY=0,animationFrame=null;
+  let paintFrame=null,faceVersion=0,referenceSignature='';
   function face() {
     if(window.CLPortraits?.active())return window.CLPortraits.face();
     const shape = get('face').value;
@@ -34,6 +63,7 @@
     bg.closePath();
   }
   function drawFace() {
+    faceVersion++;
     if(window.CLPortraits?.draw(base))return;
     const f=face(),skin=window.CLCharacterColours?.skin||get('skin').value,hair=get('hair').value,colour=get('hair-colour').value;
     const top=f.y-f.ry;
@@ -160,7 +190,12 @@
     ctx.globalCompositeOperation=stroke.tool==='eraser' ? 'destination-out' : 'source-over';
     ctx.strokeStyle=stroke.colour;ctx.fillStyle=stroke.colour;ctx.lineWidth=stroke.size;ctx.lineCap='round';ctx.lineJoin='round';
     ctx.globalAlpha=(stroke.opacity || 100)/100;
-    const points=stroke.points.map(p=>mirror?mirrorPoint(p,stroke):p);
+    let points=stroke.points;
+    if(mirror){
+      const x=stroke.mirrorAxis??300,y=stroke.mirrorAxisY??360,a=(stroke.mirrorAngle||0)*Math.PI/180;
+      const ux=Math.sin(a),uy=Math.cos(a);
+      points=stroke.points.map(p=>{const dx=p.x-x,dy=p.y-y,dot=dx*ux+dy*uy;return {x:x+2*dot*ux-dx,y:y+2*dot*uy-dy};});
+    }
     if(mirror&&stroke.mirrorScope&&stroke.mirrorScope!=='whole'){ctx.beginPath();ctx.rect(0,stroke.mirrorScope==='lower'?350:0,600,stroke.mirrorScope==='lower'?370:350);ctx.clip();}
     if(stroke.tool==='blend'){for(const p of points){ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,stroke.size,0,Math.PI*2);ctx.clip();ctx.filter='blur(3px)';ctx.globalAlpha=.35;ctx.drawImage(ctx.canvas,0,0);ctx.restore();}ctx.restore();return;}
     if(stroke.finish==='metallic'||stroke.finish==='pearl'){const g=ctx.createLinearGradient(0,Math.min(...points.map(p=>p.y))-stroke.size,0,Math.max(...points.map(p=>p.y))+stroke.size);g.addColorStop(0,stroke.colour);g.addColorStop(.45,stroke.finish==='pearl'?'#fdf4ff':'#fff8dc');g.addColorStop(.6,stroke.colour);g.addColorStop(1,stroke.colour);ctx.strokeStyle=g;ctx.fillStyle=g;}
@@ -205,12 +240,19 @@
     if(stroke.finish==='glitter'&&stroke.tool!=='eraser'){ctx.fillStyle='#fff';for(const p of points){ctx.fillRect(p.x-2,p.y-2,2,2);ctx.fillRect(p.x+3,p.y+2,1,1);}}
     ctx.restore();
   }
-  function render() {
+  function render(reuseLayers=false) {
+    if(paintFrame!==null){cancelAnimationFrame(paintFrame);paintFrame=null;}
     ctx.clearRect(0,0,600,720);
-    if(window.CLStudioEdits)window.CLStudioEdits.render(draw,strokes.concat(active ? [active] : []),value=>ctx=value,canvas);else for(const stroke of strokes.concat(active ? [active] : [])){draw(stroke);if(stroke.mirror)draw(stroke,true);}
-    if(window.CLStudioEdits)window.CLStudioEdits.refresh();else{get('undo').disabled=!strokes.length;get('redo').disabled=!redo.length;}
-    updateMission();
+    if(window.CLStudioEdits)window.CLStudioEdits.render(draw,strokes,value=>ctx=value,canvas,active,reuseLayers);else for(const stroke of strokes.concat(active ? [active] : [])){draw(stroke);if(stroke.mirror)draw(stroke,true);}
+    if(!active){
+      if(window.CLStudioEdits)window.CLStudioEdits.refresh();else{get('undo').disabled=!strokes.length;get('redo').disabled=!redo.length;}
+      updateMission();
+    }
     updateReference();
+  }
+  function schedulePaint(){
+    if(paintFrame!==null)return;
+    paintFrame=requestAnimationFrame(()=>{paintFrame=null;render(true);});
   }
   // Screen-space preview only: never included in painting or downloads.
   const brushCursor=document.createElement('div');brushCursor.className='paint-brush-cursor';brushCursor.hidden=true;brushCursor.setAttribute('aria-hidden','true');
@@ -232,7 +274,7 @@
   const animationToggle=get('animate'),reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
   animationToggle.checked=!reducedMotion.matches;
   function animationEnabled(){return animationToggle.checked&&!document.hidden&&!window.CLPortraits?.active();}
-  function refreshAnimation(){if(animationFrame!==null)return;animationFrame=requestAnimationFrame(()=>{animationFrame=null;drawFace();render();});}
+  function refreshAnimation(){if(animationFrame!==null)return;animationFrame=requestAnimationFrame(()=>{animationFrame=null;drawFace();updateReference();});}
   function resetAnimation(){blinking=false;gazeX=0;gazeY=0;refreshAnimation();}
   animationToggle.addEventListener('change',resetAnimation);
   get('model').addEventListener('change',resetAnimation);
@@ -256,7 +298,7 @@
     const p=point(event),last=active.points[active.points.length-1];
     const distance=Math.hypot(p.x-last.x,p.y-last.y);
     if(distance < (['stars','dots','hearts','flowers'].includes(active.tool) ? active.size*1.5 : 2))return;
-    active.points.push(p);render();
+    active.points.push(p);schedulePaint();
   });
   function finish(event) {
     if(window.CLStudioEdits?.pointerUp(event))return;
@@ -345,6 +387,9 @@
   }
   function updateReference() {
     const mode=get('game-mode').value,customer=customers[mission%customers.length];
+    const signature=`${mode}:${mission}:${mode==='follow'?faceVersion:0}:${get('show-guide').checked}`;
+    if(signature===referenceSignature)return;
+    referenceSignature=signature;
     get('customer-card').hidden=mode!=='customer';get('reference-panel').hidden=mode!=='follow';
     get('customer-name').textContent=`Meet ${customer.name}`;get('customer-request').textContent=customer.request;
     const guide=get('guide').getContext('2d');guide.clearRect(0,0,600,720);
@@ -413,7 +458,7 @@
   get('request-colours').addEventListener('click',()=>{const c=customers[mission%customers.length];get('colour-mode').value='solid';get('colour').value=c.colours[0];cakePreview();get('status').textContent='First requested colour loaded. Use the two highlighted palette colours.';document.querySelectorAll('.paint-palette button').forEach(button=>button.setAttribute('aria-pressed',String(c.colours.includes(button.getAttribute('aria-label').replace('Paint colour ','')))));});
   get('start-timer').addEventListener('click',()=>{if(active)return;if(get('game-mode').value!=='timed')mission=0;get('game-mode').value='timed';get('tasks').hidden=false;get('progress').hidden=false;deadline=Date.now()+120000;timedFinished=false;missionRound++;won=false;loadGamePrompt();});
   setInterval(()=>{if(!deadline)return;const seconds=Math.max(0,Math.ceil((deadline-Date.now())/1000));get('timer').textContent=`Time left: ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;if(!seconds){deadline=null;timedFinished=true;if(active)finish({pointerId:active.pointer});get('timer').textContent='Round complete! Download your design, start again or switch to free play.';}},250);
-  window.CLStudioCore={strokes,render,drawFace,cakes,canvas,base,point,mirrorPoint,
+  window.CLStudioCore={strokes,render,scheduleRender:schedulePaint,drawFace,cakes,canvas,base,point,mirrorPoint,
     renderPreview(target,previewStrokes){const previous=ctx;try{ctx=target.getContext('2d');ctx.clearRect(0,0,600,720);for(const stroke of previewStrokes){draw(stroke);if(stroke.mirror)draw(stroke,true);}}finally{ctx=previous;}}
   };
   drawFace();render();

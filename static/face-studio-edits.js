@@ -22,6 +22,8 @@
  <p id="edit-status" role="status">Choose a detail to edit, or paint on a layer.</p></div>`;
  document.querySelector('.paint-controls').append(panel);
  const layers=[{name:'Base colours',visible:true},{name:'Linework',visible:true},{name:'Decorations',visible:true}],order=[0,1,2],surfaces=layers.map(()=>Object.assign(document.createElement('canvas'),{width:600,height:720}));
+ const activeSurface=Object.assign(document.createElement('canvas'),{width:600,height:720});
+ let layersCached=false;
  let selected=-1,drag=null,transform=null,applied={scale:1,rotation:0},selectionSignature='';const undo=[],redo=[],versions=[];
  const clone=x=>JSON.parse(JSON.stringify(x));
  function snapshot(){return {strokes:clone(core.strokes),layers:clone(layers),order:[...order]};}
@@ -61,9 +63,30 @@
  window.CLStudioEdits={checkpoint,refresh,snapshot,restore,appearance,
   undo(){if(!undo.length)return;redo.push(snapshot());restore(undo.pop());},redo(){if(!redo.length)return;undo.push(snapshot());restore(redo.pop());},
   strokeSettings(){return {layer:Number(get('layer').value),finish:get('finish').value,smoothing:get('smooth').checked,mirrorAxis:Number(get('axis').value),mirrorAxisY:Number(get('axis-y').value),mirrorAngle:Number(get('axis-angle').value),mirrorScope:get('scope').value};},
-  render(draw,strokes,setContext,canvas){const main=canvas.getContext('2d');for(const id of order){const context=surfaces[id].getContext('2d');context.clearRect(0,0,600,720);setContext(context);for(const stroke of strokes){if((stroke.layer||0)!==id)continue;draw(stroke);if(stroke.mirror)draw(stroke,true);}if(layers[id].visible)main.drawImage(surfaces[id],0,0);}setContext(main);},
+  render(draw,strokes,setContext,canvas,active=null,reuseLayers=false){
+   const main=canvas.getContext('2d');
+   // Completed layers are stable during brush movement. Keep erasing and
+   // blending on a copy of the active layer so their compositing stays correct.
+   if(!layersCached||!reuseLayers||!active){
+    for(const id of order){
+     const context=surfaces[id].getContext('2d');context.clearRect(0,0,600,720);setContext(context);
+     for(const stroke of strokes){if((stroke.layer||0)!==id)continue;draw(stroke);if(stroke.mirror)draw(stroke,true);}
+    }
+    layersCached=true;
+   }
+   for(const id of order){
+    if(!layers[id].visible)continue;
+    let surface=surfaces[id];
+    if(active&&(active.layer||0)===id){
+     const context=activeSurface.getContext('2d');context.clearRect(0,0,600,720);context.drawImage(surface,0,0);setContext(context);
+     draw(active);if(active.mirror)draw(active,true);surface=activeSurface;
+    }
+    main.drawImage(surface,0,0);
+   }
+   setContext(main);
+  },
   pointerDown(event,p){if(get('mode').value==='paint')return false;event.preventDefault();const result=hit(p);selected=result?result.index:-1;resetTransform();refresh();if(get('mode').value==='delete'){removeSelected();return true;}if(result){checkpoint();core.canvas.setPointerCapture(event.pointerId);drag={id:event.pointerId,start:p,points:clone(selectedStroke().points),mirrored:result.mirrored};notice('Drag the detail to move it; use Resize and Rotate below.');}return true;},
-  pointerMove(event,p){if(!drag||drag.id!==event.pointerId)return false;let dx=p.x-drag.start.x,dy=p.y-drag.start.y;if(drag.mirrored){const s=selectedStroke(),origin={x:s.mirrorAxis??300,y:s.mirrorAxisY??360},reflected=core.mirrorPoint({x:origin.x+dx,y:origin.y+dy},s);dx=reflected.x-origin.x;dy=reflected.y-origin.y;}selectedStroke().points=drag.points.map(point=>({x:point.x+dx,y:point.y+dy}));core.render();return true;},
+  pointerMove(event,p){if(!drag||drag.id!==event.pointerId)return false;let dx=p.x-drag.start.x,dy=p.y-drag.start.y;if(drag.mirrored){const s=selectedStroke(),origin={x:s.mirrorAxis??300,y:s.mirrorAxisY??360},reflected=core.mirrorPoint({x:origin.x+dx,y:origin.y+dy},s);dx=reflected.x-origin.x;dy=reflected.y-origin.y;}selectedStroke().points=drag.points.map(point=>({x:point.x+dx,y:point.y+dy}));core.scheduleRender();return true;},
   pointerUp(event){if(!drag||drag.id!==event.pointerId)return false;drag=null;refresh();return true;}
  };
  // Additional illustrated anatomy controls, kept beside the existing finishing details.

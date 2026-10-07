@@ -59,6 +59,8 @@
 .paint-workspace{width:100%;max-width:600px;margin:0 auto;min-width:0;display:flex;flex-direction:column}
 .paint-workspace>*{order:2}.paint-workspace>.paint-viewport{order:0}
 .paint-workspace .paint-zoom-controls{margin:14px 0 0}
+.paint-workspace > .paint-canvas-actions { order:1; justify-content:center; gap:8px; margin:0 0 12px; padding:0 8px; }
+.paint-canvas-actions .btn { min-height:44px; }
 .paint-studio .paint-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:start;width:100%;min-width:0}
 .paint-controls>.paint-option-group{min-width:0;width:100%;box-sizing:border-box}
 .paint-controls>.paint-actions{grid-column:1/-1;order:5;justify-content:center}
