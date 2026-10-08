@@ -1,5 +1,65 @@
 # Admin and client portal features
 
+## Email images, attachments and links
+
+Open **Settings → Email configuration → Images, documents & links**. Add a label
+and choose booking updates, reward notifications or both. Images (PNG/JPEG/GIF)
+are embedded below the heading; documents (PDF/DOCX/XLSX/PPTX/UTF-8 TXT, or image
+files) are downloadable email attachments; labelled HTTPS links appear below
+the email content and are also included in the plain-text version.
+
+Preview the relevant saved layout before sending. The preview serves files through
+admin-only routes, while actual emails carry file content, including inline image
+attachments. Maximum 2 MB per file, 5 MB of files overall and 12 items. Remove an
+item to stop including it in future emails, or remove and re-add it to replace it.
+Use general material appropriate for every recipient in the chosen email group.
+These additions apply to the existing configurable booking-update/reward layouts,
+not verification emails, marketing campaigns or booking acknowledgement emails.
+Restart the application to create the new email-media table. No new service or
+credentials are required beyond the existing Resend configuration.
+
+Email configuration uses a composer layout with a template menu, subject and message
+editor, insertion tools and a saved-email preview. Select Booking updates or Rewards
+to edit that template; insert client name, reference and update details at the cursor.
+The image/file/link toolbar opens the media panel with the selected template and
+item type already chosen. Shared design and media settings expand when needed.
+The live preview updates while editing subject, content, shared design and layout.
+Saving does not send an email. The preview appears below the editor on narrow screens.
+
+**Custom layout** lets each template choose width, spacing, font, text size, line
+spacing, corner rounding, colours, alignment and portal-link wording. Move blocks
+up/down to place images, links and document labels around the heading, message,
+portal link and footer. Images have percentage width, alignment and captions;
+links can appear as text or buttons. Save content & layout persists the current
+template, layout and shared heading/footer/accent settings. Shared design changes
+apply to both email groups; block order and custom styles are separate per group.
+Live previews use sample data and the same renderer as actual notifications. An
+invalid value leaves the last valid preview visible and displays an explanation.
+Previewing alone does not save changes or send emails. Save before leaving the
+page or uploading another item. Files are managed in the attachment panel; after
+adding a file its block becomes available for placement.
+
+## Admin client profiles
+
+Open a client name in **Clients** or a client result in **Search all records**.
+The private profile shows contact details, account creation date, booking counts,
+review requests, unread client messages, upcoming accepted events and payment totals.
+The outstanding summary includes accepted bookings only; cancelled and declined
+booking arrangements remain available in the Payments section.
+
+Use the section links for paginated bookings, payment ledgers and invoices, signed
+waivers, conversations, current loyalty members and referral codes, or admin-only
+notes. Booking links open the existing activity timeline and actions. Viewing the
+profile does not mark conversations read. History is linked by account email;
+changing an account email does not merge records held under older addresses.
+Transferred members appear under their current custodian.
+
+Admin notes are append-only and timestamped. They are never sent as notifications
+or shown in the client portal. Dates of birth, signatures, login codes and payment
+card information are not shown in the profile overview. Contact changes remain in
+the existing client account workflow. Restart the application to create the new
+admin-client-note table without replacing existing records.
+
 ## Importing records
 
 Choose **Imports** in the admin sidebar. Download a client or booking CSV template,

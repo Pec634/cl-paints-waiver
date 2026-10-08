@@ -1,0 +1,21 @@
+<link rel="stylesheet" href="{{ url_for('static',filename='email-composer.css') }}">
+<section class="email-workspace" aria-label="Email settings workspace">
+<nav class="email-folders" aria-label="Email templates"><h2>Email templates</h2><button type="button" data-email-select="booking" aria-pressed="true">Booking updates</button><button type="button" data-email-select="reward" aria-pressed="false">Rewards</button><a href="#email-design">Shared design</a><a href="#email-media">Images &amp; attachments</a><hr><a href="{{ url_for('email_history') }}">Delivery history</a><a href="{{ url_for('marketing_dashboard') }}">Marketing campaigns</a></nav>
+<div class="email-editor">
+{% for area,label,purpose in [('booking','Booking updates','Sent when a visible booking detail changes.'),('reward','Reward notifications','Sent for referral and loyalty updates.')] %}
+<form method="post" class="email-compose client-form" id="email-{{ area }}" data-email-composer="{{ area }}">
+<header><h2>{{ label }}</h2><span data-email-draft-status>Saved template</span></header>
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="section" value="{{ 'email_bookings' if area=='booking' else 'email_rewards' }}">
+<p class="email-recipient"><strong>To</strong> The client receiving this {{ 'booking' if area=='booking' else 'reward' }} update</p>
+<label class="email-subject">Subject<input name="notification_{{ area }}_subject" value="{{ settings['notification_'+area+'_subject'] }}" maxlength="200" required></label>
+<label class="email-body">Message<textarea name="notification_{{ area }}_body" rows="14" maxlength="5000" required>{{ settings['notification_'+area+'_body'] }}</textarea></label>
+<div class="email-compose-tools" aria-label="Message tools"><span>Insert:</span>{% for token,label in [('{name}','Client name'),('{reference}','Reference'),('{details}','Update details')] %}<button type="button" data-email-token="{{ token }}">{{ label }}</button>{% endfor %}</div>
+<footer><button class="btn primary" type="submit">Save template</button><button type="button" class="btn" data-email-add="image">Add image</button><button type="button" class="btn" data-email-add="document">Attach file</button><button type="button" class="btn" data-email-add="link">Add link</button></footer>
+<p class="email-note">{{ purpose }} The portal link is included automatically. Saving updates the template; it does not send an email.</p>
+</form>{% endfor %}
+{% include '_email_layout_controls.html' %}
+<details class="panel" id="email-design"><summary>Shared design &mdash; heading, footer, colour &amp; layout</summary><form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="section" value="email_design"><p>Applies to booking updates and reward notifications.</p><label>Email heading<input name="notification_heading" value="{{ settings.notification_heading }}" maxlength="5000" required></label><label>Email footer<textarea name="notification_footer" rows="3" maxlength="5000" required>{{ settings.notification_footer }}</textarea></label><label>Accent colour<input type="color" name="notification_colour" value="{{ settings.notification_colour }}"></label><label>Layout<select name="notification_layout"><option value="card" {% if settings.notification_layout=='card' %}selected{% endif %}>Branded card</option><option value="simple" {% if settings.notification_layout=='simple' %}selected{% endif %}>Simple letter</option></select></label><button class="btn primary">Save shared design</button></form></details>
+<details class="email-media-drawer" id="email-media"><summary>Images, attachments &amp; links</summary>{% include '_email_media_settings.html' %}</details>
+</div>
+<aside class="email-preview-pane"><h2>Email preview</h2><p>Sample client details. Nothing is sent.</p><iframe title="Live email preview" src="{{ url_for('email_preview',kind='booking',embed=1) }}" data-email-preview></iframe><a class="btn" data-email-preview-link href="{{ url_for('email_preview',kind='booking') }}" target="_blank" rel="noopener">Open full preview</a><p class="email-note">Preview updates while you edit. Save to apply the layout to outgoing emails.</p></aside>
+</section><script src="{{ url_for('static',filename='email-composer.js') }}" defer></script>

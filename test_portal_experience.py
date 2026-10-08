@@ -61,7 +61,7 @@ class PortalExperienceTest(unittest.TestCase):
         self.assertEqual(page.status_code,200)
         self.assertIn(f'/admin/bookings/{self.booking.id}/activity'.encode(),page.data)
         page = self.admin.get('/admin/search',query_string=dict(q=self.account.first_name+' '+self.account.last_name))
-        self.assertIn(f'#client-{self.account.id}'.encode(),page.data)
+        self.assertIn(f'/admin/clients/{self.account.id}'.encode(),page.data)
         self.assertIn(self.account.email.encode(),page.data)
         page = self.admin.get('/admin/search?q=%25')
         self.assertNotIn(f'/admin/bookings/{self.booking.id}/activity'.encode(),page.data)

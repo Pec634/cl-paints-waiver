@@ -6,7 +6,7 @@
         {% set current = request.endpoint or '' %}
         {% for endpoint, label, active in [
             ('admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages', 'admin_payments', 'admin_booking_invoices']),
-            ('admin_clients', 'Clients', current == 'admin_clients'),
+            ('admin_clients', 'Clients', current in ['admin_clients','admin_client_profile']),
             ('admin_events', 'Events', current in ['admin_events', 'loyalty.event_admin']),
             ('admin_record_imports', 'Imports', current in ['admin_record_imports', 'admin_record_import_review']),
             ('admin_moodboard', 'Moodboard', current in ['admin_moodboard', 'admin_event_moodboard']),

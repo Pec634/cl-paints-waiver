@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime
 from string import Formatter
-from flask import abort, current_app, redirect, request, session, url_for
+from flask import abort, current_app, redirect, request, session, url_for, has_app_context
 import secrets
 
 EMAIL_DEFAULTS = {
@@ -78,7 +78,7 @@ def booking_snapshot(booking, schedule):
             result[f'Event {index}: {label}'] = str(event.get(field, ''))
     return result
 
-def render_notification(config, name, kind, reference, details, link):
+def render_notification(config, name, kind, reference, details, link, preview=False, layout=None):
     variables = dict(name=name, reference=reference, details=details)
     subject = config[f'notification_{kind}_subject'].format(**variables)
     body = config[f'notification_{kind}_body'].format(**variables)
@@ -91,6 +91,10 @@ def render_notification(config, name, kind, reference, details, link):
                f'<p style="white-space:pre-line;line-height:1.6">{html.escape(body)}</p>'
                f'<p><a style="color:{colour}" href="{html.escape(link, quote=True)}">View your {"booking" if kind == "booking" else "rewards"}</a></p>'
                f'<p style="color:#667189">{html.escape(footer)}</p></div>')
+    if has_app_context() and current_app.extensions.get('email_layout_render'):
+        message, body = current_app.extensions['email_layout_render'](config,kind,heading,body,footer,link,preview,layout)
+    elif has_app_context() and current_app.extensions.get('email_media_decorate'):
+        message, body = current_app.extensions['email_media_decorate'](kind,message,body,preview)
     return subject, body, footer, message
 
 def register_notifications(app, db, models, Booking, Account, Owner, current_client, settings, send):
@@ -105,7 +109,11 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         Preference = app.extensions.get('client_email_preference_model')
         preference = db.session.get(Preference, account.id) if Preference and account else None
         enabled = essential or preference is None or (preference.booking_updates if kind == 'booking' else preference.reward_updates)
-        notice.email_sent = send(email, subject, body + '\n\n' + link + '\n\n' + footer, message) if enabled else False
+        attachments = app.extensions['email_media_attachments'](kind) if app.extensions.get('email_media_attachments') else []
+        args = [email, subject, body + '\n\n' + link + '\n\n' + footer, message]
+        if attachments:
+            args.append(attachments)
+        notice.email_sent = send(*args) if enabled else False
         db.session.commit()
         return notice.email_sent if enabled else None
     def booking_updated(booking, before, schedule):

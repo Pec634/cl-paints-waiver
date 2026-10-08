@@ -1,0 +1,9 @@
+<section class="panel email-layout-controls"><h2>Custom layout</h2><p>Move blocks to place images and links anywhere around the heading, message, portal link and footer. Preview changes appear as you edit.</p>
+<div class="client-grid">
+{% for key,label,minimum,maximum,step in [('width','Email width (px)',320,900,1),('padding','Inside spacing (px)',0,60,1),('font_size','Text size (px)',12,28,1),('line_height','Line spacing',1,2.5,0.1),('radius','Corner rounding (px)',0,40,1)] %}<label>{{ label }}<input data-layout-key="{{ key }}" type="number" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}"></label>{% endfor %}
+{% for key,label in [('background','Surrounding background'),('paper','Email background'),('text','Text colour')] %}<label>{{ label }}<input data-layout-key="{{ key }}" type="color"></label>{% endfor %}
+<label>Font<select data-layout-key="font">{% for font in ['Arial','Georgia','Verdana','Tahoma'] %}<option>{{ font }}</option>{% endfor %}</select></label><label>Text alignment<select data-layout-key="align"><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></label><label>Portal link text<input data-layout-key="portal_label" maxlength="100"></label></div>
+<h3>Block order &amp; placement</h3><div data-layout-blocks></div><button type="button" class="btn primary" data-layout-save>Save content &amp; layout</button><p role="status" aria-live="polite" data-layout-status>Loading preview…</p></section>
+<script type="application/json" id="email-layout-data">{{ email_layouts|tojson }}</script>
+<script type="application/json" id="email-layout-media">[{% for item in email_media %}{"id":{{ item.id }},"kind":{{ item.kind|tojson }},"label":{{ item.label|tojson }},"area":{{ item.area|tojson }}}{% if not loop.last %},{% endif %}{% endfor %}]</script>
+<script src="{{ url_for('static',filename='email-layout.js') }}" defer></script>

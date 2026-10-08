@@ -24,3 +24,6 @@ body { font-size: 1rem; }
 .portal-reduced-motion *, .portal-reduced-motion *::before, .portal-reduced-motion *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 @media (max-width: 600px) { .portal-filter { display: grid; } .portal-timeline { padding-left: 10px; } .portal-display-controls { margin: 12px; } }
 @media (max-width: 700px) { .client-shell > .portal-mobile-shortcuts { grid-template-columns: repeat(4,minmax(0,1fr)); } .client-shell > .portal-mobile-shortcuts a { font-size: .875rem; min-width: 0; overflow-wrap: anywhere; } }
+/* Reference codes remain readable and selectable on narrow phone screens. */
+.dashboard-reference-code { display: block; font-family: ui-monospace, monospace; font-size: 1.15rem; overflow-wrap: anywhere; user-select: text; }
+#your-references .client-grid > section { min-width: 0; }

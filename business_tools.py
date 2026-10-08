@@ -347,8 +347,10 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
         if kind not in ['booking','reward']: abort(404)
         from client_notifications import render_notification
         subject, body, footer, message=render_notification(settings(),'Sample client',kind,'05/10/2026 - B - 0001' if kind=='booking' else '05/10/2026 - L - 0001',
-            'Travel charge: £0.00 → £15.00' if kind=='booking' else 'One loyalty point earned. Current balance: 1/3.',url_for('client.login',_external=True))
-        return render_template('admin_email_preview.html',subject=subject,message=message)
+            'Travel charge: £0.00 → £15.00' if kind=='booking' else 'One loyalty point earned. Current balance: 1/3.',url_for('client.login',_external=True),preview=True)
+        response=app.make_response(render_template('email_preview_embed.html' if request.args.get('embed')=='1' else 'admin_email_preview.html',subject=subject,message=message))
+        response.headers['Cache-Control']='private, no-store'
+        return response
 
     def reminders(dry_run=True):
         today=datetime.now(ZoneInfo('Europe/London')).date()

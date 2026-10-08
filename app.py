@@ -517,6 +517,10 @@ from record_imports import define_models as define_record_import_models
 record_import_models = define_record_import_models(db)
 from phone_push import define_models as define_phone_push_models
 phone_push_models = define_phone_push_models(db)
+from admin_client_profiles import define_model as define_admin_client_note
+AdminClientNote = define_admin_client_note(db)
+from email_media import define_model as define_email_media
+EmailMedia = define_email_media(db)
 from client_features import define_model as define_client_preference_model
 ClientEmailPreference = define_client_preference_model(db)
 app.extensions['client_email_preference_model'] = ClientEmailPreference
@@ -2636,13 +2640,15 @@ from business_settings import register_settings
 get_business_settings = register_settings(app, db, BusinessSetting, AdminCredential, AdminPasswordReset, admin_required, ADMIN_PASSWORD, ADMIN_EMAIL)
 
 
-def send_client_email(to, subject, body, html_body=None):
+def send_client_email(to, subject, body, html_body=None, attachments=None):
     if not RESEND_API_KEY:
         return False
     try:
         payload = {'from': 'CL Paints <info@clpaints.com>', 'to': [to], 'subject': subject, 'text': body}
         if html_body:
             payload['html'] = html_body
+        if attachments:
+            payload['attachments'] = attachments
         resend.Emails.send(payload)
         return True
     except Exception:
@@ -2723,7 +2729,14 @@ def privacy_policy():
 
 
 from phone_push import register as register_phone_push
+from email_media import register as register_email_media
+register_email_media(app, db, EmailMedia, admin_required)
+from email_layout import register as register_email_layout
+register_email_layout(app, db, BusinessSetting, EmailMedia, get_business_settings, admin_required)
 register_phone_push(app, db, phone_push_models, Booking, get_current_client, admin_required)
+from admin_client_profiles import register as register_admin_client_profiles
+register_admin_client_profiles(app, db, AdminClientNote, ClientAccount, Booking, Waiver, Participant,
+    BookingMessage, ClientEnquiry, ClientRewardOwner, BookingInvoice, loyalty_models, admin_required)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

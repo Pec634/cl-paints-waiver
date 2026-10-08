@@ -138,10 +138,14 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
         return hmac.new(str(app.secret_key).encode(), value.encode(), hashlib.sha256).hexdigest()
     @app.context_processor
     def loyalty_context():
-        if request.endpoint in ['client.rewards', 'client.account'] or (request.endpoint and request.endpoint.startswith('loyalty.') and request.path.startswith('/client/')):
+        if request.endpoint in ['client.dashboard', 'client.rewards', 'client.account'] or (request.endpoint and request.endpoint.startswith('loyalty.') and request.path.startswith('/client/')):
             account = current_client()
             people = members(account) if account else []
-            return dict(client_account=account, loyalty_members=people, loyalty_balances={p.id: (db.session.get(Balance, p.id).points if db.session.get(Balance, p.id) else 0) for p in people}, client_csrf=csrf())
+            result = dict(client_account=account, loyalty_members=people, loyalty_balances={p.id: (db.session.get(Balance, p.id).points if db.session.get(Balance, p.id) else 0) for p in people}, client_csrf=csrf())
+            if request.endpoint == 'client.dashboard' and account:
+                result['dashboard_waivers'] = Waiver.query.filter(func.lower(func.trim(Waiver.responsible_email)) == account.email.casefold()).order_by(Waiver.signed_date.desc(), Waiver.id.desc()).all()
+                result['dashboard_reference_now'] = now()
+            return result
         return {}
 
     @bp.get('/client/waivers')
