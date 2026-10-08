@@ -27,6 +27,7 @@ Admin Login | CL Paints
             </div>
         {% endif %}
 
+        {% if retry_seconds %}<p class="login-notice" data-login-countdown="{{ retry_seconds }}">Try again in <span data-login-time>{{ '%02d:%02d'|format(retry_seconds // 60, retry_seconds % 60) }}</span>.</p><p data-login-ready role="status"></p><script src="{{ url_for('static', filename='admin-login-timer.js') }}" defer></script>{% endif %}
         <form method="POST" class="login-form">
             <input type="hidden" name="csrf_token" value="{{ login_csrf }}">
             <label for="password">
@@ -42,7 +43,7 @@ Admin Login | CL Paints
                 autofocus
             >
 
-            <button type="submit" class="btn login-submit">
+            <button type="submit" class="btn login-submit" {% if retry_seconds %}disabled{% endif %}>
                 Sign In
             </button>
         </form>

@@ -1,0 +1,13 @@
+<form method="post" class="panel client-form" data-warn-unsaved>
+  <h2>Login page reviews</h2>
+  <p>Add up to ten genuine customer reviews. Reviews rotate every seven seconds when more than one is saved. Use approved wording and attribution. Leave a review completely blank to remove it.</p>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="section" value="login_reviews">
+  {% for index in range(10) %}{% set review = login_reviews[index] if index < login_reviews|length else {} %}
+  <details class="login-review-editor"><summary>Review {{ index + 1 }}{% if review.name %} &mdash; {{ review.name }}{% endif %}</summary>
+    <label>Reviewer name<input name="review_name_{{ index }}" maxlength="100" value="{{ request.form.get('review_name_' ~ index, review.get('name','')) if request.form.get('section') == 'login_reviews' else review.get('name','') }}"></label>
+    <label>Rating<select name="review_rating_{{ index }}">{% set selected = request.form.get('review_rating_' ~ index, review.get('rating',5))|int if request.form.get('section') == 'login_reviews' else review.get('rating',5) %}{% for rating in range(1,6) %}<option value="{{ rating }}" {% if rating == selected %}selected{% endif %}>{{ rating }} stars</option>{% endfor %}</select></label>
+    <label>Review text<textarea name="review_text_{{ index }}" maxlength="1000" rows="4">{{ request.form.get('review_text_' ~ index, review.get('text','')) if request.form.get('section') == 'login_reviews' else review.get('text','') }}</textarea></label>
+    <label>Event or date (optional)<input name="review_detail_{{ index }}" maxlength="160" value="{{ request.form.get('review_detail_' ~ index, review.get('detail','')) if request.form.get('section') == 'login_reviews' else review.get('detail','') }}"></label>
+  </details>{% endfor %}
+  <button class="btn primary" type="submit">Save login reviews</button>
+</form>

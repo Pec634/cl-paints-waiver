@@ -23,13 +23,11 @@
   </div>
   <div class="client-nav-tools">
     <a class="client-nav-updates" href="{{ url_for('client_notification_centre') }}">Notifications {% if client_unread_count %}<span class="client-unread-badge">{{ client_unread_count }} unread</span>{% endif %}</a>
-    <details class="client-nav-group{% if request.endpoint in ['client.account', 'client.contact', 'client_preferences', 'client_help'] %} active{% endif %}">
+    <details class="client-nav-group{% if request.endpoint in ['client.account', 'client.contact', 'client_preferences'] %} active{% endif %}">
       <summary>Account</summary>
       <div class="client-nav-dropdown">
-        <a href="{{ url_for('client.account') }}" {% if request.endpoint == 'client.account' %}aria-current="page"{% endif %}>My account</a>
+        <a href="{{ url_for('client.account') }}" {% if request.endpoint == 'client.account' %}aria-current="page"{% endif %}>Account settings</a>
         <a href="{{ url_for('client.contact') }}" {% if request.endpoint == 'client.contact' %}aria-current="page"{% endif %}>Contact us</a>
-        <a href="{{ url_for('client_preferences') }}" {% if request.endpoint == 'client_preferences' %}aria-current="page"{% endif %}>Email preferences</a>
-        <a href="{{ url_for('client_help') }}" {% if request.endpoint == 'client_help' %}aria-current="page"{% endif %}>Help &amp; aftercare</a>
         <a href="#portal-text-size" data-open-display>Display settings</a>
         <form method="post" action="{{ url_for('client.logout') }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="client-nav-signout" type="submit">Sign out</button></form>
       </div>
@@ -67,7 +65,10 @@
     {% endif %}
     <div class="client-footer-bottom">
       <p>Bringing colour to life - One face at time</p>
+      <nav class="client-footer-links" aria-label="Help and policies">
+      {% if client_account %}<a href="{{ url_for('client_help') }}" {% if request.endpoint == 'client_help' %}aria-current="page"{% endif %}>Help &amp; aftercare</a>{% endif %}
       <a href="{{ url_for('privacy_policy') }}">Privacy policy</a>
+      </nav>
     </div>
   </div>
 </footer>

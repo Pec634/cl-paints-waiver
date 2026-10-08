@@ -34,7 +34,7 @@ Client Booking Request | CL Paints
     {% endif %}
 
     <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('booking_request') }}">{% if seasonal_form %}<section class="booking-section panel"><h2>{{ seasonal_form.title }}</h2><p>{{ seasonal_form.description }}</p><input type="hidden" name="seasonal_id" value="{{ seasonal_form.id }}"><div class="client-form">{% with fields=native_form_fields(seasonal_form), field_form=seasonal_form %}{% include '_native_fields.html' %}{% endwith %}</div><label class="booking-field booking-field-wide"><span>Upload your design ideas (optional)</span><input type="file" name="design_images" accept="image/jpeg,image/png,image/webp" multiple><small>Up to six images, each no larger than 15 MB. Stored privately for CL Paints to review.</small></label>{% if seasonal_form.terms %}<p class="rota-note">{{ seasonal_form.terms }}</p><label><input type="checkbox" name="seasonal_agree" value="yes" required> I have read and accept this seasonal booking information.</label>{% endif %}</section>{% endif %}
-        <details class="panel booking-calendar-panel"><summary>View our availability calendar</summary><iframe class="booking-calendar-frame" title="CL Paints availability calendar" src="{{ url_for('client_availability_calendar') }}" loading="lazy"></iframe><a href="{{ url_for('client_availability_calendar') }}" target="_blank" rel="noopener">Open calendar in a separate tab</a></details>
+<p><a class="btn" href="{{ url_for('client_availability_calendar') }}">Check a preferred date and time</a></p>
         <div class="booking-error" id="bookingValidationError" role="alert" tabindex="-1" hidden></div>
         {% if not seasonal_form %}{% include '_form_spam.html' %}{% endif %}
         <link rel="stylesheet" href="{{ url_for('static',filename='native-fields.css') }}">
@@ -46,7 +46,7 @@ Client Booking Request | CL Paints
                 <span>01</span>
                 <div>
                     <h2>Your request</h2>
-                    <p>Check the calendar above, then send your booking details for review.</p>
+                    <p>Choose your preferred dates and times, then send your booking details for review.</p>
                 </div>
             </div>
 

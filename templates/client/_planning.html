@@ -7,7 +7,7 @@
   <p class="client-small-note">Download the event for your calendar. If your arrangements change, download the updated event again.</p>
 </section>
 {% endif %}
-{% if checklist_booking %}{% include 'client/_checklist.html' %}{% endif %}
+{% if checklist_booking %}{% include 'client/_checklist.html' %}{% endif %}{% if portal_payments %}
 <section class="panel">
   <h2>Payments &amp; invoices</h2>
   {% if portal_payments %}<p>Recorded balance across active bookings: <strong>&pound;{{ '%.2f'|format(portal_outstanding) }}</strong></p>
@@ -15,9 +15,8 @@
   {% for row in portal_payments %}<article class="client-record"><a class="client-text-link" href="{{ url_for('client.booking_detail', booking_id=row.booking.id) }}">{{ row.booking.public_reference }} &middot; {{ row.booking.event_type }}</a><span>Payments received: &pound;{{ '%.2f'|format(row.payment.paid) }} &middot; Outstanding: &pound;{{ '%.2f'|format(row.payment.outstanding) }}</span>{% if row.payment.balance_due %}<span>Balance due: {{ row.payment.balance_due.strftime('%d/%m/%Y') }}</span>{% endif %}{% for invoice in row.invoices %}<a href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">{{ invoice.purpose }} invoice {{ invoice.reference }} &middot; &pound;{{ '%.2f'|format(invoice.amount) }} &middot; View payment options in SumUp</a>{% else %}<span>No invoice attached yet.</span>{% endfor %}</article>{% endfor %}
   {% else %}<p>When you have an active booking, your recorded payments, balance and invoice links will appear here.</p>{% endif %}
 </section>
-<section class="panel">
+{% endif %}{% if portal_payments or portal_change_requests %}<section class="panel">
   <h2>Booking changes</h2><p>Open your booking to request changes to the date, times or venue, or request cancellation. CL Paints will review your request and confirm the outcome.</p>
   <a class="btn" href="{{ url_for('client.bookings') }}">Choose a booking</a>
   {% for item in portal_change_requests %}<article class="client-record"><a class="client-text-link" href="{{ url_for('client.booking_detail', booking_id=item.booking_id) }}">{{ portal_booking_lookup[item.booking_id].public_reference }} &middot; {{ item.kind|capitalize }} request</a><strong>{{ item.status }}</strong><span>{{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</span>{% if item.response %}<p class="client-message">CL Paints: {{ item.response }}</p>{% endif %}</article>{% else %}<p>No change requests yet.</p>{% endfor %}
-</section>
-<section class="panel"><h2>Make the portal work for you</h2><p>Choose your optional email updates or find answers about preparing for your event.</p><div class="client-action-row"><a class="btn" href="{{ url_for('client_preferences') }}">Email preferences</a><a class="btn" href="{{ url_for('client_help') }}">Help &amp; aftercare</a></div></section>
+</section>{% endif %}

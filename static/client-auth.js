@@ -20,7 +20,8 @@
         });
         window.matchMedia('(max-width: 700px)').addEventListener('change', closeMenu);
         navigation.addEventListener('click', event => {
-            if (event.target.closest('a')) closeMenu();
+            // Keep dropdown links visible until the browser handles navigation.
+            if (event.target.closest('a')) window.setTimeout(closeMenu, 0);
         });
         groups.forEach(group => group.addEventListener('toggle', () => {
             if (group.open) groups.forEach(other => { if (other !== group) other.open = false; });

@@ -167,16 +167,17 @@ def register(app, db, Read, Booking, Account, Waiver, Message, Request, Change, 
             pattern = '%' + query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_').lower() + '%'
             match = re.search(r'(?:^|[-#\s])0*(\d+)$', query)
             number = int(match[1]) if match and len(match[1]) <= 10 else None
+            account_query = re.fullmatch(r'CL-A-\d+',query,re.I) is not None
 
             def search(model, fields):
                 expressions = [db.func.lower(field).like(pattern, escape='\\') for field in fields]
-                if number is not None:
+                if number is not None and (not account_query or model is Account):
                     expressions.append(model.id == number)
                 return model.query.filter(or_(*expressions)).order_by(model.id.desc()).limit(20).all()
 
             groups.append(('Bookings', [dict(title=b.public_reference, detail=f'{b.first_name} {b.last_name} · {b.event_type} · {b.status}',
                 link=url_for('admin_booking_activity', booking_id=b.id)) for b in search(Booking, [Booking.email, Booking.first_name + ' ' + Booking.last_name, Booking.phone, Booking.event_type, Booking.event_address])]))
-            groups.append(('Clients', [dict(title=f'{a.first_name} {a.last_name}', detail=a.email,
+            groups.append(('Clients', [dict(title=f'{a.first_name} {a.last_name}', detail=f'{a.account_number} · {a.email}',
                 link=url_for('admin_client_profile',client_id=a.id)) for a in search(Account, [Account.first_name + ' ' + Account.last_name, Account.email, Account.phone])]))
             groups.append(('Waivers', [dict(title=w.waiver_reference, detail=f'{w.responsible_first_name} {w.responsible_last_name}',
                 link=url_for('admin_waiver_detail', waiver_id=w.id)) for w in search(Waiver, [Waiver.waiver_reference, Waiver.responsible_first_name, Waiver.responsible_last_name, Waiver.responsible_email])]))

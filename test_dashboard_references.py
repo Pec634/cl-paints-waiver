@@ -29,10 +29,24 @@ class DashboardReferencesTest(unittest.TestCase):
         page=self.fixture.client.get('/client/')
         browsers.NativeFormBrowserTest().browser(page.data, '''
             const section=document.querySelector('#your-references');
-            assert(section && section.querySelectorAll('h3').length===3,'Three clearly labelled reference groups');
+            assert(section.closest('.client-welcome'),'Codes belong to welcome header');
+            assert(document.querySelector('.client-main > header, .client-main > section').classList.contains('client-welcome'),'Welcome first dashboard section');
+            assert(section && section.querySelectorAll('h3').length===4,'Four clearly labelled reference groups');
             for(const code of section.querySelectorAll('.dashboard-reference-code')) {
               assert(getComputedStyle(code).userSelect==='text','Code selectable');
               assert(code.getBoundingClientRect().right<=innerWidth+1,'Code fits phone width');
             }
             assert(section.textContent.includes('No refer-a-friend code linked yet'),'Helpful referral empty state');
+            const dropdowns=[...document.querySelectorAll('[data-dashboard-accordion] > details')];
+            assert(dropdowns.length>=3,'Dashboard sections are collapsible');
+            const counts=document.querySelector('.client-main > .client-summary');
+            assert(counts && !counts.closest('details'),'Request and reward counts always visible');
+            assert(counts.previousElementSibling.classList.contains('client-welcome'),'Counts directly below welcome');
+            const labels=dropdowns.map(item=>item.querySelector('summary').textContent.trim());
+            assert(labels.every((label,index)=>index===0 || labels[index-1].localeCompare(label,'en-GB',{sensitivity:'base'})<=0),'Dropdowns alphabetically ordered');
+            assert(dropdowns.every(item=>!item.open),'Sections initially collapsed');
+            dropdowns[0].querySelector('summary').click();
+            assert(dropdowns[0].open,'First section opens');
+            dropdowns[1].querySelector('summary').click();
+            assert(dropdowns[1].open && !dropdowns[0].open,'Only one section opens at a time');
         ''',width=390)

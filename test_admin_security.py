@@ -49,6 +49,23 @@ class AdminSecurityTest(unittest.TestCase):
         self.assertEqual(page.headers['Cache-Control'],'no-store')
         self.assertEqual(page.headers['X-Frame-Options'],'SAMEORIGIN')
 
+    def test_success_clears_attempts_and_lockout_countdown_survives_reload(self):
+        with patch.object(main,'ADMIN_PASSWORD','test-password'),patch.dict(os.environ,{'ADMIN_EMAIL_VERIFICATION':'false'}):
+            for _ in range(7):
+                token=self.token()
+                self.assertEqual(self.client.post('/admin/login',data={'csrf_token':token,'password':'test-password'}).status_code,302)
+                self.assertEqual(Attempt.query.count(),0)
+            token=self.token()
+            for _ in range(5):self.client.post('/admin/login',data={'csrf_token':token,'password':'wrong'})
+            response=self.client.post('/admin/login',data={'csrf_token':token,'password':'wrong'})
+            self.assertEqual(response.status_code,429)
+            self.assertTrue(0<int(response.headers['Retry-After'])<=900)
+            self.assertIn(b'data-login-countdown',response.data)
+            self.assertIn(b'data-login-countdown',self.client.get('/admin/login').data)
+            Attempt.query.update({'created_at':datetime.utcnow()-timedelta(minutes=16)});main.db.session.commit()
+            self.assertNotIn(b'data-login-countdown',self.client.get('/admin/login').data)
+            self.assertEqual(self.client.post('/admin/login',data={'csrf_token':token,'password':'test-password'}).status_code,302)
+
     def test_expired_login_form_recovers_without_authenticating(self):
         old_token = self.token()
         with self.client.session_transaction() as session:

@@ -72,12 +72,15 @@ class NativeFormBrowserTest(unittest.TestCase):
                 toggle.click();
                 assert(toggle.getAttribute('aria-expanded') === 'true', 'menu state not announced');
                 assert(getComputedStyle(nav).display !== 'none', 'menu did not open');
+                assert(getComputedStyle(shortcuts).display === 'none', 'quick links should hide while full menu is open');
                 nav.querySelector('a').dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
                 assert(toggle.getAttribute('aria-expanded') === 'false', 'Escape did not close menu');
                 assert(document.activeElement === toggle, 'Escape did not restore focus');
+                assert(getComputedStyle(shortcuts).display === 'grid', 'quick links should return after menu closes');
                 toggle.click(); document.querySelector('main').click();
                 assert(toggle.getAttribute('aria-expanded') === 'false', 'outside click did not close');
                 assert(!document.querySelector('%s'), 'expanded menu class remains');
+                assert(getComputedStyle(shortcuts).display === 'grid', 'outside click should restore quick links');
                 assert(document.documentElement.scrollWidth <= innerWidth, 'page overflows phone width');
             ''' % (button, navigation, expanded), width=390)
 
@@ -277,6 +280,112 @@ class NativeFormBrowserTest(unittest.TestCase):
             change(model);window.CLStudioCore.drawFace();window.CLStudioCore.render();
             assert(!document.getElementById('paint-animate').checked,'character animation remains active');
         ''')
+
+    def test_client_bookings_link_stays_visible_during_activation(self):
+        page=self.fixture.client.get('/client/')
+        self.browser(page.data, '''
+            const navigation=document.querySelector('.client-navigation');
+            const group=[...navigation.querySelectorAll('details')].find(item=>item.querySelector('summary').textContent==='My events');
+            group.open=true;
+            const link=group.querySelector('a');
+            assert(link.getAttribute('href')==='/client/bookings','Bookings destination correct');
+            const event=new MouseEvent('click',{bubbles:true,cancelable:true});
+            link.addEventListener('click',click=>click.preventDefault(),{once:true});
+            link.dispatchEvent(event);
+            assert(group.open,'Dropdown stays open while link activates');
+            await new Promise(resolve=>setTimeout(resolve,50));
+            assert(!group.open,'Menu closes after link activation');
+        ''')
+
+    def test_admin_groups_and_saved_filters(self):
+        page=self.fixture.admin.get('/admin/bookings')
+        self.browser(page.data, '''
+            const groups=[...document.querySelectorAll('.admin-navigation-group')];
+            assert(groups.length===4,'Four admin navigation groups');
+            const active=document.querySelector('nav[aria-label="Admin navigation"] a[aria-current="page"]');
+            assert(active.closest('details').open,'Current navigation group expanded');
+            const bounds=document.querySelector('.admin aside').getBoundingClientRect();
+            for(const group of groups) {
+                group.open=true;
+                for(const link of group.querySelectorAll('a')) {
+                    assert(getComputedStyle(link).display==='flex','Navigation links are button blocks');
+                    assert(link.getBoundingClientRect().right<=bounds.right,'Button stays within sidebar');
+                }
+            }
+            assert(getComputedStyle(active).backgroundColor===getComputedStyle(document.querySelector('.btn.primary')).backgroundColor,'Active navigation uses brand colour');
+            groups[0].open=true;
+            groups[1].open=true;
+            assert(groups[1].open && !groups[0].open,'Only one navigation folder opens');
+            groups[1].querySelector('summary').click();
+            assert(!groups[1].open,'Folder can collapse');
+            const row=document.querySelector('.portal-saved-filter');
+            assert(row,'Saved filter controls available');
+            row.querySelector('button').click();
+            assert(!row.querySelector('a').hidden,'Saved filter can be restored');
+            assert(row.querySelector('a').getAttribute('href').includes('filter='),'Only filter saved');
+            row.querySelectorAll('button')[1].click();
+            assert(row.querySelector('a').hidden,'Saved filter removed');
+        ''',width=390)
+
+    def test_booking_section_navigation_and_mobile_cards(self):
+        booking=self.fixture.fixture.booking
+        admin_page=self.fixture.admin.get(f'/admin/bookings/{booking.id}/activity')
+        self.browser(admin_page.data, '''
+            const nav=document.querySelector('.portal-booking-navigation');
+            const links=[...nav.querySelectorAll('a')];
+            assert(getComputedStyle(nav).display==='grid','Booking buttons use an organised grid');
+            assert(getComputedStyle(links[0]).color==='rgb(16, 33, 63)','Booking buttons have dark readable text');
+            assert(Math.abs(links[0].getBoundingClientRect().top-links[1].getBoundingClientRect().top)<1,'Desktop buttons share a row');
+        ''')
+        page=self.fixture.client.get(f'/client/bookings/{booking.id}')
+        self.browser(page.data, '''
+            const links=[...document.querySelectorAll('.portal-booking-navigation a')];
+            assert(links.length>=4,'Booking sections have shortcuts');
+            assert(links.every(link=>document.querySelector(link.hash)),'Shortcuts point to existing sections');
+            const headings=[...document.querySelectorAll('.client-main > section.panel h2')].map(h=>h.textContent.trim());
+            assert(headings.indexOf('Your event details')<headings.indexOf('Payments & balance'),'Event summary before payments');
+            assert(headings.indexOf('Booking activity timeline')>headings.indexOf('Payments & balance'),'Activity after payments');
+            assert(document.documentElement.scrollWidth<=innerWidth,'Booking fits phone');
+        ''',width=390)
+        page=self.fixture.admin.get('/admin/bookings')
+        self.browser(page.data, '''
+            const cell=document.querySelector('td[data-column-label]');
+            assert(cell && getComputedStyle(cell).display==='block','Mobile table uses labelled cards');
+            assert(cell.dataset.columnLabel,'Card fields have labels');
+            assert(document.documentElement.scrollWidth<=innerWidth,'Booking cards fit phone');
+        ''',width=390)
+
+    def test_account_unsaved_changes_warning(self):
+        page=self.fixture.client.get('/client/account')
+        self.browser(page.data, '''
+            const form=document.querySelector('form[data-warn-unsaved]');
+            const field=form.querySelector('[name="first_name"]');
+            const original=field.value;
+            field.value='Changed name';input(field);
+            const changed=new Event('beforeunload',{cancelable:true});window.dispatchEvent(changed);
+            assert(changed.defaultPrevented,'Unsaved edits warn before leaving');
+            field.value=original;input(field);
+            const reverted=new Event('beforeunload',{cancelable:true});window.dispatchEvent(reverted);
+            assert(!reverted.defaultPrevented,'Reverted edits do not warn');
+        ''')
+
+    def test_mobile_studio_layout_and_tools(self):
+        page=self.fixture.client.get('/client/face-paint-studio')
+        self.browser(page.data, '''
+            const studio=document.querySelector('.paint-studio');
+            assert(window.CLStudioCore && window.CLStudioEdits,'Painting tools initialize');
+            assert(getComputedStyle(document.querySelector('.studio-mobile-shortcuts')).display==='flex','Mobile shortcuts visible');
+            const panels=[...studio.querySelectorAll(':scope > .studio-mobile-panel')];
+            assert(panels.length>=2 && panels.every(panel=>!panel.open),'Mission and progress initially collapsed');
+            assert(document.querySelector('#studio-face').getBoundingClientRect().top < panels[0].getBoundingClientRect().top,'Canvas before mission information');
+            const groups=[...document.querySelectorAll('.paint-controls > details')];
+            groups[0].open=true;
+            await new Promise(resolve=>setTimeout(resolve,50));
+            groups[1].open=true;
+            await new Promise(resolve=>setTimeout(resolve,50));
+            assert(groups[1].open && !groups[0].open,'One tool group at a time');
+            assert(studio.getBoundingClientRect().right<=innerWidth+1,'Studio fits phone');
+        ''',width=390)
 
     def test_public_form_review_does_not_submit_until_confirmed(self):
         page=self.fixture.client.get('/forms/'+str(self.form.id))

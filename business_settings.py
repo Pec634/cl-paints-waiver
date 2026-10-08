@@ -3,6 +3,8 @@ from flask import request, session, render_template, redirect, url_for, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.exc import SQLAlchemyError
 import secrets
+import json
+from login_reviews import DEFAULT_REVIEWS, read_reviews, validate_reviews
 
 DEFAULTS = dict(business_name='CL Paints', contact_email='info@clpaints.com', phone='',
                 website='https://www.clpaints.com', hourly_rate='45.00', minimum_hours='2',
@@ -10,6 +12,7 @@ DEFAULTS = dict(business_name='CL Paints', contact_email='info@clpaints.com', ph
                 recovery_email='')
 from client_notifications import EMAIL_DEFAULTS, validate_email_settings
 DEFAULTS.update(EMAIL_DEFAULTS)
+DEFAULTS['login_reviews'] = json.dumps(DEFAULT_REVIEWS, ensure_ascii=False)
 DEFAULTS.update(calendar_buffer_minutes='60', reminder_days='2', public_app_url='')
 DEFAULTS.update(facebook_url='https://www.facebook.com/profile.php?id=61578784131483&locale=en_GB',
                 instagram_url='https://www.instagram.com/cl.paints_/',
@@ -27,7 +30,8 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
         return read_settings(db, Setting, recovery_default)
     @app.context_processor
     def settings_context():
-        return {'business_settings': get_settings()}
+        settings = get_settings()
+        return {'business_settings': settings, 'login_reviews': read_reviews(settings['login_reviews'])}
 
     @app.route('/admin/settings', methods=['GET', 'POST'])
     @admin_required
@@ -52,6 +56,8 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                     values['contact_email'] = validate_email(values['contact_email'], check_deliverability=False).normalized
                     if values['website'] and not values['website'].startswith(('https://', 'http://')):
                         raise ValueError('The website must begin with https:// or http://.')
+                elif section == 'login_reviews':
+                    values['login_reviews'] = validate_reviews(request.form)
                 elif section == 'social':
                     from urllib.parse import urlsplit
                     for key, domain in [('facebook_url','facebook.com'),('instagram_url','instagram.com'),('trustpilot_url','trustpilot.com')]:

@@ -205,32 +205,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
 
     @app.get('/booking/calendar')
     def client_availability_calendar():
-        import calendar
-        try:
-            month = datetime.strptime(request.args.get('month', datetime.now(ZoneInfo('Europe/London')).strftime('%Y-%m')), '%Y-%m')
-            if not 1900 <= month.year <= 2100: raise ValueError()
-        except ValueError:
-            abort(400)
-        # Only publish occupied intervals; never names, addresses, references or block reasons.
-        occupied = [(row['occupied_start'], row['occupied_end']) for row in calendar_rows()
-                    if not row['booking'] or row['booking'].status == 'Accepted']
-        weeks = []
-        for week in calendar.Calendar().monthdatescalendar(month.year, month.month):
-            cells = []
-            for date in week:
-                start = datetime.combine(date, datetime.min.time())
-                end = start + timedelta(days=1)
-                intervals = sorted((max(a, start), min(b, end)) for a, b in occupied if a < end and b > start)
-                merged = []
-                for a, b in intervals:
-                    if merged and a <= merged[-1][1]: merged[-1] = (merged[-1][0], max(b, merged[-1][1]))
-                    else: merged.append((a, b))
-                cells.append(dict(date=date, in_month=date.month == month.month,
-                    times=[a.strftime('%H:%M') + '–' + ('24:00' if b == end else b.strftime('%H:%M')) for a, b in merged]))
-            weeks.append(cells)
-        return render_template('client/availability_calendar.html', weeks=weeks, month=month,
-            previous=(month-timedelta(days=1)).strftime('%Y-%m'),
-            next_month=(month.replace(day=28)+timedelta(days=4)).strftime('%Y-%m'))
+        return render_template('client/availability_calendar.html', today=datetime.now(ZoneInfo('Europe/London')).date().isoformat())
 
     @app.route('/admin/calendar',methods=['GET','POST'])
     @admin_required

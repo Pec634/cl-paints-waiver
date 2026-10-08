@@ -7,6 +7,22 @@
 #paint-guide{pointer-events:none}#paint-reference{width:180px;max-width:100%;height:auto;background:#faf5ff;border:1px solid #ddd6fe;border-radius:16px}#paint-customer-card,#paint-reference-panel{padding:18px;margin:16px 0;background:#fff;border-radius:16px;border:1px solid #e9d5ff}
 @media(max-width:700px){.paint-studio{grid-template-columns:1fr;gap:20px}.paint-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.paint-actions,.paint-palette,.paint-mirror{grid-column:1/-1}}
 
+.studio-mobile-shortcuts { display:none; }
+.studio-mobile-panel > summary { display:none; }
+@media(max-width:700px) {
+  .studio-mobile-shortcuts { display:flex;gap:8px;margin:12px 0; }
+  .studio-mobile-shortcuts a { flex:1;display:flex;align-items:center;justify-content:center;min-height:44px;padding:8px;background:#fff0f7;border:1px solid #f4b5d2;border-radius:10px;text-align:center;font-weight:700;font-size:.85rem; }
+  .paint-studio.panel { padding:12px;gap:14px; }
+  .paint-studio > .paint-workspace { order:-2; }
+  .paint-studio > .paint-controls { order:-1; }
+  .studio-mobile-panel { border:1px solid #e9d5ff;border-radius:12px; }
+  .studio-mobile-panel > summary { display:list-item;padding:14px;cursor:pointer;font-weight:700; }
+  .studio-mobile-panel .panel { margin:0;border:0;box-shadow:none; }
+  .paint-studio .paint-palette button { width:44px;height:44px; }
+  .paint-studio .paint-canvas-actions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:0;margin-top:10px; }
+  .paint-studio input[type=range] { min-height:44px; }
+  #studio-face,#studio-tools,#studio-community-gallery { scroll-margin-top:16px; }
+}
 .paint-zoom-controls[hidden]{display:none}
 
 /* Group options into a vertical list, including on narrow screens. */
@@ -137,3 +153,11 @@
 .paint-reward-reveal.is-revealing { animation:paint-reward-arrive .7s ease-out both; }
 @keyframes paint-reward-arrive { from { opacity:0; transform:translateY(10px) scale(.95); } to { opacity:1; transform:none; } }
 @media(prefers-reduced-motion:reduce) { .paint-reward-reveal.is-revealing { animation:none; } }
+/* Preserve desktop sidebar positions; put painting first on phones. */
+.paint-fullscreen > .studio-mobile-panel { display:none; }
+@media(max-width:700px) {
+  .paint-studio { display:flex;flex-direction:column; }
+  .paint-studio > .studio-mobile-panel { width:100%;min-width:0;box-sizing:border-box; }
+  .paint-studio .paint-workspace .paint-viewport { margin:0;max-width:100%; }
+  .paint-studio .paint-controls { grid-template-columns:minmax(0,1fr); }
+}

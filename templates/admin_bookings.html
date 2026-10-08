@@ -139,7 +139,7 @@ Bookings | CL Paints
                                 </details>
                                 <details class="booking-detail booking-manage-detail">
                                     <summary>Manage request</summary>
-                                    <form method="post" action="{{ url_for('admin_manage_booking', booking_id=booking.id) }}" class="booking-manage-form">
+                                    <form data-warn-unsaved method="post" action="{{ url_for('admin_manage_booking', booking_id=booking.id) }}" class="booking-manage-form">
                                         <label class="booking-field">
                                             <span>Status</span>
                                             <select name="status">

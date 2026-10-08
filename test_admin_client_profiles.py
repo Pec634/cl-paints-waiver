@@ -41,6 +41,18 @@ class AdminClientProfilesTest(unittest.TestCase):
         self.assertNotIn(b'PRIVATE-NOTE',self.client.get('/client/').data)
         self.assertEqual(main.phone_push_models[1].query.count(),0)
 
+    def test_account_number_search_and_paginated_client_cards(self):
+        number=self.account.account_number
+        self.assertRegex(number,r'^CL-A-\d{4,}$')
+        page=self.admin.get('/admin/clients',query_string={'q':number.lower()})
+        self.assertIn(number.encode(),page.data)
+        self.assertIn(self.path.encode(),page.data)
+        self.assertIn(number.encode(),self.admin.get('/admin/search',query_string={'q':number}).data)
+        main.db.session.add_all([main.ClientAccount(email=f'list{i}@example.com',first_name='Paged',last_name=str(i)) for i in range(25)])
+        main.db.session.commit()
+        self.assertIn(b'Page 1 of 2',self.admin.get('/admin/clients').data)
+        self.assertIn(number.encode(),self.admin.get(self.path).data)
+
     def test_profile_message_summary_keeps_unread_and_note_pagination(self):
         data=self.fixture.data(self.client,self.fixture.client_path,'Profile message')
         self.client.post(self.fixture.client_path,data=data)

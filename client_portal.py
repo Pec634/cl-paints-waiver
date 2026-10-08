@@ -6,6 +6,7 @@ import hmac
 import secrets
 import os
 import ipaddress
+import re
 from urllib.parse import urlsplit
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, abort
 from sqlalchemy import func
@@ -375,7 +376,20 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                     flash('Referral code linked to the verified client account.', 'success')
             return redirect(url_for('rewards.dashboard' if request.form.get('return_to') == 'rewards' else 'admin_clients'))
         clients = Account.query.order_by(Account.first_name, Account.last_name).all()
-        return render_template('admin_clients.html', clients=clients, enquiries=Enquiry.query.order_by(Enquiry.created_at.desc()).limit(50).all(),
+        query = request.args.get('q','').strip()
+        if len(query)>100: abort(400)
+        account_query = Account.query
+        if query:
+            pattern='%'+query.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+            expressions=[column.ilike(pattern,escape='\\') for column in
+                         (Account.first_name+' '+Account.last_name,Account.email,Account.phone,Account.address)]
+            match=re.fullmatch(r'(?:CL-A-)?(\d+)',query,re.I)
+            if match and len(match[1])<=12: expressions.append(Account.id==int(match[1]))
+            from sqlalchemy import or_
+            account_query=account_query.filter(or_(*expressions))
+        pagination=account_query.order_by(Account.first_name,Account.last_name,Account.id).paginate(page=max(1,request.args.get('page',1,type=int)),per_page=24,error_out=False)
+        return render_template('admin_clients.html', clients=clients, client_rows=pagination.items,pagination=pagination,query=query,
+                               enquiries=Enquiry.query.order_by(Enquiry.created_at.desc()).limit(5).all(),
                                accounts={a.id: a for a in clients}, owners=Owner.query.all(), client_csrf=csrf())
     from studio_community import register as register_studio_community
     register_studio_community(app, portal, db, app.extensions['studio_community_models'], Account, client_required, check_csrf, admin_required)

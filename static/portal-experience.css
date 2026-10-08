@@ -27,6 +27,76 @@ body { font-size: 1rem; }
 /* Reference codes remain readable and selectable on narrow phone screens. */
 .dashboard-reference-code { display: block; font-family: ui-monospace, monospace; font-size: 1.15rem; overflow-wrap: anywhere; user-select: text; }
 #your-references .client-grid > section { min-width: 0; }
+@media (max-width: 800px) {
+    .admin aside.admin-menu-ready.admin-menu-open > nav.portal-mobile-shortcuts { display: none; }
+}
+@media (max-width: 700px) {
+    .client-shell:has(.client-navigation.is-expanded) > .portal-mobile-shortcuts { display: none; }
+}
+#your-references { padding:16px; }
+.client-welcome { flex-wrap:wrap; }
+#availability-continue[hidden] { display:none; }
+.login-review-editor { border:1px solid #eed8e4;border-radius:10px;padding:12px; }
+.login-review-editor summary { cursor:pointer;font-weight:700;min-height:32px; }
+.login-review-editor label { margin-top:12px; }
+.admin-navigation-group { margin:6px 0;border-top:1px solid #ffffff16;min-width:0;max-width:100%; }
+.admin-navigation-group > summary { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 12px;cursor:pointer;color:#e5eaf5;font-size:.85rem;font-weight:700;overflow-wrap:anywhere;list-style:none;background:#ffffff0c;border:1px solid #ffffff18;border-radius:10px; }
+.admin-navigation-group > summary::-webkit-details-marker { display:none; }
+.admin-navigation-group > summary::after { content:'';width:7px;height:7px;flex-shrink:0;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg); }
+.admin-navigation-group[open] > summary { background:#ffffff18;color:#fff; }
+.admin-navigation-group[open] > summary::after { transform:rotate(225deg); }
+.admin-navigation-group > summary:focus-visible { outline:2px solid #f72585;outline-offset:-2px; }
+.admin aside nav .admin-navigation-group > a { display:flex;align-items:center;width:100%;min-width:0;max-width:100%;margin:4px 0;padding:12px;border-radius:10px;background:#ffffff08;color:#dbe5f3;white-space:normal;overflow-wrap:anywhere;line-height:1.4; }
+.admin aside nav .admin-navigation-group > a:hover { background:#ffffff18;color:#fff; }
+.admin aside nav .admin-navigation-group > a.active { background:var(--pink);color:#fff;font-weight:800; }
+.admin aside nav .admin-navigation-group > a:focus-visible { outline:2px solid #ffe876;outline-offset:-2px; }
+.portal-saved-filter,.portal-booking-navigation { display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 20px; }
+.portal-booking-navigation a { padding:10px 14px;min-height:44px;box-sizing:border-box;border:1px solid #eed8e4;border-radius:10px;background:white;text-decoration:none;font-weight:600;color:var(--navy); }
+.portal-booking-navigation a:hover { background:#fff0f7; }
+.admin main nav.portal-booking-navigation { display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:16px 0 20px;max-width:100%; }
+.admin main nav.portal-booking-navigation a { display:flex;align-items:center;justify-content:center;min-height:48px;padding:12px 16px;border:1px solid #d6c3d0;border-radius:12px;background:#fff;color:var(--navy);text-align:center;font-weight:700;line-height:1.4; }
+.admin main nav.portal-booking-navigation a:hover { background:#fff0f7;border-color:var(--pink);color:var(--navy); }
+.admin main nav.portal-booking-navigation a:focus-visible { outline:3px solid var(--pink);outline-offset:2px; }
+@media(max-width:700px) { .admin main nav.portal-booking-navigation { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+[id^="booking-section-"] { scroll-margin-top:20px; }
+@media(max-width:700px) {
+  .admin .table-wrap:has(table.waiver-table) { overflow:visible; }
+  .admin table.waiver-table:has(td[data-column-label]) { display:block;width:100%;min-width:0; }
+  .admin table.waiver-table:has(td[data-column-label]) thead { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+  .admin table.waiver-table:has(td[data-column-label]) tbody { display:grid;gap:14px; }
+  .admin table.waiver-table:has(td[data-column-label]) tr { display:block;padding:12px;background:white;border:1px solid #eed8e4;border-radius:12px; }
+  .admin table.waiver-table td[data-column-label] { display:block;width:auto;max-width:none;border:0;padding:8px;overflow-wrap:anywhere; }
+  .admin table.waiver-table .booking-manage-form { min-width:0;grid-template-columns:minmax(0,1fr); }
+  .admin table.waiver-table td[data-column-label]::before { content:attr(data-column-label);display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:4px; }
+}
+.client-dashboard-dropdown { padding:0;overflow:hidden; }
+.client-dashboard-dropdown > summary { padding:18px 20px;cursor:pointer;font-weight:700; }
+.client-dashboard-dropdown > summary:focus-visible { outline:3px solid #f72585;outline-offset:-3px; }
+.client-dashboard-dropdown[open] > summary { border-bottom:1px solid #eed8e4;background:#fff3f8; }
+.client-dashboard-dropdown > section.panel { margin:0;border:0;box-shadow:none; }
+.client-dashboard-dropdown > .client-summary { margin:0;padding:16px; }
+.client-welcome .client-trustpilot { flex:0 0 100%;min-width:0;box-sizing:border-box;margin:0;padding:14px 16px;background:#ffffffcc;border:1px solid #eed8e4;border-radius:14px; }
+.client-welcome .client-trustpilot h2 { margin:0 0 6px;font-size:1.05rem; }
+.client-welcome .client-trustpilot p { margin:0 0 10px;font-size:.85rem; }
+.client-welcome #your-references { flex:0 0 100%;box-sizing:border-box;margin:0;background:#ffffffcc;border:1px solid #eed8e4;border-radius:14px; }
+.client-welcome #your-references small { font-weight:400;letter-spacing:normal;color:var(--muted); }
+#your-references h2 { margin:0 0 10px;font-size:1.05rem; }
+#your-references .client-grid { gap:14px; }
+#your-references h3 { margin:0 0 6px;font-size:.9rem; }
+#your-references p,#your-references a,#your-references summary { font-size:.8rem; }
+#your-references p { margin:6px 0; }
+#your-references .client-record { padding:6px 0;gap:3px; }
+#your-references .dashboard-reference-code { font-size:.8rem;line-height:1.3; }
+#your-references details { margin:4px 0 8px; }
+#your-references summary { cursor:pointer; }
+.admin-clients-heading { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px; }
+.admin-client-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)));gap:14px; }
+.admin-client-card { display:grid;align-content:start;gap:7px;border:1px solid var(--border);border-radius:12px;padding:16px;overflow-wrap:anywhere; }
+.admin-account-number { font-family:ui-monospace,monospace;font-weight:700;color:var(--navy); }
+.admin main nav[aria-label="Client profile sections"] { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px; }
+.admin main nav[aria-label="Client profile sections"] .btn { text-align:center;color:#183354;background:white;border:1px solid #7385a0;white-space:normal; }
+.admin main nav[aria-label="Client profile sections"] .btn[aria-current="page"] { color:white;background:#be185d;border-color:#be185d; }
+@media(max-width:600px) { .admin main nav[aria-label="Client profile sections"] { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
 /* Prominent section buttons in the notification hub. */
 .admin main nav.communications-navigation {

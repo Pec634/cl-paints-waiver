@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 import hashlib
 import secrets
+import math
 from flask import abort, redirect, render_template, request, session, url_for
 from werkzeug.exceptions import BadRequest
 
@@ -22,6 +23,14 @@ def define_models(db):
 
 def register(app,db,models,send_email,email_address):
     Attempt,Challenge=models
+    def source_key():
+        return hashlib.sha256((request.remote_addr or 'unknown').encode()).hexdigest()
+    def retry_seconds():
+        now=datetime.utcnow()
+        attempts=Attempt.query.filter(Attempt.source==source_key(),Attempt.created_at>now-timedelta(minutes=15)).order_by(Attempt.created_at.desc()).limit(5).all()
+        return max(0, math.ceil((attempts[-1].created_at+timedelta(minutes=15)-now).total_seconds())) if len(attempts)==5 else 0
+    def clear_attempts():
+        Attempt.query.filter_by(source=source_key()).delete();db.session.commit()
     def check_login():
         token=session.setdefault('admin_login_csrf',secrets.token_urlsafe(32))
         if not secrets.compare_digest(token,request.form.get('csrf_token','')):
@@ -30,8 +39,9 @@ def register(app,db,models,send_email,email_address):
         now=datetime.utcnow(); window=now-timedelta(minutes=15)
         if Attempt.query.filter(Attempt.source==source,Attempt.created_at>window).count()>=5:
             return False
-        db.session.add(Attempt(source=source)); db.session.commit()
         return True
+    def record_failure():
+        db.session.add(Attempt(source=source_key()));db.session.commit()
     def start_verification():
         email=email_address()
         if not email: return False
@@ -43,6 +53,9 @@ def register(app,db,models,send_email,email_address):
         session.clear();session['admin_challenge']=identity
         return True
     app.extensions['admin_login_check']=check_login
+    app.extensions['admin_login_retry_seconds']=retry_seconds
+    app.extensions['admin_login_clear_attempts']=clear_attempts
+    app.extensions['admin_login_record_failure']=record_failure
     app.extensions['admin_start_verification']=start_verification
 
     @app.route('/admin/verify',methods=['GET','POST'])

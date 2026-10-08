@@ -301,9 +301,18 @@ class ClientPortalTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         for secret in [b'secret@example.com', b'SECRET PERSON', b'SECRET VENUE', b'SECRET REASON', b'15:00']:
             self.assertNotIn(secret, response.data)
-        self.assertIn('Unavailable 09:00–13:00'.encode(), response.data)
-        self.assertIn('Unavailable 09:00–11:00'.encode(), response.data)
-        self.assertEqual(self.client.get('/booking/calendar?month=invalid').status_code, 400)
+        self.assertIn(b'Check your preferred date', response.data)
+        self.assertNotIn(b'client-calendar-grid', response.data)
+        self.assertNotIn(b'Unavailable 09:00', response.data)
+        blocked = self.client.post('/api/bookings/availability-check', json=dict(date='2099-01-02',start_time='09:30',finish_time='10:30',address='Venue',event_type='Party'))
+        self.assertFalse(blocked.json['available'])
+        self.assertIn('Please contact us',blocked.json['message'])
+        available = self.client.post('/api/bookings/availability-check', json=dict(date='2099-01-03',start_time='09:30',finish_time='10:30',address='Venue',event_type='Party'))
+        self.assertTrue(available.json['available'])
+        self.assertIn('Available to enquire',available.json['message'])
+        prefilled = self.client.get('/booking?preferred_date=2099-01-03&preferred_start=09:30&preferred_finish=10:30&preferred_type=Birthday').data
+        self.assertIn(b'2099-01-03',prefilled)
+        self.assertIn(b'Birthday',prefilled)
 
     def test_client_session_expiry_and_timer(self):
         self.signup()

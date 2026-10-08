@@ -65,6 +65,19 @@ adding a file its block becomes available for placement.
 
 ## Admin client profiles
 
+Every client account has a stable account number such as `CL-A-0001`, derived
+from its retained account ID. Existing accounts receive the display number without
+a data migration. Find it on the Clients cards and profile header; search the full
+number in Clients or Search all records. Clients offers 24 accounts per page,
+contact cards, address search and direct profile links. Enquiry replies are managed
+in the communications hub; the client list shows the five most recent enquiries.
+Referral-code linking expands only when needed.
+
+The client dashboard reference panel uses smaller text and tighter spacing for
+waivers, loyalty, referrals and recent booking references. Extra waiver/member/code
+rows expand on demand; links still open all records. Profile navigation uses aligned
+section buttons and adapts to a two-column grid on phones.
+
 Open a client name in **Clients** or a client result in **Search all records**.
 The private profile shows contact details, account creation date, booking counts,
 review requests, unread client messages, upcoming accepted events and payment totals.
@@ -200,3 +213,23 @@ automatically.
 Restart the app after updating. The existing startup creates the new audit,
 proposal, follow-up and notification-read tables without replacing existing data.
 The features use the existing authentication, CSRF, booking and payment services.
+
+Portal organisation
+-------------------
+Admin navigation groups bookings/events, clients/rewards, communications and
+business settings. The current page's group opens automatically. Without
+JavaScript the original navigation links remain available.
+
+The Bookings list can save its selected filter on the current browser/device.
+Saved filters contain filter choices only and can be removed from the same page.
+Admin tables present labelled cards on phones; desktop tables remain available.
+
+Client booking pages show event details and progress before payments, with
+activity history later. Both client booking details and the admin booking
+activity page offer section shortcuts and share the booking progress display.
+The existing notification centre already links updates to relevant records.
+
+Account, preference, booking and profile editing forms warn before leaving with
+unsaved edits. Browser confirmation wording is controlled by the browser.
+Empty dashboard payment/change panels are hidden until relevant records exist.
+The dashboard's request and reward counts remain visible below the welcome area.

@@ -1,0 +1,13 @@
+{% if login_reviews %}
+<section class="client-review-carousel" aria-label="Customer reviews" aria-roledescription="carousel">
+  {% for review in login_reviews %}
+  <figure class="client-signup-review" data-review-slide {% if not loop.first %}hidden{% endif %} aria-label="Review {{ loop.index }} of {{ login_reviews|length }}">
+    <div class="client-review-stars" aria-label="{{ review.rating }} out of 5 stars">{% for star in range(review.rating) %}&#9733;{% endfor %}</div>
+    <blockquote><p>&ldquo;{{ review.text }}&rdquo;</p></blockquote>
+    <figcaption><strong>{{ review.name }}</strong>{% if review.detail %}<span>{{ review.detail }}</span>{% endif %}<a href="https://www.trustpilot.com/review/clpaints.com" target="_blank" rel="noopener noreferrer">Read reviews on Trustpilot</a></figcaption>
+  </figure>
+  {% endfor %}
+  {% if login_reviews|length > 1 %}<div class="client-review-controls" hidden><button type="button" class="btn" data-review-prev aria-label="Previous review">&larr;</button><span data-review-count>1 / {{ login_reviews|length }}</span><button type="button" class="btn" data-review-next aria-label="Next review">&rarr;</button><button type="button" class="btn" data-review-pause>Pause rotation</button></div>{% endif %}
+</section>
+<script src="{{ url_for('static', filename='login-reviews.js') }}" defer></script>
+{% endif %}

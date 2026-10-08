@@ -1,13 +1,5 @@
-{% extends 'base.html' %}{% block title %}Availability | CL Paints{% endblock %}
-{% block body %}<main class="client-availability">
-<header><h1>Find a date for your event</h1><p>Browse our diary before sending your booking request. All times are UK local time.</p></header>
-<nav class="client-calendar-nav" aria-label="Choose calendar month"><a class="btn" aria-label="Previous month" href="{{ url_for('client_availability_calendar', month=previous) }}">← Previous</a><h2>{{ month.strftime('%B %Y') }}</h2><a class="btn" aria-label="Next month" href="{{ url_for('client_availability_calendar', month=next_month) }}">Next →</a></nav>
-<div class="client-calendar-key"><span class="client-calendar-free">Open for enquiries</span><span class="client-calendar-busy">Unavailable times</span></div>
-<p class="client-calendar-note">Unavailable times include confirmed bookings and setup/travel buffers. Other times may be available. CL Paints confirms availability after reviewing your request.</p>
-<div class="client-calendar-grid">{% for name in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<strong class="client-calendar-weekday">{{ name }}</strong>{% endfor %}
-{% for week in weeks %}{% for cell in week %}
-<article class="client-calendar-day{% if not cell.in_month %} client-calendar-outside{% endif %}{% if cell.times %} client-calendar-has-booking{% endif %}" aria-label="{{ cell.date.strftime('%A %d %B %Y') }}">
-<time datetime="{{ cell.date.isoformat() }}"><span class="client-calendar-date">{{ cell.date.day }}</span><span class="client-calendar-day-name">{{ cell.date.strftime('%A') }}</span></time>
-{% if cell.in_month %}<div class="client-calendar-day-details">{% if cell.times %}<strong class="client-calendar-status">{% if cell.times == ['00:00–24:00'] %}Unavailable all day{% else %}Partly booked{% endif %}</strong>{% for time in cell.times %}<span class="client-calendar-time">Unavailable {{ time }}</span>{% endfor %}{% else %}<span class="client-calendar-open">Open for enquiries</span>{% endif %}</div>{% endif %}
-</article>{% endfor %}{% endfor %}</div>
-</main>{% endblock %}
+{% extends 'base.html' %}{% block title %}Check a date | CL Paints{% endblock %}
+{% block body %}<main class="client-availability" style="max-width:650px;margin:24px auto;padding:16px"><section class="panel"><h1>Check your preferred date</h1><p>Tell us when and where you would like your event. All times are UK local time.</p>
+<form class="client-form" id="availability-form" data-check-url="{{ url_for('booking_availability_check') }}" data-booking-url="{{ url_for('booking_request') }}">
+<label>Event date<input type="date" name="date" min="{{ today }}" required></label><label>Start time<input type="time" name="start_time" required></label><label>Finish time<input type="time" name="finish_time" required></label><label>Event type<input name="event_type" maxlength="150" placeholder="For example, birthday party" required></label><label>Venue address<input name="address" maxlength="1000" autocomplete="street-address" required></label><button class="btn primary" type="submit">Check this date</button></form>
+<p id="availability-result" role="status"></p><a class="btn primary" id="availability-continue" hidden>Continue to booking request</a><p>Availability is provisional until CL Paints confirms your booking.</p><p><a href="mailto:{{ business_settings.contact_email }}">Contact CL Paints about your date</a></p></section></main><script src="{{ url_for('static', filename='availability-checker.js') }}" defer></script>{% endblock %}

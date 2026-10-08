@@ -331,6 +331,10 @@ app.extensions['studio_community_models'] = (StudioDesign, StudioReport, StudioF
 
 
 class ClientAccount(db.Model):
+    @property
+    def account_number(self):
+        return f'CL-A-{self.id:04d}' if self.id is not None else ''
+
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False, unique=True)
     first_name = db.Column(db.String(100), nullable=False)
@@ -1237,7 +1241,8 @@ def admin_login():
                 login_csrf=token,
             ), 400
         if not login_allowed:
-            return render_template('admin_login.html', error='Too many sign-in attempts. Wait 15 minutes before trying again.', login_csrf=token), 429
+            retry = app.extensions['admin_login_retry_seconds']()
+            return render_template('admin_login.html', error='Too many failed sign-in attempts. Please wait before trying again.', login_csrf=token, retry_seconds=retry), 429, {'Retry-After': str(retry)}
         password = request.form.get("password", "")
         password_is_valid = (
             check_password_hash(credential.password_hash, password)
@@ -1248,6 +1253,7 @@ def admin_login():
         if not credential and not ADMIN_PASSWORD:
             error = "Admin password has not been configured."
         elif password_is_valid:
+            app.extensions['admin_login_clear_attempts']()
             if os.getenv('ADMIN_EMAIL_VERIFICATION', '').lower() == 'true':
                 if app.extensions['admin_start_verification']():
                     return redirect(url_for('admin_verify'))
@@ -1257,6 +1263,7 @@ def admin_login():
             session['admin_last_activity'] = datetime.utcnow().timestamp()
             return redirect(url_for("admin_dashboard"))
         else:
+            app.extensions['admin_login_record_failure']()
             error = "Incorrect password."
 
     return render_template(
@@ -1264,6 +1271,7 @@ def admin_login():
         error=error,
         login_csrf=token,
         reset_success=request.args.get("reset") == "success",
+        retry_seconds=app.extensions['admin_login_retry_seconds'](),
     )
 
 
@@ -1411,7 +1419,7 @@ def booking_availability_check():
     for row in app.extensions['calendar_rows']():
         if row['booking'] and row['booking'].status != 'Accepted': continue
         if start < row['occupied_end'] and finish > row['occupied_start']:
-            return jsonify(success=True, available=False, message='This time is unavailable or overlaps setup/travel time. Choose another time or contact CL Paints.')
+            return jsonify(success=True, available=False, message='Please contact us about this date. We can discuss suitable arrangements.')
 
     for booking in Booking.query.filter_by(status="Accepted").all():
         try:
@@ -1439,13 +1447,13 @@ def booking_availability_check():
                 return jsonify({
                     "success": True,
                     "available": False,
-                    "message": "That time overlaps an accepted booking. Please choose another time.",
+                    "message": "Please contact us about this date. We can discuss suitable arrangements.",
                 })
 
     return jsonify({
         "success": True,
         "available": True,
-        "message": "No accepted booking overlaps that time. Availability remains subject to confirmation by CL Paints.",
+        "message": "Available to enquire. Availability is provisional until CL Paints confirms your booking.",
     })
 
 
@@ -1620,6 +1628,16 @@ def booking_request():
             form_data.update(app.extensions['repeat_booking_details'](portal_account, repeat_id))
     elif request.method == 'GET' and request.args.get('repeat'):
         return redirect(url_for('client.login'))
+    if request.method == 'GET' and request.args.get('preferred_date') and not request.args.get('repeat'):
+        try:
+            date = datetime.strptime(request.args['preferred_date'], '%Y-%m-%d').date()
+            start = datetime.strptime(request.args.get('preferred_start',''), '%H:%M').time()
+            finish = datetime.strptime(request.args.get('preferred_finish',''), '%H:%M').time()
+            if finish <= start: raise ValueError()
+            form_data['single_date'] = 'yes'
+            form_data['event_schedule'] = json.dumps({'events': [dict(date=date.isoformat(), start_time=start.strftime('%H:%M'), finish_time=finish.strftime('%H:%M'), event_type=request.args.get('preferred_type','')[:150], event_address=request.args.get('preferred_address','')[:1000])]})
+        except (ValueError, TypeError):
+            pass
     error = None
 
     if request.method == "POST":
