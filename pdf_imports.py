@@ -9,6 +9,12 @@ ALIASES = {
     'full_name': ('full name', 'client name', 'customer name', 'name'),
     'phone': ('phone', 'telephone', 'mobile', 'phone number', 'contact number'),
     'address': ('address', 'client address', 'billing address', 'home address'),
+    'address_line_2': ('address line 2',),
+    'address_line_3': ('address line 3',),
+    'city': ('city', 'town'),
+    'county': ('county', 'region'),
+    'postcode': ('postcode', 'postal code', 'zip code'),
+    'country': ('country',),
     'date_of_birth': ('date of birth', 'dob', 'birth date'),
     'event_date': ('event date', 'booking date', 'date'),
     'start_time': ('start time', 'starts', 'start'),
@@ -66,7 +72,7 @@ def text_records(text):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         value = text[match.end():end].strip()
         # Addresses may wrap across lines. Other values end at their first line.
-        value = ' '.join(value.splitlines()) if key in ('address', 'event_address') else (value.splitlines()[0] if value else '')
+        value = '\n'.join(line.strip() for line in value.splitlines() if line.strip()) if key in ('address', 'event_address') else (value.splitlines()[0] if value else '')
         if key in current:
             records.append(clean_record(current)); current = {}
         current[key] = value[:4000]

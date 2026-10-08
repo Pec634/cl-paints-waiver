@@ -31,6 +31,16 @@ class RecordImportsTest(unittest.TestCase):
         writer.writerow(['imported@example.com','Imported','Client','1990-01-01','2027-06-01','10:00','12:00','Venue, London','Birthday party','125.50','OLD-BOOKING-12'])
         return output.getvalue().encode()
 
+    def test_full_address_columns_preview_storage_and_clients_display(self):
+        response=self.upload('clients',b'email,first_name,last_name,Address Line 1,Address Line 2,Town,County,Postal Code,Country\nfull@example.com,Full,Address,10 Example Road,Flat 2,London,Greater London,SW1A 1AA,United Kingdom\n')
+        address='10 Example Road\nFlat 2\nLondon\nGreater London\nSW1A 1AA\nUnited Kingdom'
+        self.assertIn(address.encode(),self.admin.get(response.location).data)
+        self.assertEqual(self.save(response.location).status_code,302)
+        account=main.ClientAccount.query.filter_by(email='full@example.com').one()
+        self.assertEqual(account.address,address)
+        self.assertIn(address.encode(),self.admin.get('/admin/clients').data)
+        self.assertIn(address.encode(),self.admin.get(f'/admin/clients/{account.id}').data)
+
     def test_clients_review_mapping_duplicate_and_idempotence(self):
         initial=main.ClientAccount.query.count()
         response=self.upload('clients',b'Contact,Given name,Family name\nNEW@example.com,New,Client\nnew@example.com,Duplicate,Client\n')

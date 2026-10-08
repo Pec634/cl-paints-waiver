@@ -17,7 +17,10 @@ from dateutil.relativedelta import relativedelta
 from defusedxml.common import DefusedXmlException
 
 CLIENT_FIELDS = [('email', 'Email', True), ('first_name', 'First name', True),
-                 ('last_name', 'Surname', True), ('phone', 'Phone', False), ('address', 'Address', False)]
+                 ('last_name', 'Surname', True), ('phone', 'Phone', False), ('address', 'Full address / address line 1', False),
+                 ('address_line_2', 'Address line 2', False), ('address_line_3', 'Address line 3', False),
+                 ('city', 'Town / city', False), ('county', 'County / region', False),
+                 ('postcode', 'Postcode', False), ('country', 'Country', False)]
 BOOKING_FIELDS = CLIENT_FIELDS + [(name, label, required) for name, label, required in (
     ('date_of_birth', 'Date of birth', True), ('event_date', 'Event date', True),
     ('start_time', 'Start time', True), ('finish_time', 'Finish time', True),
@@ -147,6 +150,11 @@ def register(app, db, models, Account, Booking, current_client, admin_required):
         return str(amount)
 
     def validate(values, kind):
+        address_parts = [values.get(key, '').strip() for key in
+                         ('address', 'address_line_2', 'address_line_3', 'city', 'county', 'postcode', 'country')]
+        values['address'] = '\n'.join(part for part in address_parts if part)
+        for key in ('address_line_2', 'address_line_3', 'city', 'county', 'postcode', 'country'):
+            values[key] = ''
         for field, label, required in CLIENT_FIELDS if kind == 'clients' else BOOKING_FIELDS:
             if required and not values.get(field):
                 raise ValueError(f'{label} is required.')
@@ -240,6 +248,12 @@ def register(app, db, models, Account, Booking, current_client, admin_required):
                     expires_at=datetime.utcnow() + timedelta(hours=24))
                 fields = CLIENT_FIELDS if kind == 'clients' else BOOKING_FIELDS
                 normalized = {re.sub(r'[^a-z0-9]', '', header.lower()): index for index, header in enumerate(payload['headers'])}
+                for key, aliases in {'address': ['addressline1','streetaddress','fulladdress'],
+                                     'city': ['town','towncity'], 'county': ['region','state'],
+                                     'postcode': ['postalcode','zipcode','zip']}.items():
+                    if key not in normalized:
+                        match = next((normalized[alias] for alias in aliases if alias in normalized), None)
+                        if match is not None: normalized[key] = match
                 batch.mapping = json.dumps({key: normalized[re.sub(r'[^a-z0-9]', '', key)] for key, _, _ in fields if re.sub(r'[^a-z0-9]', '', key) in normalized})
                 db.session.add(batch); db.session.commit()
                 return redirect(url_for('admin_record_import_review', batch_id=batch.id))
