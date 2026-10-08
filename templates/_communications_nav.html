@@ -1,0 +1,4 @@
+<header><h1>Notifications &amp; messages</h1><p>Review activity, manage conversations and configure your emails and phone alerts here.</p></header>
+<nav class="communications-navigation" aria-label="Communications sections">
+{% for endpoint,label in [('admin_notification_centre','Activity'),('communications_messages','Messages'),('communications_history','Email history'),('communications_templates','Email templates & layout'),('marketing_dashboard','Campaigns'),('communications_configuration','Configuration')] %}
+<a class="btn" href="{{ url_for(endpoint) }}" {% if request.endpoint==endpoint or (endpoint=='communications_templates' and request.endpoint in ['admin_settings','email_preview']) or (endpoint=='communications_history' and request.endpoint=='email_history') or (endpoint=='marketing_dashboard' and request.endpoint in ['marketing_campaign','marketing_email_preview']) %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>

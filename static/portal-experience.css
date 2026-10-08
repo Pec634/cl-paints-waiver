@@ -27,3 +27,66 @@ body { font-size: 1rem; }
 /* Reference codes remain readable and selectable on narrow phone screens. */
 .dashboard-reference-code { display: block; font-family: ui-monospace, monospace; font-size: 1.15rem; overflow-wrap: anywhere; user-select: text; }
 #your-references .client-grid > section { min-width: 0; }
+
+/* Prominent section buttons in the notification hub. */
+.admin main nav.communications-navigation {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0 24px;
+    padding: 14px;
+    border: 1px solid #dce3ed;
+    border-radius: 14px;
+    background: #f1f4f9;
+}
+.admin main nav.communications-navigation .btn {
+    min-width: 0;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+@media (min-width: 1450px) {
+    .admin main nav.communications-navigation {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+}
+@media (max-width: 600px) {
+    .admin main nav.communications-navigation {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px;
+    }
+}
+.admin main nav[aria-label="Communications sections"] .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 11px 18px;
+    border: 2px solid #7385a0;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #183354;
+    font-weight: 750;
+    text-decoration: none;
+    box-shadow: 0 2px 4px #10213f20;
+}
+.admin main nav[aria-label="Communications sections"] .btn[aria-current="page"] {
+    background: #be185d;
+    border-color: #be185d;
+    color: #ffffff;
+    box-shadow: 0 3px 8px #be185d30;
+}
+.admin main nav[aria-label="Communications sections"] .btn:hover {
+    background: #183354;
+    border-color: #183354;
+    color: #ffffff;
+}
+.admin main nav[aria-label="Communications sections"] .btn[aria-current="page"]:hover {
+    background: #971249;
+    border-color: #971249;
+}
+.admin main nav[aria-label="Communications sections"] .btn:focus-visible {
+    outline: 3px solid #7c3aed;
+    outline-offset: 3px;
+}

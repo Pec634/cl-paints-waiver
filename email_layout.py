@@ -59,7 +59,7 @@ def register(app,db,Setting,Media,settings,admin_required):
         return validate(data,items(kind))
     @app.context_processor
     def context():
-        return {'email_layouts':{kind:saved(kind) for kind in ('booking','reward')}} if request.endpoint=='admin_settings' else {}
+        return {'email_layouts':{kind:saved(kind) for kind in ('booking','reward')}} if request.endpoint in ('admin_settings','communications_templates') else {}
     def render(config,kind,heading,body,footer,link,preview=False,draft=None):
         layout=validate(draft,items(kind)) if draft is not None else saved(kind)
         esc=html.escape

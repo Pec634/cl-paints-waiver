@@ -34,7 +34,7 @@ class PhonePushTest(unittest.TestCase):
         valid_subscription(subscription('https://web.push.apple.com/test'))
         self.assertEqual(self.enable(self.admin,'admin','https://fcm.googleapis.com/test').status_code,200)
         self.assertEqual(Subscription.query.count(),1)
-        response=self.admin.get('/admin/notifications')
+        response=self.admin.get('/admin/communications/configuration')
         self.assertIn(b'Phone notifications',response.data)
         response=self.admin.get('/phone-push-worker.js')
         self.assertEqual(response.status_code,200); response.close()

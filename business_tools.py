@@ -302,7 +302,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
             flash('Reply saved and emailed.' if sent else 'Reply saved; email delivery failed. Contact the client.', 'success' if sent else 'error')
         else:
             flash('Enquiry status saved.','success')
-        return redirect(url_for('admin_clients')+'#enquiry-'+str(enquiry.id))
+        return redirect((url_for('communications_messages',view='enquiries') if request.form.get('return_to')=='communications' else url_for('admin_clients'))+'#enquiry-'+str(enquiry.id))
 
     @app.post('/admin/loyalty/visits/<int:visit_id>/reverse')
     @admin_required
@@ -339,7 +339,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
     @app.get('/admin/email-history')
     @admin_required
     def email_history():
-        return render_template('admin_email_history.html',notices=Notice.query.order_by(Notice.id.desc()).limit(100).all())
+        return app.view_functions['communications_history']()
 
     @app.get('/admin/email-preview/<kind>')
     @admin_required

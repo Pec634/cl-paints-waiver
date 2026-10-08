@@ -1,4 +1,4 @@
-{% extends 'rewards/base.html' %}{% block title %}Campaign | CL Paints{% endblock %}{% block content %}
+{% extends 'rewards/base.html' %}{% block title %}Campaign | CL Paints{% endblock %}{% block content %}{% include '_communications_nav.html' %}
 <a href="{{ url_for('marketing_dashboard') }}">Back to Marketing</a><h1>{{ campaign.subject }}</h1>
 {% if not campaign.started_at %}
 <details class="panel" open><summary>Edit content and design</summary><form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="edit">
@@ -22,7 +22,7 @@
 {% if not campaign.started_at %}<p>Send to {{ eligible }} opted-in customers. The recipient list is saved when you start; consent is checked again before each email.</p><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn primary" name="action" value="start">Confirm recipient list</button></form>
 {% else %}<p id="marketingProgress" role="status">{{ pending }} emails remaining.</p>{% if pending %}<form method="post" id="marketingSendForm"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="send"><button class="btn primary" id="marketingSend">Send remaining emails</button><button type="button" class="btn" id="marketingPause" hidden>Pause after this email</button></form>{% endif %}{% endif %}
 <p>Accepted means Resend accepted the email for sending. Check Resend for delivery or bounce outcomes. Failed or interrupted attempts are recorded and are not automatically sent again.</p></section>
-<section class="panel"><h2>Sending history</h2>{% for delivery in deliveries %}<p>{{ delivery.email }} · {{ delivery.status }}{% if delivery.attempted_at %} · {{ delivery.attempted_at.strftime('%d/%m/%Y %H:%M') }} UTC{% endif %}</p>{% else %}<p>No sending attempts yet.</p>{% endfor %}</section>
+<section class="panel"><h2>Sending history</h2>{% for delivery in deliveries %}<p>{{ delivery.email }} Â· {{ delivery.status }}{% if delivery.attempted_at %} Â· {{ delivery.attempted_at.strftime('%d/%m/%Y %H:%M') }} UTC{% endif %}</p>{% else %}<p>No sending attempts yet.</p>{% endfor %}</section>
 <script>
 (() => {
 const form=document.getElementById('marketingSendForm'); if(!form)return;

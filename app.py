@@ -2738,5 +2738,9 @@ from admin_client_profiles import register as register_admin_client_profiles
 register_admin_client_profiles(app, db, AdminClientNote, ClientAccount, Booking, Waiver, Participant,
     BookingMessage, ClientEnquiry, ClientRewardOwner, BookingInvoice, loyalty_models, admin_required)
 
+from communications import register as register_communications
+register_communications(app, db, Booking, BookingMessage, notification_models[1], marketing_models,
+    get_business_settings, admin_required, ClientEnquiry, ClientAccount, tool_models[3])
+
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

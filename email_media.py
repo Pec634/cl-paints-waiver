@@ -56,7 +56,7 @@ def register(app,db,Media,admin_required):
             abort(400)
     @app.context_processor
     def context():
-        return {'email_media':Media.query.order_by(Media.id).all()} if request.endpoint=='admin_settings' else {}
+        return {'email_media':Media.query.order_by(Media.id).all()} if request.endpoint in ('admin_settings','communications_templates') else {}
     @app.post('/admin/settings/email-media')
     @admin_required
     def email_media_add():
@@ -90,12 +90,12 @@ def register(app,db,Media,admin_required):
             db.session.rollback(); flash(str(exc),'error')
         except SQLAlchemyError:
             db.session.rollback(); flash('The email item could not be saved. Please try again.','error')
-        return redirect(url_for('admin_settings',tab='email')+'#email-media')
+        return redirect(url_for('communications_templates')+'#email-media')
     @app.post('/admin/settings/email-media/<int:media_id>/delete')
     @admin_required
     def email_media_delete(media_id):
         check(); db.session.delete(db.get_or_404(Media,media_id)); db.session.commit()
-        return redirect(url_for('admin_settings',tab='email')+'#email-media')
+        return redirect(url_for('communications_templates')+'#email-media')
     @app.get('/admin/settings/email-media/<int:media_id>/file')
     @admin_required
     def email_media_file(media_id):

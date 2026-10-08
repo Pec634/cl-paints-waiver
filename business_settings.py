@@ -34,7 +34,7 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
     def admin_settings():
         token = session.setdefault('settings_csrf', secrets.token_urlsafe(32))
         email_sections = {'notifications', 'email_bookings', 'email_rewards', 'email_design'}
-        active_tab = 'email' if request.args.get('tab') == 'email' or request.form.get('section') in email_sections else 'general'
+        active_tab = 'email' if request.endpoint == 'communications_templates' or request.args.get('tab') == 'email' or request.form.get('section') in email_sections else 'general'
         if request.method == 'POST':
             if not secrets.compare_digest(request.form.get('csrf_token', ''), token):
                 return 'Your session expired. Reload Settings and try again.', 400
@@ -130,7 +130,7 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                         row.value = value
                 db.session.commit()
                 flash('Settings saved.', 'success')
-                return redirect(url_for('admin_settings', tab='email') if active_tab == 'email' else url_for('admin_settings'))
+                return redirect(url_for('communications_templates') if active_tab == 'email' else url_for('communications_configuration') if request.form.get('return_to') == 'communications' else url_for('admin_settings'))
             except (ValueError, InvalidOperation) as error:
                 db.session.rollback()
                 flash(str(error) if not isinstance(error, InvalidOperation) else 'Enter valid numbers for all fields.', 'error')

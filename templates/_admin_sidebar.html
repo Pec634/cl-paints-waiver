@@ -10,10 +10,11 @@
             ('admin_events', 'Events', current in ['admin_events', 'loyalty.event_admin']),
             ('admin_record_imports', 'Imports', current in ['admin_record_imports', 'admin_record_import_review']),
             ('admin_moodboard', 'Moodboard', current in ['admin_moodboard', 'admin_event_moodboard']),
+            ('admin_notification_centre', 'Notifications & messages', current in ['admin_notification_centre','communications_messages','communications_history','communications_templates','communications_configuration','email_history','email_preview','marketing_dashboard','marketing_campaign','marketing_email_preview'] or (current == 'admin_settings' and request.args.get('tab')=='email')),
             ('admin_participants', 'Participants', current in ['admin_participants', 'admin_waivers', 'admin_archived_waivers', 'admin_waiver_detail']),
             ('admin_reports', 'Reports', current == 'admin_reports'),
             ('admin_rewards', 'Rewards', current == 'admin_rewards' or current.startswith('rewards.')),
-            ('admin_settings', 'Settings', current == 'admin_settings'),
+            ('admin_settings', 'Settings', current == 'admin_settings' and request.args.get('tab')!='email'),
             ('studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin')
         ] %}
         <a href="{{ url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>

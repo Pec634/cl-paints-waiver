@@ -1,5 +1,29 @@
 # Admin and client portal features
 
+## Unified communications workspace
+
+Open **Notifications & messages** in the admin sidebar. The shared section menu
+is available on activity, conversation, history, template, campaign and configuration
+pages. Activity combines notifications and outstanding actions. Messages offers
+client messages, unread messages, sent admin replies and general enquiries; open
+a booking conversation to reply or manage an enquiry directly in that section.
+Viewing message lists does not mark them read. Sent booking messages are preserved
+in their conversation history rather than edited retroactively.
+
+Email history searches notification records and campaign recipients by sending
+status. Notification records retain update details, not snapshots of the historical
+email layout. Provider acceptance does not prove inbox delivery; client preferences
+can also explain a notification that was not sent. Older acknowledgements and login
+verification emails are not in this history. Campaign content remains on its campaign
+record. Phone alerts retain pending queue entries but not a historical delivery log.
+
+Email templates & layout contains the existing live composer and uploaded media.
+Configuration contains admin phone preferences and automatic-event-reminder settings.
+Phone keys, the push worker, reminder scheduler and Resend credentials still require
+the deployment configuration described elsewhere in this guide. Client preferences
+and consent continue to apply. General Settings retains business, pricing and account
+controls; email and reminder controls link into the communications workspace.
+
 ## Email images, attachments and links
 
 Open **Settings → Email configuration → Images, documents & links**. Add a label

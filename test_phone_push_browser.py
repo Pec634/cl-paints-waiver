@@ -6,7 +6,7 @@ class PhonePushBrowserTest(unittest.TestCase):
     def test_mobile_permission_preferences_and_disable(self):
         fixture=browsers.NativeFormBrowserTest(); fixture.setUp()
         try:
-            page=fixture.fixture.admin.get('/admin/notifications')
+            page=fixture.fixture.admin.get('/admin/communications/configuration')
             fixture.browser(page.data, '''
               const pause = () => new Promise(resolve => setTimeout(resolve, 50));
               await pause();
