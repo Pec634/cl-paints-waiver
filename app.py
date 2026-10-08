@@ -515,6 +515,8 @@ from portal_experience import define_model as define_portal_read_model
 PortalRead = define_portal_read_model(db)
 from record_imports import define_models as define_record_import_models
 record_import_models = define_record_import_models(db)
+from phone_push import define_models as define_phone_push_models
+phone_push_models = define_phone_push_models(db)
 from client_features import define_model as define_client_preference_model
 ClientEmailPreference = define_client_preference_model(db)
 app.extensions['client_email_preference_model'] = ClientEmailPreference
@@ -2719,6 +2721,9 @@ register_staff_reports(app, db, staff_report_models, admin_required)
 def privacy_policy():
     return render_template('privacy_policy.html')
 
+
+from phone_push import register as register_phone_push
+register_phone_push(app, db, phone_push_models, Booking, get_current_client, admin_required)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

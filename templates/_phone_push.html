@@ -1,0 +1,9 @@
+<section class="panel" id="phone-notifications" data-push-api="{{ '/admin/phone-notifications' if is_admin else '/client/phone-notifications' }}">
+<h2>Phone notifications</h2><p>Receive alerts on this device, even when the portal is closed. Private message text is kept off the lock screen.</p>
+<p>On iPhone or iPad, add this portal to your Home Screen, then open it from that icon. Notifications need your permission and a secure connection.</p>
+<fieldset><legend>Notify me about</legend>
+{% for key,label in [('bookings','Bookings & date changes'),('messages','Booking messages'),('payments','Payments & invoices'),('updates','Enquiries, rewards & event feedback')] %}
+<label style="display:flex;align-items:center;gap:.65rem;margin:.6rem 0"><input type="checkbox" value="{{ key }}" checked style="width:auto;margin:0">{{ label }}</label>
+{% endfor %}</fieldset><div class="client-action-row"><button type="button" class="btn" data-push-enable>Enable / save preferences</button><button type="button" class="btn" data-push-disable>Turn off on this device</button></div>
+<p data-push-status role="status" aria-live="polite">Checking phone notification availability…</p></section>
+<script src="{{ url_for('static',filename='phone-push.js') }}" defer></script>

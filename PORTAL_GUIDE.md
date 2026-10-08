@@ -10,9 +10,17 @@ overwritten. Repeated original source references are also detected for bookings.
 
 Files allow up to 500 data rows, 60 columns and 5 MB. Use UTF-8 CSV or the first
 worksheet of an XLSX file. Replace formulas with values. Dates accept YYYY-MM-DD
-or DD/MM/YYYY, and times use HH:MM. PDF, scanned documents and older XLS files are
-not supported. This first version imports one event per booking row; use the
+or DD/MM/YYYY, and times use HH:MM. Older XLS files are not supported.
+This version imports one event per booking row; use the
 normal booking workflow for multi-date bookings.
+
+PDF uploads support selectable text, labelled details, simple tables and known
+filled form fields. Open the extracted page text alongside the editable records,
+correct missing or misidentified details, and save corrections before confirming
+the import. Extraction runs locally; documents are not sent to an external service.
+PDFs can contain up to 20 pages within the 5 MB upload limit. Unlock protected PDFs
+first. Scanned PDFs need OCR (text recognition) and must be saved as searchable
+PDFs before uploading; automatic OCR is not included.
 
 Client rows require email, first name and surname. Booking rows additionally
 require date of birth, event date, start and finish times, venue and event name.
@@ -25,9 +33,13 @@ Review accepted bookings carefully because they reserve calendar space. Import
 previews are private to the uploading admin session, expire after 24 hours, and
 their staged contents are cleared when imported or when expired batches are
 cleaned up on the next visit to Imports. Import receipts remain for duplicate
-protection. Install the updated requirements for XLSX support.
+protection. Install the updated requirements for XLSX and PDF support.
 
 ## Notifications and next steps
+
+Phone push controls are available in each portal's notification centre. Choose
+bookings, messages, payments and other updates per device. Hosted setup needs HTTPS,
+VAPID keys and one delivery worker; see [Phone notification setup](PHONE_NOTIFICATIONS.md).
 
 Admins can open **Notifications**, **Search all records** and **Calendar** from
 the toolbar on admin pages. Clients have **Notifications** in the portal menu.

@@ -52,9 +52,12 @@ def define_models(db):
     return RecordImportBatch, RecordImportReceipt
 
 
-def read_table(filename, content):
+def read_table(filename, content, kind='bookings'):
     if not content or len(content) > 5_000_000:
-        raise ValueError('Choose a non-empty CSV or XLSX file up to 5 MB.')
+        raise ValueError('Choose a non-empty CSV, XLSX or PDF file up to 5 MB.')
+    if filename.lower().endswith('.pdf'):
+        from pdf_imports import read_pdf
+        return read_pdf(content, CLIENT_FIELDS if kind == 'clients' else BOOKING_FIELDS)
     if filename.lower().endswith('.csv'):
         try:
             text = content.decode('utf-8-sig')
@@ -102,7 +105,7 @@ def read_table(filename, content):
         except (zipfile.BadZipFile, KeyError, OSError, ParseError, DefusedXmlException):
             raise ValueError('Choose a valid, unencrypted XLSX workbook.') from None
     else:
-        raise ValueError('Use CSV or Excel XLSX. PDF, scanned files and older XLS workbooks are not supported yet.')
+        raise ValueError('Use CSV, Excel XLSX or a searchable PDF. Older XLS workbooks are not supported.')
     if len(table) < 2:
         raise ValueError('Include a header row and at least one data row.')
     headers = [str(value).strip() for value in table[0]]
@@ -231,7 +234,7 @@ def register(app, db, models, Account, Booking, current_client, admin_required):
                 upload = request.files.get('file')
                 if not upload:
                     raise ValueError('Choose a file to upload.')
-                payload = read_table(upload.filename or '', upload.stream.read(5_000_001))
+                payload = read_table(upload.filename or '', upload.stream.read(5_000_001), kind)
                 batch = Batch(id=secrets.token_hex(32), owner=owner(), kind=kind,
                     filename=(upload.filename or '').replace('\\','/').split('/')[-1][:255], payload=json.dumps(payload),
                     expires_at=datetime.utcnow() + timedelta(hours=24))
@@ -256,7 +259,21 @@ def register(app, db, models, Account, Booking, current_client, admin_required):
             if batch.state == 'Complete':
                 return redirect(url_for('admin_record_import_review', batch_id=batch.id))
             action = request.form.get('action')
-            if action == 'map':
+            if action == 'edit_pdf':
+                payload = json.loads(batch.payload)
+                if payload.get('format') != 'pdf':
+                    abort(400)
+                for index, row in enumerate(payload['rows']):
+                    for column, key in enumerate(payload['headers']):
+                        value = request.form.get(f'pdf_{index}_{key}', '').strip()
+                        if len(value) > 4000:
+                            abort(400)
+                        row[column] = value
+                batch.payload = json.dumps(payload)
+                batch.mapping = json.dumps({key: index for index, key in enumerate(payload['headers'])})
+                db.session.commit()
+                flash('PDF corrections saved to the preview. Review the rows below before importing.', 'success')
+            elif action == 'map':
                 mapping = {}
                 for key, _, _ in fields:
                     value = request.form.get(key, '')
@@ -317,7 +334,8 @@ def register(app, db, models, Account, Booking, current_client, admin_required):
                 abort(400)
         payload = json.loads(batch.payload)
         response = app.make_response(render_template('admin_import_review.html', batch=batch, fields=fields,
-            headers=payload.get('headers', []), mapping=json.loads(batch.mapping), rows=preview(batch) if batch.state == 'Pending' else [], client_csrf=csrf()))
+            headers=payload.get('headers', []), mapping=json.loads(batch.mapping), rows=preview(batch) if batch.state == 'Pending' else [],
+            pdf_source=payload.get('sources', []), is_pdf=payload.get('format') == 'pdf', client_csrf=csrf()))
         response.headers['Cache-Control'] = 'private, no-store'
         return response
 
