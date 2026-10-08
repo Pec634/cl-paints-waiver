@@ -1,1 +1,13 @@
-{% extends 'client/base.html' %}{% block content %}<section class="panel"><h1>{{ item.title_snapshot }}</h1><p>Received · F-{{ item.id }}</p>{% for label,value in answers.items() %}<p><strong>{{ label }}</strong>: {{ value }}</p>{% endfor %}<details><summary>Accepted wording</summary><p class="rota-note">{{ item.terms_snapshot }}</p></details>{% for file in media %}<p><a href="{{ url_for('native_media',media_id=file.id) }}">Download {{ file.filename }}</a></p>{% endfor %}<p>To ask about this submission or withdraw photography consent, contact us with reference F-{{ item.id }}.</p><a class="btn" href="{{ url_for('client.contact') }}">Contact CL Paints</a></section>{% endblock %}
+{% extends 'client/base.html' %}
+{% from '_native_answers.html' import answer with context %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='native-fields.css') }}">
+<a class="btn" href="{{ url_for('native_submission_pdf',token=item.token) }}">Download response PDF</a>
+<section class="panel"><h1>{{ item.title_snapshot }}</h1><p>Received · F-{{ item.id }}</p>
+{% if confirmation_message %}<p class="native-preserve">{{ confirmation_message }}</p>{% endif %}
+{% for label,value in answers.items() %}{% set definition = snapshot.get('fields', [])|selectattr('label', 'equalto', label)|first|default({}) %}<div class="native-response-answer"><strong>{{ label }}</strong><div>{{ answer(value, definition) }}</div></div>{% endfor %}
+<details><summary>Accepted wording</summary><p class="native-preserve">{{ item.terms_snapshot }}</p>{% for block in snapshot.get('fields', []) if block.type in ['content', 'heading'] %}<h3>{{ block.label }}</h3><p class="native-preserve">{{ block.get('content', '') }}</p>{% endfor %}</details>
+{% for file in files %}<p><a href="{{ url_for('native_field_file', file_id=file.id) }}">Download {{ file.label }}: {{ file.filename }}</a></p>{% endfor %}
+{% for file in media %}<p><a href="{{ url_for('native_media',media_id=file.id) }}">Download {{ file.filename }}</a></p>{% endfor %}
+<p>To ask about this submission or withdraw photography consent, contact us with reference F-{{ item.id }}.</p><a class="btn" href="{{ url_for('client.contact') }}">Contact CL Paints</a></section>
+{% endblock %}

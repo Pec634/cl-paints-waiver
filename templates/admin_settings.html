@@ -4,20 +4,7 @@
 <label class="booking-field"><span>{{ label }}</span><input type="{{ type }}" name="{{ name }}" value="{{ settings[name] }}" {% if minimum != '' %}min="{{ minimum }}"{% endif %} {% if maximum != '' %}max="{{ maximum }}"{% endif %} {% if step %}step="{{ step }}"{% endif %} {% if type == 'number' %}required{% endif %} {% if type in ['text', 'email', 'url'] %}maxlength="255"{% endif %}></label>
 {% endmacro %}
 {% block body %}
-<div class="admin"><aside><div class="brand light">CL <span>Paints</span></div><nav>
-            <a href="/">Dashboard</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
-            <a href="{{ url_for('admin_events') }}">Events</a>
-            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
-            <a href="{{ url_for('admin_reports') }}">Reports</a>
-            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
-            <a class="active" href="{{ url_for('admin_settings') }}">Settings</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_logout') }}">Logout</a>
-        </nav></aside><main class="settings-main">
+<div class="admin">{% include '_admin_sidebar.html' %}<main class="settings-main">
 <header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Settings</h1><p>Manage your business details, booking rules and admin account.</p></div></header>
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
 <nav class="settings-tabs" aria-label="Settings sections"><a class="btn{% if active_tab == 'general' %} primary{% endif %}" href="{{ url_for('admin_settings') }}" {% if active_tab == 'general' %}aria-current="page"{% endif %}>General settings</a><a class="btn{% if active_tab == 'email' %} primary{% endif %}" href="{{ url_for('admin_settings', tab='email') }}" {% if active_tab == 'email' %}aria-current="page"{% endif %}>Email configuration</a></nav>

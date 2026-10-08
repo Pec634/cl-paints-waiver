@@ -1,0 +1,6 @@
+{% if portal_next_steps is defined %}
+<section class="panel portal-next-steps" aria-labelledby="portal-next-steps-title">
+<div class="panel-heading"><div><h2 id="portal-next-steps-title">Your next steps</h2><p>Messages, booking updates, payments, approaching events and follow-up.</p></div><span class="dashboard-count">{{ portal_next_steps_total }}</span></div>
+{% for step in portal_next_steps %}<a class="dashboard-item" href="{{ step.link }}"><div><h3>{{ step.label }}</h3><p>{{ step.detail }}</p></div><span aria-hidden="true">&rarr;</span></a>{% else %}<p>No outstanding actions here. Booking updates and payment requests will appear as they are recorded.</p>{% endfor %}
+{% if portal_next_steps_total > 8 %}<p>Showing the first eight actions. Open your bookings to review the remaining items.</p>{% endif %}
+</section>{% endif %}

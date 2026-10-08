@@ -1,0 +1,24 @@
+<aside>
+    <div class="brand light">CL <span>Paints</span></div>
+    <nav aria-label="Admin navigation">
+        <a href="{{ url_for('admin_dashboard') }}" {% if request.endpoint == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
+        <hr class="admin-nav-divider">
+        {% set current = request.endpoint or '' %}
+        {% for endpoint, label, active in [
+            ('admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages', 'admin_payments', 'admin_booking_invoices']),
+            ('admin_clients', 'Clients', current == 'admin_clients'),
+            ('admin_events', 'Events', current in ['admin_events', 'loyalty.event_admin']),
+            ('admin_record_imports', 'Imports', current in ['admin_record_imports', 'admin_record_import_review']),
+            ('admin_moodboard', 'Moodboard', current in ['admin_moodboard', 'admin_event_moodboard']),
+            ('admin_participants', 'Participants', current in ['admin_participants', 'admin_waivers', 'admin_archived_waivers', 'admin_waiver_detail']),
+            ('admin_reports', 'Reports', current == 'admin_reports'),
+            ('admin_rewards', 'Rewards', current == 'admin_rewards' or current.startswith('rewards.')),
+            ('admin_settings', 'Settings', current == 'admin_settings'),
+            ('studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin')
+        ] %}
+        <a href="{{ url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+        <hr class="admin-nav-divider">
+        <a href="{{ url_for('admin_logout') }}">Logout</a>
+    </nav>
+</aside>

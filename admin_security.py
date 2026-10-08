@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import hashlib
 import secrets
 from flask import abort, redirect, render_template, request, session, url_for
+from werkzeug.exceptions import BadRequest
 
 
 def define_models(db):
@@ -23,7 +24,8 @@ def register(app,db,models,send_email,email_address):
     Attempt,Challenge=models
     def check_login():
         token=session.setdefault('admin_login_csrf',secrets.token_urlsafe(32))
-        if not secrets.compare_digest(token,request.form.get('csrf_token','')):abort(400)
+        if not secrets.compare_digest(token,request.form.get('csrf_token','')):
+            raise BadRequest('The admin sign-in form has expired. Please enter your password again.')
         source=hashlib.sha256((request.remote_addr or 'unknown').encode()).hexdigest()
         now=datetime.utcnow(); window=now-timedelta(minutes=15)
         if Attempt.query.filter(Attempt.source==source,Attempt.created_at>window).count()>=5:

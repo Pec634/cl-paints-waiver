@@ -8,26 +8,7 @@ Waiver Management | CL Paints
 
 <div class="admin">
 
-    <aside>
-        <div class="brand light">
-            CL <span>Paints</span>
-        </div>
-
-        <nav>
-            <a href="/">Dashboard</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
-            <a href="/admin/events">Events</a>
-            <a href="/admin/moodboard">Moodboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
-            <a href="{{ url_for('admin_reports') }}">Reports</a>
-            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
-            <a href="{{ url_for('admin_settings') }}">Settings</a>
-            <hr class="admin-nav-divider">
-            <a href="/admin/logout">Logout</a>
-        </nav>
-    </aside>
+    {% include '_admin_sidebar.html' %}
 
     <main>
 

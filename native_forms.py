@@ -1,15 +1,26 @@
 """Native giveaway, private consent uploads, and seasonal booking definitions."""
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import json
 import secrets
+import hashlib
 from zoneinfo import ZoneInfo
-from flask import abort, flash, redirect, render_template, request, session, url_for, send_file
+from flask import abort, flash, redirect, render_template, request, session, url_for, send_file, jsonify
 from sqlalchemy.exc import IntegrityError
+from native_form_fields import parse_fields, field_answers
+from native_form_records import define_models as define_record_models, register as register_records, validate_settings, confirmation, read_form_files, upload_names, STATUSES
+from native_form_features import signature_path, accessibility_issues
 
 
 def define_models(db):
+    define_record_models(db)
+    from form_workflows import define_models as define_workflow_models
+    define_workflow_models(db)
+    class NativeFormImage(db.Model):
+        id=db.Column(db.Integer,primary_key=True)
+        content=db.Column(db.LargeBinary,nullable=False)
+        mime=db.Column(db.String(50),nullable=False)
+    db._native_form_image=NativeFormImage
     class BookingDesignMedia(db.Model):
         id=db.Column(db.Integer,primary_key=True)
         booking_id=db.Column(db.Integer,db.ForeignKey('booking.id'),nullable=False,index=True)
@@ -54,23 +65,8 @@ def available(form, now=None):
     return form and form.enabled and (not form.starts_at or form.starts_at<=now) and (not form.ends_at or now<form.ends_at)
 
 
-def answers(form, submitted):
-    result={}
-    for index,field in enumerate(json.loads(form.fields_json)):
-        value=submitted.get('custom_'+str(index),'').strip()
-        if field['required'] and not value:raise ValueError('Complete '+field['label']+'.')
-        if len(value)>2000:raise ValueError(field['label']+' is too long.')
-        if value and field['type']=='number':
-            try:
-                if not Decimal(value).is_finite():raise ValueError('Enter a valid number for '+field['label']+'.')
-            except InvalidOperation:raise ValueError('Enter a valid number for '+field['label']+'.')
-        if value and field['type']=='date':
-            try:datetime.strptime(value,'%Y-%m-%d')
-            except ValueError:raise ValueError('Enter a valid date for '+field['label']+'.')
-        if value and field['type']=='select' and value not in field.get('options',[]):raise ValueError('Choose a listed option for '+field['label']+'.')
-        if value and field['type']=='checkbox' and value!='yes':raise ValueError('Confirm '+field['label']+'.')
-        result[field['label']]=value
-    return result
+def answers(form, submitted, uploads=None):
+    return field_answers(form, submitted, uploads)
 
 
 def register(app,db,models,Account,Booking,current_client,admin_required,send_email):
@@ -81,15 +77,66 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     app.extensions['native_booking_media']=db._native_booking_media
     @app.context_processor
     def native_context():
-        return dict(native_forms=[f for f in Form.query.order_by(Form.id.desc()).all() if available(f)],native_form_fields=lambda f: json.loads(f.fields_json))
+        return dict(native_forms=[f for f in Form.query.order_by(Form.id.desc()).all() if available(f)],native_form_fields=lambda f: json.loads(f.fields_json),native_signature_path=signature_path,
+            native_form_settings=lambda f: records['settings'](f),native_booking_details=lambda booking: records['booking_details'](booking))
 
     def csrf():return session.setdefault('client_csrf',secrets.token_urlsafe(32))
     def check():
         if not secrets.compare_digest(csrf(),request.form.get('csrf_token','')):abort(400)
+    records=register_records(app,db,models,Account,Booking,current_client,admin_required,available,csrf,check)
+    from form_workflows import register as register_workflows
+    workflows=register_workflows(app,db,models,Booking,current_client,admin_required,available,records,csrf,check)
+    def revision(form):return hashlib.sha256(json.dumps(records['snapshot'](form),sort_keys=True).encode()).hexdigest()
+    def publish_checks(form):
+        from form_publish_checks import checklist
+        return checklist(form,records['settings'](form),lambda identity:db.session.get(db._native_form_image,identity) is not None)
+
+    @app.get('/admin/native-forms/<int:form_id>/checklist')
+    @admin_required
+    def native_form_checklist(form_id):
+        response=jsonify(publish_checks(db.get_or_404(Form,form_id)));response.headers['Cache-Control']='no-store';return response
+
+    @app.post('/admin/native-form-images')
+    @admin_required
+    def native_form_image_upload():
+        check()
+        upload=request.files.get('image')
+        if not upload or not upload.filename:return jsonify(error='Choose a JPG, PNG or WebP image.'),400
+        content=upload.stream.read(5_000_001)
+        if not content or len(content)>5_000_000:return jsonify(error='Images must be no larger than 5 MB.'),400
+        if content.startswith(b'\x89PNG\r\n\x1a\n'):mime='image/png'
+        elif content.startswith(b'\xff\xd8\xff'):mime='image/jpeg'
+        elif content[:4]==b'RIFF' and content[8:12]==b'WEBP':mime='image/webp'
+        else:return jsonify(error='Use JPG, PNG or WebP images.'),400
+        image=db._native_form_image(content=content,mime=mime)
+        db.session.add(image);db.session.commit()
+        return jsonify(url=url_for('native_form_image',image_id=image.id),mime=mime),201
+
+    @app.get('/form-images/<int:image_id>')
+    def native_form_image(image_id):
+        image=db.get_or_404(db._native_form_image,image_id)
+        source=url_for('native_form_image',image_id=image.id)
+        admin=session.get('admin_authenticated') and datetime.utcnow().timestamp()-session.get('admin_last_activity',0)<1800
+        if not admin:
+            referenced=False
+            for form in Form.query.filter_by(enabled=True).all():
+                if not available(form):continue
+                for field in json.loads(form.fields_json):
+                    if field.get('src')==source or source in field.get('option_images',{}).values():referenced=True;break
+                from form_workflows import catalog
+                settings=records['settings'](form)
+                if any(row.get('image')==source for key in ('packages','extras') for row in catalog(settings.get(key,''),key)):referenced=True
+                if referenced:break
+            if not referenced:abort(404)
+        response=send_file(BytesIO(image.content),mimetype=image.mime)
+        response.headers['Cache-Control']='no-store'
+        response.headers['X-Content-Type-Options']='nosniff'
+        return response
 
     @app.route('/admin/native-forms',methods=['GET','POST'])
     @admin_required
     def native_forms_admin():
+        submitted = None
         if request.method=='POST':
             check()
             try:
@@ -98,27 +145,37 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                     if not preset:raise ValueError('Choose a listed template.')
                     form=Form(kind=preset['kind'],title=preset['title'],description=preset['description'],terms=preset['terms'],fields_json=json.dumps(preset['fields']))
                     db.session.add(form)
+                elif request.form.get('action')=='duplicate':
+                    source=db.get_or_404(Form,request.form.get('id',type=int))
+                    form=Form(kind=source.kind,title=source.title[:143]+' (copy)',description=source.description,
+                        terms=source.terms,fields_json=source.fields_json,enabled=False)
+                    db.session.add(form)
+                    db.session.flush();records['set_settings'](form,records['settings'](source))
                 elif request.form.get('action')=='toggle':
-                    form=db.get_or_404(Form,request.form.get('id',type=int));form.enabled=not form.enabled
+                    form=db.get_or_404(Form,request.form.get('id',type=int))
+                    if not form.enabled:
+                        result=publish_checks(form)
+                        if not result['ready']:raise ValueError('Before publishing: '+' '.join(result['errors']))
+                    form.enabled=not form.enabled
                 else:
                     kind=request.form.get('kind');title=request.form.get('title','').strip()
                     terms=request.form.get('terms','').strip();description=request.form.get('description','').strip()
                     if kind not in ('giveaway','photo','booking') or not title or len(title)>150 or len(description)>2000 or len(terms)>10000:
                         raise ValueError('Check the form type, title and text lengths.')
                     if kind in ('giveaway','photo') and not terms:raise ValueError('Add the giveaway rules or photography permissions before creating this form.')
-                    fields=[]
-                    for line in request.form.get('fields','').splitlines():
-                        if not line.strip():continue
-                        parts=[p.strip() for p in line.split('|')]
-                        if len(parts) not in (3,4) or not parts[0] or len(parts[0])>150 or parts[1] not in ('text','textarea','number','date','checkbox','select') or parts[2] not in ('required','optional'):
-                            raise ValueError('Use Question | type | required/optional; select questions also need | choices separated by commas.')
-                        if any(f['label']==parts[0] for f in fields):raise ValueError('Question labels must be unique.')
-                        fields.append(dict(label=parts[0],type=parts[1],required=parts[2]=='required'))
-                        if parts[1]=='select':
-                            choices=[v.strip() for v in parts[3].split(',') if v.strip()] if len(parts)==4 else []
-                            if not choices or len(choices)>20 or any(len(v)>150 for v in choices):raise ValueError('Provide up to twenty short choices for each select question.')
-                            fields[-1]['options']=choices
-                    if len(fields)>10:raise ValueError('Use up to ten extra questions.')
+                    fields=parse_fields(request.form)
+                    settings_data=validate_settings(request.form)
+                    from form_workflows import catalog
+                    for key in ('packages','extras'):
+                        for row in catalog(settings_data.get(key,''),key):
+                            source=row.get('image','')
+                            if source.startswith('/form-images/') and not db.session.get(db._native_form_image,int(source.rsplit('/',1)[1])):
+                                raise ValueError('A package image is missing. Upload it again before saving.')
+                    for field in fields:
+                        sources=[field.get('src','')]+list(field.get('option_images',{}).values())
+                        for source in sources:
+                            if source.startswith('/form-images/') and not db.session.get(db._native_form_image,int(source.rsplit('/',1)[1])):
+                                raise ValueError('An uploaded image is missing. Upload it again before saving.')
                     def stamp(value):
                         if not value:return None
                         parsed=datetime.fromisoformat(value)
@@ -128,27 +185,54 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                     if start and end and end<=start:raise ValueError('Closing time must follow opening time.')
                     form_id=request.form.get('id',type=int)
                     form=db.get_or_404(Form,form_id) if form_id else Form(kind=kind)
+                    if request.form.get('action')=='autosave' and form_id:
+                        form=Form.query.filter_by(id=form_id).populate_existing().with_for_update().first()
+                        if request.form.get('revision')!=revision(form):
+                            return jsonify(error='This draft changed in another tab. Reload before continuing; your current edits have not been overwritten.'),409
                     if form.enabled or form.kind!=kind:raise ValueError('Unpublish before editing; form type cannot change.')
                     form.title=title;form.description=description;form.terms=terms;form.fields_json=json.dumps(fields);form.starts_at=start;form.ends_at=end
                     db.session.add(form)
-                db.session.commit();flash('Saved. New forms start as drafts; publish when ready.','success')
+                    db.session.flush();records['set_settings'](form,settings_data)
+                records['record_version'](form)
+                db.session.commit()
+                action=request.form.get('action')
+                if action=='autosave':return jsonify(id=form.id,revision=revision(form),saved_at=datetime.utcnow().isoformat()+'Z')
+                if action=='toggle':
+                    message='Published. Responses are accepted during the availability window.' if form.enabled else 'Unpublished. Responses are paused; you can now edit the draft.'
+                elif action=='duplicate':message='Created a draft copy. Set new opening and closing dates before publishing.'
+                else:message='Draft saved. Review it, then publish from Your forms when ready.'
+                flash(message,'success')
+                if request.form.get('action') in ('preset','duplicate') or not request.form.get('action'):
+                    return redirect(url_for('native_forms_admin',edit=form.id))
             except ValueError as error:
-                db.session.rollback();flash(str(error),'error')
-            return redirect(url_for('native_forms_admin'))
-        edit_id=request.args.get('edit',type=int)
+                db.session.rollback()
+                if request.form.get('action')=='autosave':
+                    return jsonify(error=str(error)),400
+                flash(str(error),'error')
+                if not request.form.get('action'):submitted=request.form
+            if submitted is None:return redirect(url_for('native_forms_admin'))
+        edit_id=submitted.get('id',type=int) if submitted is not None else request.args.get('edit',type=int)
         edit_form=db.get_or_404(Form,edit_id) if edit_id else None
         def local(value):return value.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/London')).strftime('%Y-%m-%dT%H:%M') if value else ''
-        return render_template('admin_native_forms.html',forms=Form.query.order_by(Form.id.desc()).all(),csrf=csrf(),edit_form=edit_form,
+        builder_fields=submitted.get('fields_json','') if submitted is not None else (edit_form.fields_json if edit_form else '[]')
+        return render_template('admin_native_forms.html',forms=Form.query.order_by(Form.id.desc()).all(),csrf=csrf(),edit_form=edit_form,submitted=submitted,available=available,now=datetime.utcnow(),builder_fields=builder_fields,
+            form_settings=records['settings'](edit_form) if edit_form else {},versions=records['versions'](edit_form) if edit_form else [],builder_revision=revision(edit_form) if edit_form else '',
             edit_fields='\n'.join(f"{f['label']} | {f['type']} | {'required' if f['required'] else 'optional'}"+(' | '+', '.join(f['options']) if f.get('options') else '') for f in json.loads(edit_form.fields_json)) if edit_form else '',local=local)
 
     @app.get('/forms/<int:form_id>')
     def native_form_open(form_id):
         form=db.get_or_404(Form,form_id)
-        if not available(form):abort(404)
+        if not available(form):
+            if form.enabled and records['settings'](form).get('waitlist_enabled')=='yes':return redirect(url_for('form_waiting_list',form_id=form.id))
+            abort(404)
+        if workflows['full'](form):
+            if records['settings'](form).get('waitlist_enabled')=='yes':return redirect(url_for('form_waiting_list',form_id=form.id))
+            abort(404)
         if form.kind=='booking':return redirect(url_for('booking_request',seasonal=form.id))
         if not current_client():
             session['native_return_form']=form.id
             return redirect(url_for('client.login'))
+        workflows['track'](form);db.session.commit()
         return render_template('native_form.html',form=form,fields=json.loads(form.fields_json),csrf=csrf(),
             submission_token=session.setdefault('native_form_'+str(form.id),secrets.token_urlsafe(32)))
 
@@ -162,7 +246,11 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
         if not token or not secrets.compare_digest(token,request.form.get('submission_token','')):abort(400)
         if request.content_length and request.content_length>32_000_000:abort(413)
         try:
-            data=answers(form,request.form)
+            workflows['guard']()
+            Form.query.filter_by(id=form.id).with_for_update().first()
+            if workflows['full'](form):raise ValueError('This form has reached its response limit. Contact CL Paints or join its waiting list.')
+            field_uploads=read_form_files(form,request.files)
+            data=answers(form,request.form,upload_names(field_uploads))
             if request.form.get('agree')!='yes':raise ValueError('Confirm that you accept the displayed rules or permissions.')
             uploads=[]
             if form.kind=='photo':
@@ -193,9 +281,11 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
             item=Submission(form_id=form.id,client_id=account.id,token=token,giveaway_key=f'{form.id}:{account.id}' if form.kind=='giveaway' else None,
                 email=account.email,name=(account.first_name+' '+account.last_name).strip(),answers_json=json.dumps(data),terms_snapshot=form.terms,title_snapshot=form.title)
             db.session.add(item);db.session.flush()
+            records['record_submission'](form,item,data,field_uploads)
             for content,mime,filename in uploads:db.session.add(Media(submission_id=item.id,content=content,mime=mime,filename=filename))
-            db.session.commit()
-            item.email_sent=send_email(account.email,'CL Paints: '+form.title+' received',f'Hello {account.first_name},\n\nWe received your submission for {form.title}. Reference: F-{item.id}.\n\nThis is not a booking confirmation or notification of a giveaway win.\n\nCL Paints')
+            records['clear_draft'](form);workflows['track'](form,completed=True);db.session.commit()
+            messages=confirmation(records['settings'](form),account.first_name,form.title,'F-'+str(item.id))
+            item.email_sent=send_email(account.email,messages.get('email_subject') or 'CL Paints: '+form.title+' received',messages.get('email_body') or f'Hello {account.first_name},\n\nWe received your submission for {form.title}. Reference: F-{item.id}.\n\nThis is not a booking confirmation or notification of a giveaway win.\n\nCL Paints')
             db.session.commit();session.pop('native_form_'+str(form.id),None)
             flash('Submission received. Reference F-'+str(item.id)+'.','success')
             return redirect(url_for('native_form_submission',submission_id=item.id))
@@ -203,13 +293,17 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
             db.session.rollback();flash('This entry has already been received. Giveaway entry is limited to one per account per giveaway.','error')
         except ValueError as error:
             db.session.rollback();flash(str(error),'error')
+            return render_template('native_form.html',form=form,fields=json.loads(form.fields_json),csrf=csrf(),submission_token=token)
         return redirect(url_for('native_form_open',form_id=form.id))
 
     @app.get('/client/form-submissions/<int:submission_id>')
     def native_form_submission(submission_id):
         account=current_client();item=db.get_or_404(Submission,submission_id)
         if not account or item.client_id!=account.id:abort(404)
-        return render_template('native_submission.html',item=item,answers=json.loads(item.answers_json),media=Media.query.filter_by(submission_id=item.id).all())
+        meta=records['submission_record'](item)
+        snapshot=json.loads(meta.snapshot_json) if meta else {}
+        return render_template('native_submission.html',item=item,answers=json.loads(item.answers_json),media=Media.query.filter_by(submission_id=item.id).all(),
+            files=records['files'](item.id),snapshot=snapshot,confirmation_message=confirmation(snapshot.get('settings',{}),account.first_name,item.title_snapshot,'F-'+str(item.id)).get('confirmation_text',''))
 
     @app.get('/client/form-submissions')
     def native_my_submissions():
@@ -221,14 +315,8 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     @admin_required
     def native_form_entries(form_id):
         form=db.get_or_404(Form,form_id)
-        entries=Submission.query.filter_by(form_id=form.id).order_by(Submission.id.desc()).all()
-        booking_entries=[]
-        if form.kind=='booking':
-            for booking in Booking.query.order_by(Booking.id.desc()).all():
-                try:details=json.loads(booking.event_schedule or '{}').get('seasonal_form')
-                except (ValueError,AttributeError):continue
-                if details and details.get('id')==form.id:booking_entries.append(dict(booking=booking,details=details,media=db._native_booking_media.query.filter_by(booking_id=booking.id).all()))
-        return render_template('admin_native_entries.html',form=form,entries=[dict(item=item,answers=json.loads(item.answers_json),media=Media.query.filter_by(submission_id=item.id).all()) for item in entries],booking_entries=booking_entries)
+        rows=records['entries'](form);page=max(1,request.args.get('page',1,type=int))
+        return render_template('admin_native_entries.html',form=form,rows=rows[(page-1)*25:page*25],total=len(rows),page=page,statuses=STATUSES,csrf=csrf())
 
     @app.get('/form-media/<int:media_id>')
     def native_media(media_id):

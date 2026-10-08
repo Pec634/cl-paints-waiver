@@ -6,23 +6,7 @@ Bookings | CL Paints
 
 {% block body %}
 <div class="admin">
-    <aside>
-        <div class="brand light">CL <span>Paints</span></div>
-        <nav>
-            <a href="/">Dashboard</a>
-            <hr class="admin-nav-divider">
-            <a class="active" href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
-            <a href="{{ url_for('admin_events') }}">Events</a>
-            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
-            <a href="{{ url_for('admin_reports') }}">Reports</a>
-            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
-            <a href="{{ url_for('admin_settings') }}">Settings</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_logout') }}">Logout</a>
-        </nav>
-    </aside>
+    {% include '_admin_sidebar.html' %}
 
     <main>{% if booking_requests %}<section class="panel"><h2>Booking requests awaiting review</h2>{% for item in booking_requests %}<p><a href="{{ url_for('admin_booking_request', request_id=item.id) }}">{{ item.kind|capitalize }} request ? Booking #{{ item.booking_id }}</a></p>{% endfor %}</section>{% endif %}
         <div class="top bookings-top">
@@ -112,8 +96,11 @@ Bookings | CL Paints
                             <td>{{ booking.event_date.strftime("%d/%m/%Y") }}</td>
                             <td>{{ booking.status }}</td>
                             <td>
+                                <a class="btn small" href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Activity &amp; date changes</a>
+                                <a class="btn small" href="{{ url_for('admin_booking_messages', booking_id=booking.id) }}">Messages{% if booking_message_counts.get(booking.id) %} &middot; {{ booking_message_counts[booking.id] }} unread{% endif %}</a>
                                 <details class="booking-detail">
                                     <summary>View</summary>
+                                    {% include '_booking_intake_details.html' %}
                                     <p><a class="btn small" href="{{ url_for('admin_payments',booking_id=booking.id) }}">Payments &amp; deposit</a> {% if booking.status == 'Accepted' %}<a class="btn small" href="{{ url_for('connecteam_rota') }}">Staff rota</a>{% endif %}</p>
                                     <dl>
                                         <dt>Request type</dt><dd>{{ "Availability" if booking.request_type == "availability" else "Booking" }}</dd>

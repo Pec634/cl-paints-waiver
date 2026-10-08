@@ -1,0 +1,2 @@
+<section class="panel" id="booking-timeline"><h2>Booking activity timeline</h2><p>Follow the request, booking updates, payments, conversations and event follow-up.</p>
+<ol class="portal-timeline">{% for item in booking_timeline %}<li><div><strong>{{ item.label }}</strong><small>{{ item.at.strftime('%d/%m/%Y %H:%M') }} &middot; {{ item.actor }}</small></div>{% if item.details %}<p class="client-message">{{ item.details }}</p>{% endif %}{% if item.link %}<a class="client-text-link" href="{{ item.link }}">Open conversation</a>{% endif %}</li>{% endfor %}</ol></section>

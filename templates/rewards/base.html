@@ -2,23 +2,7 @@
 {% block title %}Rewards | CL Paints{% endblock %}
 {% block body %}
 <div class="admin">
-    <aside>
-        <div class="brand light">CL <span>Paints</span></div>
-        <nav>
-            <a href="/">Dashboard</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
-            <a href="{{ url_for('admin_events') }}" {% if request.endpoint == 'loyalty.event_admin' %}class="active"{% endif %}>Events</a>
-            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
-            <a href="{{ url_for('admin_reports') }}">Reports</a>
-            <a {% if request.endpoint.startswith('rewards.') %}class="active"{% endif %} href="{{ url_for('rewards.dashboard') }}">Rewards</a>
-            <a href="{{ url_for('admin_settings') }}">Settings</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_logout') }}">Logout</a>
-        </nav>
-    </aside>
+    {% include '_admin_sidebar.html' %}
     <main class="rewards-main">
         {% for category, message in get_flashed_messages(with_categories=true) %}
         <p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>

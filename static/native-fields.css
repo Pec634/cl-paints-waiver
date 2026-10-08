@@ -1,0 +1,65 @@
+.native-fields { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: minmax(24px, auto); gap: 22px 16px; align-items: start; }
+.native-fields [hidden] { display: none !important; }
+.native-block { min-width: 0; display: grid; gap: 8px; grid-column: var(--block-column, 1) / span var(--block-width, 12); grid-row: var(--block-row, auto); overflow-wrap: anywhere; }
+.native-block input:not([type=checkbox]):not([type=radio]), .native-block select, .native-block textarea { min-width: 0; width: 100%; box-sizing: border-box; }
+.native-block > label { font-weight: 600; }
+.native-block small { font-weight: 400; color: var(--muted, #666); }
+.native-block h3, .native-block p { margin: 0; }
+.native-preserve { white-space: pre-wrap; overflow-wrap: anywhere; }
+.native-help { color: var(--muted, #666); font-size: .9rem; white-space: pre-wrap; }
+.native-choice-group { border: 0; margin: 0; padding: 0; min-width: 0; }
+.native-choice-group legend { font-weight: 600; margin-bottom: 10px; }
+.native-choice-list { display: grid; grid-template-columns: repeat(var(--choice-columns, 1), minmax(0, 1fr)); gap: var(--choice-gap, 12px); margin-top: 10px; }
+.native-fields .native-choice { display: flex; align-items: flex-start; gap: 12px; font-weight: 400; padding: var(--choice-padding, 12px); border: 1px solid var(--border, #ddd); border-radius: 8px; line-height: 1.5; cursor: pointer; }
+.native-choice > input { margin-top: 4px; }
+.native-choice > span { min-width: 0; }
+.native-choice:has(input:checked) { background: #f6eff8; border-color: #822d82; }
+.native-choice:focus-within { outline: 2px solid #822d82; outline-offset: 2px; }
+.native-spacing-compact { --choice-gap: 8px; --choice-padding: 8px; }
+.native-spacing-comfortable { --choice-gap: 12px; --choice-padding: 12px; }
+.native-spacing-spacious { --choice-gap: 20px; --choice-padding: 18px; }
+.native-fields input[type=radio], .native-fields input[type=checkbox] { width: auto; min-height: auto; flex: none; accent-color: var(--primary, #822d82); }
+.native-card-grid { display: grid; grid-template-columns: repeat(var(--choice-columns, 2), minmax(0, 1fr)); gap: var(--choice-gap, 12px); margin-top: 10px; }
+.booking-form .native-card { display:grid; gap:8px; padding:16px; border:2px solid #ded5e3; border-radius:12px; cursor:pointer; }
+.booking-form .native-card:has(input:checked) { border-color:#822d82; background:#f6eff8; }
+.booking-form .native-card:focus-within { outline:2px solid #822d82; outline-offset:2px; }
+.booking-form .native-card img { width:100%; height:150px; object-fit:cover; border-radius:8px; }
+.booking-form #booking-packages fieldset { border:0; margin:12px 0; padding:0; }
+.booking-form #booking-packages input[type=radio], .booking-form #booking-packages input[type=checkbox] { width:18px; height:18px; padding:0; }
+.native-fields .native-choice-card { display: flex; gap: 12px; align-items: flex-start; padding: var(--choice-padding, 12px); border: 2px solid var(--border, #ddd); border-radius: 12px; cursor: pointer; overflow-wrap: anywhere; }
+.native-choice-card:has(input:checked) { border-color: var(--primary, #822d82); background: #f6eff8; }
+.native-choice-card:focus-within { outline: 2px solid var(--primary, #822d82); outline-offset: 2px; }
+.native-choice-card span { display: grid; gap: 10px; width: 100%; }
+.native-choice-card img { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; }
+.native-image { margin: 0; width: 100%; }
+.native-image img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.native-image figcaption { margin-top: 8px; color: var(--muted, #666); }
+.native-image-small { max-width: 240px; }
+.native-image-medium { max-width: 480px; }
+.native-align-left { justify-self: start; }
+.native-align-center { justify-self: center; }
+.native-align-right { justify-self: end; }
+.native-clear-choice { margin-top: 10px; }
+@media (max-width: 640px) {
+    .native-fields { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+    .native-fields > .native-block { grid-column: 1; grid-row: auto; }
+    .native-choice-list, .native-card-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.native-image-gallery img { object-fit: contain; background: #fafafa; height: 160px; }
+.native-repeat-rows { display: grid; gap: 16px; margin-bottom: 12px; }
+.native-repeat-row { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border, #ddd); border-radius: 10px; margin: 0; min-width: 0; }
+.native-repeat-row label { display: grid; gap: 8px; }
+.native-repeat-row legend { font-weight: 600; padding: 0 6px; }
+.native-signature-canvas { display: block; width: 100%; height: 180px; border: 1px solid var(--border, #ddd); border-radius: 8px; background: #fff; touch-action: none; margin: 12px 0; }
+.native-advanced-control { display: grid; gap: 12px; }
+.native-page-navigation, .native-draft-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.native-page-navigation progress { width: 140px; accent-color: #822d82; }
+.native-page-navigation [hidden], [data-native-tail][hidden] { display: none !important; }
+.native-block output { font-size: 1.4rem; font-weight: 700; color: #822d82; padding: 12px; background: #f8f1fa; border-radius: 8px; }
+.native-response-answer { display: grid; gap: 8px; margin: 18px 0; overflow-wrap: anywhere; }
+.native-signed-answer svg { display: block; max-width: 600px; width: 100%; border: 1px solid var(--border, #ddd); border-radius: 8px; }
+.native-response-table { overflow-x: auto; }
+.native-response-table table { width: 100%; border-collapse: collapse; }
+.native-response-table td, .native-response-table th { border: 1px solid var(--border, #ddd); text-align: left; padding: 10px; }
+.native-fields input[type=radio], .native-fields input[type=checkbox] { padding: 0; width: 18px; height: 18px; }
+.native-repeat-row label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 12px; }

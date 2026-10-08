@@ -2034,11 +2034,25 @@ label.moodboard-admin-card > div {
     }
 }
 
+.portal-mobile-shortcuts, .admin aside > nav.portal-mobile-shortcuts { display: none; }
+.booking-conversation { display: grid; gap: 12px; margin: 20px 0; }
+.booking-message { padding: 16px; border: 1px solid var(--border); border-radius: 16px; max-width: 90%; overflow-wrap: anywhere; }
+.booking-message.from-admin { background: #fff0f6; }
+.booking-message.from-client { background: #f2f7ff; margin-left: auto; }
+.booking-message header { display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; }
+.booking-message time { font-size: .8rem; color: var(--muted); }
+.booking-message p { white-space: pre-wrap; margin-bottom: 0; }
+.portal-next-steps .dashboard-item { min-width: 0; overflow-wrap: anywhere; }
 .admin-menu-toggle {
     display: none;
 }
 
 @media (max-width: 800px) {
+    .admin aside { display: block; }
+    .admin aside.admin-menu-ready { position: sticky; top: 0; z-index: 30; }
+    .admin aside.admin-menu-ready > nav.portal-mobile-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; margin: 0; }
+    .admin .portal-mobile-shortcuts a { text-align: center; min-height: 44px; padding: 12px 4px; }
+    .admin aside.admin-menu-open > nav:not(.portal-mobile-shortcuts) { max-height: 60vh; overflow-y: auto; }
     .admin aside.admin-menu-ready {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -2088,6 +2102,12 @@ label.moodboard-admin-card > div {
     .admin aside.admin-menu-open nav {
         display: grid;
     }
+}
+@media (max-width: 700px) {
+    .client-shell > .portal-mobile-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; background: var(--navy); color: white; padding: 8px 12px; position: sticky; top: 0; z-index: 30; }
+    .client-shell > .portal-mobile-shortcuts a { text-align: center; padding: 12px 4px; min-height: 44px; border-radius: 10px; }
+    .portal-mobile-shortcuts a[aria-current='page'] { background: var(--pink); color: white; font-weight: 700; }
+    .booking-message { max-width: 100%; }
 }
 
 /* Participants only: retain the desktop table, stack rows on phones.
@@ -2240,6 +2260,7 @@ label.moodboard-admin-card > div {
 .dashboard-stats a:hover article { border-color: var(--pink); }
 .dashboard-stats small { display: block; margin-top: 12px; color: var(--pink); font-weight: 600; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
+.dashboard-priority { margin-bottom: 20px; }
 .dashboard-grid .panel { margin: 0; }
 .dashboard-grid h2 { margin-top: 0; font-size: 1.25rem; }
 .dashboard-grid .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }

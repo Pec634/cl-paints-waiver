@@ -64,7 +64,10 @@
   }
   function drawFace() {
     faceVersion++;
-    if(window.CLPortraits?.draw(base))return;
+    if(window.CLPortraits){
+      if(!window.CLPortraits.draw(base)){bg.clearRect(0,0,600,720);bg.fillStyle='#fff';bg.fillRect(0,0,600,720);}
+      return;
+    }
     const f=face(),skin=window.CLCharacterColours?.skin||get('skin').value,hair=get('hair').value,colour=get('hair-colour').value;
     const top=f.y-f.ry;
     bg.clearRect(0,0,600,720);
@@ -272,8 +275,8 @@
   get('viewport').addEventListener('scroll',()=>{brushCursor.hidden=true;});
   window.addEventListener('resize',updateBrushCursor);
   const animationToggle=get('animate'),reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  animationToggle.checked=!reducedMotion.matches;
-  function animationEnabled(){return animationToggle.checked&&!document.hidden&&!window.CLPortraits?.active();}
+  animationToggle.checked=false;
+  function animationEnabled(){return false;}
   function refreshAnimation(){if(animationFrame!==null)return;animationFrame=requestAnimationFrame(()=>{animationFrame=null;drawFace();updateReference();});}
   function resetAnimation(){blinking=false;gazeX=0;gazeY=0;refreshAnimation();}
   animationToggle.addEventListener('change',resetAnimation);
@@ -282,8 +285,6 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden)resetAnimation();});
   canvas.addEventListener('pointermove',event=>{if(!animationEnabled()||event.pointerType==='touch')return;const rect=canvas.getBoundingClientRect(),x=(event.clientX-rect.left)*600/rect.width,y=(event.clientY-rect.top)*720/rect.height;gazeX=Math.max(-3,Math.min(3,(x-300)/60));gazeY=Math.max(-2,Math.min(2,(y-305)/100));refreshAnimation();});
   canvas.addEventListener('pointerleave',()=>{gazeX=0;gazeY=0;if(animationEnabled())refreshAnimation();});
-  function scheduleBlink(){setTimeout(()=>{if(animationEnabled()&&!['closed','sleepy'].includes(get('expression').value)){blinking=true;refreshAnimation();setTimeout(()=>{blinking=false;refreshAnimation();},140);}scheduleBlink();},3000+Math.random()*2500);}
-  scheduleBlink();
   function point(event) {const rect=canvas.getBoundingClientRect();return {x:(event.clientX-rect.left)*600/rect.width,y:(event.clientY-rect.top)*720/rect.height};}
   canvas.addEventListener('pointerdown',event=>{
     if(active || timedFinished || (event.pointerType==='mouse' && event.button!==0))return;
@@ -314,7 +315,7 @@
   for(const id of ['model','face','skin','hair','hair-colour','facial-hair','expression','eye-colour','brows','freckles','lips','height','width'])get(id).addEventListener('change',()=>{drawFace();render();});
   for(const id of ['height','width'])get(id).addEventListener('input',()=>{get(id+'-value').value=get(id).value+'%';drawFace();render();});
   get('surprise').addEventListener('click',()=>{
-    get('model').value='illustrated';get('model').dispatchEvent(new Event('change'));
+    const models=[...get('model').options];get('model').value=models[Math.floor(Math.random()*models.length)].value;get('model').dispatchEvent(new Event('change'));
     for(const id of ['face','skin','hair','facial-hair','expression','eye-colour','brows','freckles','lips']){const select=get(id);select.selectedIndex=Math.floor(Math.random()*select.options.length);}
     get('hair-colour').selectedIndex=Math.floor(Math.random()*get('hair-colour').options.length);
     drawFace();render();get('status').textContent='Meet your surprise character! Your painting has been kept.';

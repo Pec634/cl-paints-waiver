@@ -49,6 +49,25 @@ class AdminSecurityTest(unittest.TestCase):
         self.assertEqual(page.headers['Cache-Control'],'no-store')
         self.assertEqual(page.headers['X-Frame-Options'],'SAMEORIGIN')
 
+    def test_expired_login_form_recovers_without_authenticating(self):
+        old_token = self.token()
+        with self.client.session_transaction() as session:
+            session.clear()
+        with patch.object(main, 'ADMIN_PASSWORD', 'test-password'), patch.dict(os.environ, {'ADMIN_EMAIL_VERIFICATION': 'false'}):
+            response = self.client.post('/admin/login', data={'csrf_token': old_token, 'password': 'test-password'})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn(b'Your sign-in form expired', response.data)
+            self.assertIn(b'name="password"', response.data)
+            self.assertEqual(response.headers['Cache-Control'], 'no-store')
+            self.assertEqual(Attempt.query.count(), 0)
+            with self.client.session_transaction() as session:
+                self.assertNotIn('admin_authenticated', session)
+                fresh_token = session['admin_login_csrf']
+            self.assertNotEqual(old_token, fresh_token)
+            response = self.client.post('/admin/login', data={'csrf_token': fresh_token, 'password': 'test-password'})
+            self.assertEqual(response.status_code, 302)
+            self.assertTrue(response.location.endswith('/admin/dashboard'))
+
     def test_verification_delivery_failure_does_not_sign_in(self):
         token=self.token()
         with patch.object(main,'ADMIN_PASSWORD','test-password'),patch.object(main,'ADMIN_EMAIL','admin@example.com'),patch.dict(os.environ,{'ADMIN_EMAIL_VERIFICATION':'true'}),patch.object(main,'send_client_email',return_value=False):

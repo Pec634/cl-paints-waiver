@@ -2,28 +2,26 @@
 {% block title %}Dashboard | CL Paints{% endblock %}
 {% block body %}
 <div class="admin">
-    <aside>
-        <div class="brand light">CL <span>Paints</span></div>
-        <nav>
-            <a class="active" href="/">Dashboard</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a href="{{ url_for('studio_gallery_admin') }}">Studio gallery moderation</a>
-            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
-            <a href="{{ url_for('admin_events') }}">Events</a>
-            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
-            <a href="{{ url_for('admin_reports') }}">Reports</a>
-            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
-            <a href="{{ url_for('admin_settings') }}">Settings</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_logout') }}">Logout</a>
-        </nav>
-    </aside>
+    {% include '_admin_sidebar.html' %}
     <main class="dashboard-main">
         <header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Dashboard</h1><p>Your daily overview, with the next steps ready to hand.</p></div><div class="dashboard-date"><span id="dashboardDate">{{ today.strftime('%A, %d %B %Y') }}</span><time id="dashboardClock" aria-label="Current UK time"></time></div></header>
+        <div class="dashboard-grid dashboard-priority">
+            <section class="panel dashboard-attention dashboard-upcoming">
+                <div class="panel-heading"><div><h2>Needs attention</h2><p>Booking reviews, unread messages, change requests, payments due and waivers expiring within 30 days.</p></div><span class="dashboard-count">{{ pending_count + expiring_count + portal_next_steps_total }}</span></div>
+                {% for booking in pending_bookings %}
+                <a class="dashboard-item" href="{{ url_for('admin_bookings') }}#booking-{{ booking.id }}"><div><span class="dashboard-tag">Booking to review</span><h3>{{ booking.first_name }} {{ booking.last_name }}</h3><p>Request #{{ booking.id }} · {{ booking.event_type }} · {{ booking.event_date.strftime('%d/%m/%Y') }}</p></div><span aria-hidden="true">→</span></a>
+                {% endfor %}
+                {% for waiver in expiring_waivers %}
+                <a class="dashboard-item" href="{{ url_for('admin_waiver_detail', waiver_id=waiver.id) }}"><div><span class="dashboard-tag dashboard-tag-amber">Waiver expiring</span><h3>{{ waiver.responsible_first_name }} {{ waiver.responsible_last_name }}</h3><p>{{ waiver.waiver_reference }} · Expires {{ waiver.expiry_date.strftime('%d/%m/%Y') }}</p></div><span aria-hidden="true">→</span></a>
+                {% endfor %}
+                {% for step in portal_next_steps %}<a class="dashboard-item" href="{{ step.link }}"><div><span class="dashboard-tag">Next step</span><h3>{{ step.label }}</h3><p>{{ step.detail }}</p></div><span aria-hidden="true">&rarr;</span></a>{% endfor %}
+                {% if not pending_count and not expiring_count and not portal_next_steps_total %}<div class="dashboard-empty"><h3>You're up to date.</h3><p>No outstanding actions here.</p></div>{% endif %}
+                {% if portal_next_steps_total > 8 %}<p class="dashboard-footnote">Showing the first eight message, request and payment actions. Open Bookings to review all records.</p>{% endif %}
+                {% if pending_count > 5 or expiring_count > 5 %}<p class="dashboard-footnote">Showing the first five items in each group. Open Bookings or Participants to see all records.</p>{% endif %}
+            </section>
+        </div>
         <section class="stats dashboard-stats" aria-label="Overview">
-            <a href="{{ url_for('admin_clients') }}"><article><span>Verified client signups</span><strong>{{ client_signup_count }}</strong><small>{{ client_signup_month_count }} this month · View clients →</small></article></a>
+            <a href="{{ url_for('admin_clients') }}"><article><span>Client accounts</span><strong>{{ client_signup_count }}</strong><small>{{ client_signup_month_count }} this month · View clients →</small></article></a>
             <a href="{{ url_for('admin_bookings') }}"><article><span>Bookings awaiting review</span><strong>{{ pending_count }}</strong><small>Review client requests →</small></article></a>
             <a href="{{ url_for('admin_events') }}"><article><span>Upcoming events</span><strong>{{ upcoming_event_count }}</strong><small>Open events from today →</small></article></a>
             <a href="{{ url_for('admin_participants') }}"><article><span>Valid waivers</span><strong>{{ valid_waiver_count }}</strong><small>View participant records →</small></article></a>
@@ -51,17 +49,6 @@
                 {% for enquiry, client in recent_correspondence %}
                 <a class="dashboard-item" href="{{ url_for('admin_clients') }}#enquiry-{{ enquiry.id }}"><div><span class="dashboard-tag">Client enquiry</span><h3>{{ enquiry.subject }}</h3><p>{{ client.first_name }} {{ client.last_name }} · {{ client.email }} · {{ enquiry.created_at.strftime('%d/%m/%Y %H:%M') }}</p><p>{{ enquiry.message|truncate(160, true) }}</p></div><span aria-hidden="true">→</span></a>
                 {% else %}<div class="dashboard-empty"><p>No client correspondence yet. Messages sent through the client portal will appear here.</p></div>{% endfor %}
-            </section>
-            <section class="panel dashboard-attention">
-                <div class="panel-heading"><div><h2>Needs attention</h2><p>Booking requests and waivers expiring within 30 days.</p></div><span class="dashboard-count">{{ pending_count + expiring_count }}</span></div>
-                {% for booking in pending_bookings %}
-                <a class="dashboard-item" href="{{ url_for('admin_bookings') }}#booking-{{ booking.id }}"><div><span class="dashboard-tag">Booking to review</span><h3>{{ booking.first_name }} {{ booking.last_name }}</h3><p>Request #{{ booking.id }} · {{ booking.event_type }} · {{ booking.event_date.strftime('%d/%m/%Y') }}</p></div><span aria-hidden="true">→</span></a>
-                {% endfor %}
-                {% for waiver in expiring_waivers %}
-                <a class="dashboard-item" href="{{ url_for('admin_waiver_detail', waiver_id=waiver.id) }}"><div><span class="dashboard-tag dashboard-tag-amber">Waiver expiring</span><h3>{{ waiver.responsible_first_name }} {{ waiver.responsible_last_name }}</h3><p>{{ waiver.waiver_reference }} · Expires {{ waiver.expiry_date.strftime('%d/%m/%Y') }}</p></div><span aria-hidden="true">→</span></a>
-                {% endfor %}
-                {% if not pending_count and not expiring_count %}<div class="dashboard-empty"><h3>You're up to date.</h3><p>No booking requests or expiring waivers need attention.</p></div>{% endif %}
-                {% if pending_count > 5 or expiring_count > 5 %}<p class="dashboard-footnote">Showing the first five items in each group. Open Bookings or Participants to see all records.</p>{% endif %}
             </section>
             <section class="panel dashboard-quick">
                 <h2>Quick actions</h2><p>Go straight to the tools you use most.</p>

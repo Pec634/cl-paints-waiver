@@ -1,0 +1,14 @@
+{% extends 'rewards/base.html' if is_admin else 'client/base.html' %}
+{% block content %}
+<a class="client-text-link" href="{{ url_for('admin_bookings') ~ '#booking-' ~ booking.id if is_admin else url_for('client.booking_detail', booking_id=booking.id) }}">Back to booking</a>
+<h1>Booking messages</h1>
+<section class="panel"><h2>{{ booking.public_reference }} &middot; {{ booking.event_type }}</h2>
+<p>{{ booking.first_name }} {{ booking.last_name }} &middot; {{ booking.status }}</p>
+<p>Messages are saved here for you and CL Paints. Check this conversation for replies. To request a booking change or cancellation, use the booking request options.</p>
+{% if older %}<a class="btn" href="{{ thread_url }}?before={{ messages[0].id }}">Older messages</a>{% endif %}
+{% if request.args.get('before') %}<a class="btn" href="{{ thread_url }}">Latest messages</a>{% endif %}
+<div class="booking-conversation" aria-label="Booking conversation">
+{% for message in messages %}<article class="booking-message {{ 'from-admin' if message.sender == 'admin' else 'from-client' }}"><header><strong>{{ 'CL Paints' if message.sender == 'admin' else 'Client' }}</strong><time datetime="{{ message.created_at.isoformat() }}Z">{{ message.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</time></header><p>{{ message.body }}</p></article>
+{% else %}<p>No messages yet. Ask a question about this booking below.</p>{% endfor %}</div>
+<form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="message_token" value="{{ message_token }}"><label for="booking-message-body">{{ 'Reply to client' if is_admin else 'Message CL Paints' }}</label><textarea id="booking-message-body" name="body" rows="4" maxlength="4000" required></textarea><small>Up to 4,000 characters. Messages are visible to the client and CL Paints.</small><button class="btn primary" type="submit">Send message</button></form></section>
+{% endblock %}

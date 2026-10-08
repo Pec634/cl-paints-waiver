@@ -3,6 +3,27 @@
 This is the first safe development stage for the new Waiver module.
 
 ## What it includes
+
+For the current form builder, booking features and setup instructions, see [Form builder guide](FORM_BUILDER_GUIDE.md).
+
+Both portals have mobile quick links and menus that close with Escape or an
+outside click. Admin **Needs attention** combines booking reviews, waivers
+expiring within 30 days, unread booking conversations, pending change/cancellation
+requests and recorded deposit/balance payments due today or earlier. The client
+dashboard starts with **Your next steps** for unread conversations, missing contact
+details and recorded payments due on accepted bookings.
+
+Open **Messages** on an admin booking or **Booking messages** on the client's
+booking detail to use the private conversation. Messages are stored in the portal;
+email notifications are not sent for these conversations. Opening the thread
+marks the displayed incoming messages as read; older messages remain available
+through pagination. General Contact us enquiries and explicit booking change
+requests continue to use their existing workflows. Restart the app to create the
+new booking message table automatically; existing records are retained.
+
+For the remaining portal features and how to use them, see
+[Portal guide](PORTAL_GUIDE.md).
+
 - `/waiver` customer journey
 - `/admin/waivers` admin prototype
 - Liability Statement screen
@@ -15,7 +36,7 @@ This is the first safe development stage for the new Waiver module.
 - admin Open / Closing Soon / Closed control
 
 ## Data handling
-The app uses `DATABASE_URL` when configured and otherwise uses a local SQLite database. Booking and waiver submissions store personal information, signatures, and event details; protect database access and backups accordingly. Booking payment preferences are recorded, but the app does not process payments.
+The app uses `DATABASE_URL` when configured and otherwise uses a local SQLite database. Booking and waiver submissions store personal information, signatures, and event details; protect database access and backups accordingly. Configured online payments use SumUp-hosted checkout, with successful payments verified and recorded by the app. Card details are entered on SumUp rather than in this app.
 
 ## Run it in VS Code
 1. Open this folder in VS Code.

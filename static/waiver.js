@@ -30,7 +30,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
         sidebar.insertBefore(menuButton, navigation);
         sidebar.classList.add("admin-menu-ready");
+        const shortcuts = document.createElement('nav');
+        shortcuts.className = 'portal-mobile-shortcuts';
+        shortcuts.setAttribute('aria-label', 'Quick navigation');
+        [...navigation.querySelectorAll('a')].filter(link => ['Dashboard', 'Bookings', 'Events'].includes(link.textContent.trim())).forEach(link => {
+            const shortcut = link.cloneNode(true);
+            if (shortcut.classList.contains('active')) shortcut.setAttribute('aria-current', 'page');
+            shortcuts.append(shortcut);
+        });
+        sidebar.append(shortcuts);
+        navigation.addEventListener('click', event => {
+            if (event.target.closest('a')) setMenuOpen(false);
+        });
+        document.addEventListener('click', event => {
+            if (!sidebar.contains(event.target)) setMenuOpen(false);
+        });
+        window.matchMedia('(max-width: 800px)').addEventListener('change', () => setMenuOpen(false));
     });
+    // Dashboard links can point inside a collapsed booking row.
+    const revealBooking = () => {
+        const target = document.getElementById(location.hash.slice(1));
+        if (target?.classList.contains('booking-row')) {
+            const details = target.querySelector('details');
+            if (details) details.open = true;
+        }
+    };
+    revealBooking();
+    window.addEventListener('hashchange', revealBooking);
 
     const app = document.getElementById("waiverApp");
 

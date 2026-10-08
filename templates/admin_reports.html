@@ -9,20 +9,7 @@
 {% else %}<p class="report-empty">No records in this period.</p>{% endif %}</section>
 {% endmacro %}
 {% block body %}
-<div class="admin"><aside><div class="brand light">CL <span>Paints</span></div><nav>
-            <a href="/">Dashboard</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_bookings') }}">Bookings</a>
-            <a href="{{ url_for('admin_clients') }}" {% if request.endpoint == 'admin_clients' %}class="active"{% endif %}>Clients</a>
-            <a href="{{ url_for('admin_events') }}">Events</a>
-            <a href="{{ url_for('admin_moodboard') }}">Moodboard</a>
-            <a href="{{ url_for('admin_participants') }}">Participants</a>
-            <a class="active" href="{{ url_for('admin_reports') }}">Reports</a>
-            <a href="{{ url_for('admin_rewards') }}">Rewards</a>
-            <a href="{{ url_for('admin_settings') }}">Settings</a>
-            <hr class="admin-nav-divider">
-            <a href="{{ url_for('admin_logout') }}">Logout</a>
-        </nav></aside><main class="reports-main">
+<div class="admin">{% include '_admin_sidebar.html' %}<main class="reports-main">
 <header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Reports</h1><p>Understand your bookings, participants, referrals and client locations.</p></div><a class="btn" href="{{ url_for('export_reports', period=period, start=start.isoformat(), end=end.isoformat(), location=location_source, setting=setting) }}">Export CSV</a></header>
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
@@ -32,6 +19,7 @@
 <label>Event setting<select name="setting"><option value="all" {% if setting == 'all' %}selected{% endif %}>All events</option><option value="Private" {% if setting == 'Private' %}selected{% endif %}>Private events</option><option value="Public" {% if setting == 'Public' %}selected{% endif %}>Public events</option></select></label><label>Location view<select name="location"><option value="client" {% if location_source == 'client' %}selected{% endif %}>Client addresses</option><option value="venue" {% if location_source == 'venue' %}selected{% endif %}>Event venues</option></select></label><button class="btn primary" type="submit">Apply filters</button>
 </form>
 <p class="report-period">{{ start.strftime('%d %B %Y') }} – {{ end.strftime('%d %B %Y') }}. Booking reports use request submission dates; {% if setting != 'Private' %}waiver reports use signing dates.{% endif %} Outcomes reflect current booking status.</p>
+<section class="panel"><h2>Customer loyalty &amp; repeat bookings</h2><div class="stats" aria-label="Repeat customer statistics"><article><span>Loyal customers</span><strong>{{ loyal_clients }}</strong><small>Clients with at least two confirmed bookings.</small></article><article><span>Repeat booking clients</span><strong>{{ repeat_clients }}</strong><small>Clients with at least two booking requests, across all statuses.</small></article><article><span>Returning booking requests</span><strong>{{ repeat_requests }}</strong><small>Requests in this period made after that client's first request.</small></article></div><p class="report-note">Customer counts include clients who submitted a request in the selected period. Their booking history is counted up to the selected end date and follows the public/private filter. Each email address counts as one client; multiple dates on one booking count as one request. “Loyal” means repeat confirmed booking clients here, separately from public-event loyalty points.</p></section>
 <section class="stats" aria-label="Report totals"><article><span>Booking requests</span><strong>{{ booking_count }}</strong></article>{% if setting != 'Private' %}<article><span>Waivers signed</span><strong>{{ waiver_count }}</strong></article><article><span>Participants recorded</span><strong>{{ participant_count }}</strong></article><article><span>Average participant age</span><strong>{{ average_age if average_age is not none else '—' }}</strong><small>{{ age_sample }} recorded ages</small></article>{% endif %}</section>
 <p class="report-note">Event setting filters booking figures, workload and locations. Mixed bookings appear in either applicable filter and count once per view. {% if setting == 'Private' %}Waiver and participant reports are omitted because waivers are not operated at private events.{% else %}Waiver and age figures include recorded waivers; their records do not consistently identify an event setting.{% endif %} Referral figures cover the complete referral cohort.</p><div class="report-grid">
 {{ bars('Public and private events', setting_comparison, 'Comparison of all requests in this date range, regardless of the event-setting filter. Mixed bookings are shown separately.') }}

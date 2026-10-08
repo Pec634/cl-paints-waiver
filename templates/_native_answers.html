@@ -1,0 +1,8 @@
+{% macro answer(value, field={}) %}
+{% if value is mapping and value.get('strokes') %}
+<div class="native-signed-answer"><strong>{{ value.name }}</strong><svg viewBox="0 0 600 180" role="img" aria-label="Signature drawn by {{ value.name }}"><path d="{{ native_signature_path(value) }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+{% elif value is sequence and value is not string and value and value[0] is mapping %}
+<div class="native-response-table"><table><thead><tr>{% for key in value[0] %}<th>{{ key }}</th>{% endfor %}</tr></thead><tbody>{% for row in value %}<tr>{% for key in value[0] %}<td>{{ row.get(key, '') }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+{% elif value is sequence and value is not string %}{{ value|join(', ') if value else 'No selections' }}
+{% else %}{{ field.get('calculation', {}).get('prefix', '') }}{{ value or 'Not provided' }}{% endif %}
+{% endmacro %}

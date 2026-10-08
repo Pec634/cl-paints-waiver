@@ -1,1 +1,135 @@
-{% extends 'rewards/base.html' %}{% block content %}<h1>Native forms</h1><p>Create giveaway, photo/video consent and seasonal booking forms within CL Paints. Seasonal forms use the main booking workflow; the others require a verified client account.</p><section class="panel"><h2>Start from your existing forms</h2><p>These templates use the supplied screenshots. Review dates, wording and travel details before publishing.</p><form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="preset"><label>Template<select name="preset"><option value="giveaway">Quarterly VIP Give-away</option><option value="photo">Photography consent</option><option value="halloween">Halloween promotion</option></select></label><button class="btn">Create editable draft</button></form></section><section class="panel"><h2>{{ 'Edit form' if edit_form else 'Create a form' }}</h2><form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}">{% if edit_form %}<input type="hidden" name="id" value="{{ edit_form.id }}">{% endif %}<label>Type<select name="kind"><option value="giveaway" {% if edit_form and edit_form.kind == 'giveaway' %}selected{% endif %}>Quarterly giveaway</option><option value="photo" {% if edit_form and edit_form.kind == 'photo' %}selected{% endif %}>Photo / video consent</option><option value="booking" {% if edit_form and edit_form.kind == 'booking' %}selected{% endif %}>Seasonal booking</option></select></label><label>Title<input name="title" value="{{ edit_form.title if edit_form else '' }}" maxlength="150" required></label><label>Introduction<textarea name="description" maxlength="2000">{{ edit_form.description if edit_form else '' }}</textarea></label><label>Rules / consent / seasonal booking information<textarea name="terms" rows="8" maxlength="10000">{{ edit_form.terms if edit_form else '' }}</textarea></label><p>Specify the actual prize, entry rules, dates and eligibility for a giveaway. For media, specify how and where it may be used, permission limits and how customers can contact you to withdraw consent.</p><label>Extra questions<textarea name="fields" rows="6" placeholder="Preferred design | text | required&#10;Event notes | textarea | optional">{{ edit_fields }}</textarea></label><p>One per line: Question | text, textarea, number, date, checkbox or select | required or optional. For select questions, add a fourth part with comma-separated choices. Up to ten questions.</p><label>Opens (optional UK time)<input type="datetime-local" name="starts_at" value="{{ local(edit_form.starts_at) if edit_form else '' }}"></label><label>Closes (optional UK time)<input type="datetime-local" name="ends_at" value="{{ local(edit_form.ends_at) if edit_form else '' }}"></label><button class="btn primary">{{ 'Save draft' if edit_form else 'Create draft form' }}</button></form></section><div class="client-grid">{% for form in forms %}<article class="panel"><h2>{{ form.title }}</h2>{% if not form.enabled %}<a class="btn" href="{{ url_for('native_forms_admin',edit=form.id) }}">Edit draft</a>{% endif %}<p>{{ form.kind|capitalize }} · {{ 'Published' if form.enabled else 'Draft' }}</p><a class="btn" href="{{ url_for('native_form_entries',form_id=form.id) }}">Submissions</a>{% if form.enabled %}<a class="btn" href="{{ url_for('native_form_open',form_id=form.id) }}" target="_blank" rel="noopener">Open form</a>{% endif %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="id" value="{{ form.id }}"><button class="btn" name="action" value="toggle">{{ 'Unpublish' if form.enabled else 'Publish' }}</button></form></article>{% else %}<p>No native forms yet. Create a draft above.</p>{% endfor %}</div>{% endblock %}
+{% extends 'rewards/base.html' %}
+{% block title %}Form builder | CL Paints{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='form-builder.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='native-fields.css') }}">
+<h1>Form builder</h1>
+<p>Create a draft, add your questions, review the preview, then publish when ready.</p>
+<div class="builder-actions"><button type="button" class="btn primary builder-open-preview" hidden>Preview form</button><button type="button" class="btn" id="builder-check-accessibility" hidden>Check accessibility</button><span>Try your current draft before saving or publishing.</span></div>
+<div id="builder-accessibility-results" role="status" aria-live="polite"></div>
+<section class="panel">
+    <h2>Start with a template</h2>
+    <p>Choose a starting point, then personalise the wording, questions and dates.</p>
+    <form method="post" class="builder-actions">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="preset">
+        <label>Template<select name="preset"><option value="giveaway">Quarterly VIP giveaway</option><option value="photo">Photography consent</option><option value="halloween">Halloween booking promotion</option></select></label>
+        <button class="btn">Create draft from template</button>
+        <a class="btn" href="{{ url_for('native_forms_admin') }}#form-editor">Start a blank form</a>
+    </form>
+</section>
+{% set locked = edit_form and edit_form.enabled %}
+{% set selected_kind = submitted.get('kind') if submitted else (edit_form.kind if edit_form else 'giveaway') %}
+<div class="builder-layout" id="form-editor">
+<section class="panel">
+    <h2>{{ 'Edit draft' if edit_form else 'Create a form' }}</h2>
+    {% if locked %}<p role="status">This form is published. Unpublish it in Your forms before editing, or duplicate it to create a new draft.</p>{% endif %}
+    <form method="post" class="client-form" id="builder-form" data-upload-url="{{ url_for('native_form_image_upload') }}" data-revision="{{ builder_revision }}" data-locked="{{ 'yes' if locked else 'no' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        {% if edit_form %}<input type="hidden" name="id" value="{{ edit_form.id }}">{% endif %}
+        <nav class="builder-section-tabs" id="builder-section-tabs" aria-label="Builder sections" hidden></nav>
+        <div class="builder-actions" id="builder-history-tools" hidden><button type="button" class="btn" id="builder-undo" disabled>Undo</button><button type="button" class="btn" id="builder-redo" disabled>Redo</button><button type="button" class="btn" id="builder-publish-check">Check before publishing</button><span id="builder-autosave-status" role="status" aria-live="polite">Autosave starts when the draft is complete.</span></div>
+        <div id="builder-publish-results" role="status" aria-live="polite"></div>
+        <div class="builder-sticky-actions" id="builder-toolbar" hidden><strong id="builder-current-section">Form details</strong><div class="builder-actions"><button type="button" class="btn builder-open-preview">Preview</button><button type="submit" class="btn primary" {% if locked %}disabled{% endif %}>Save draft</button></div></div>
+        <fieldset {% if locked %}disabled{% endif %}>
+        <legend>1. Form details</legend>
+        <label>Form type<select name="kind" id="builder-kind" {% if edit_form %}disabled{% endif %}>
+            <option value="giveaway" {% if selected_kind == 'giveaway' %}selected{% endif %}>Giveaway entry</option>
+            <option value="photo" {% if selected_kind == 'photo' %}selected{% endif %}>Photo / video consent</option>
+            <option value="booking" {% if selected_kind == 'booking' %}selected{% endif %}>Seasonal booking</option>
+        </select></label>
+        {% if edit_form %}<input type="hidden" name="kind" value="{{ edit_form.kind }}">{% endif %}
+        <p id="builder-kind-help"></p>
+        <label>Form title<input name="title" id="builder-title" value="{{ submitted.get('title', '') if submitted else (edit_form.title if edit_form else '') }}" maxlength="150" placeholder="e.g. Autumn VIP giveaway" required></label>
+        <label>Introduction<textarea name="description" id="builder-description" maxlength="2000" rows="3" placeholder="Explain who this form is for and what happens next.">{{ submitted.get('description', '') if submitted else (edit_form.description if edit_form else '') }}</textarea></label>
+        <label>Rules, permissions or booking information<textarea name="terms" id="builder-terms" rows="6" maxlength="10000">{{ submitted.get('terms', '') if submitted else (edit_form.terms if edit_form else '') }}</textarea></label>
+        <p id="builder-terms-help"></p>
+        </fieldset>
+        <fieldset {% if locked %}disabled{% endif %}>
+        <legend>2. Questions and content</legend>
+        <p>Add up to thirty blocks. Mix questions with headings, images and read-only text, then move them into the order you want. Standard account, consent and booking fields are added automatically where applicable.</p>
+        <details class="builder-grid-panel" id="builder-grid-panel" hidden open>
+            <summary>Arrange blocks on the grid</summary>
+            <p id="builder-grid-help">Drag a block to a free grid cell. Drag its right edge to resize. Select a block to edit it below. Keyboard: arrow keys move a selected block; Shift + Left/Right resizes it. You can also enter exact placement in each block. Blocks stack on phones.</p>
+            <div class="builder-actions"><button type="button" class="btn" id="builder-stack">Stack all blocks</button><span>12 columns &middot; up to 60 rows</span></div>
+            <div class="builder-actions"><label>Blocks per row<select id="builder-row-columns"><option value="2">Two</option><option value="3">Three</option><option value="4">Four</option></select></label><button type="button" class="btn" id="builder-arrange-rows">Arrange side by side</button></div><p>Automatically gives blocks equal widths without overlaps. Page breaks stay full width. You can still adjust individual placement.</p>
+            <div class="builder-grid-scroll"><div class="builder-grid-labels" aria-hidden="true">{% for column in range(1, 13) %}<span>{{ column }}</span>{% endfor %}</div><div id="builder-placement-grid" aria-label="Block placement grid"></div></div>
+            <p id="builder-grid-status" role="status" aria-live="polite"></p>
+        </details>
+        <p class="builder-selection-help">Select a block on the grid or in the list to open its settings. Only one block opens at a time.</p>
+        <div id="builder-questions"></div>
+        <label>Width for new blocks<select id="builder-new-width"><option value="12">Full row</option><option value="6">Half row — two across</option><option value="4">Third row — three across</option><option value="3">Quarter row — four across</option></select></label>
+        <details class="builder-reusable-panel"><summary>Reusable blocks and ready-made sections</summary><p>Insert a venue checklist or participant section, or save your own blocks to reuse.</p><div class="builder-actions"><label>Section<select id="builder-section-preset"><option value="venue">Venue requirements checklist</option><option value="group">Group participants</option><option value="photos">Reference photos with captions</option></select></label><button type="button" class="btn" id="builder-insert-section">Insert section</button></div><div class="builder-actions"><button type="button" class="btn" id="builder-load-library">Load saved blocks</button><label>Saved group<select id="builder-block-library"><option value="">Load the library first</option></select></label><button type="button" class="btn" id="builder-insert-library">Insert saved group</button><button type="button" class="btn" id="builder-delete-library">Delete saved group</button></div><div class="builder-actions"><label>Save as<input id="builder-template-title" maxlength="150" placeholder="e.g. Party venue checks"></label><button type="button" class="btn" id="builder-save-block">Save selected block</button><button type="button" class="btn" id="builder-save-group">Save all blocks as a group</button></div><p id="builder-template-status" role="status"></p></details>
+        <div class="builder-actions" id="builder-question-actions" hidden>
+            <label>Category<select id="builder-add-category"><option value="">All blocks</option><option>Advanced fields</option><option>Choice questions</option><option>Contact details</option><option>Content and layout</option><option>Dates and times</option><option>Text and numbers</option><option>Uploads and signatures</option></select></label>
+            <label>Block type<select id="builder-add-type">
+                <optgroup label="Advanced fields"><option value="calculation">Calculated result</option><option value="repeat">Repeating section</option></optgroup>
+                <optgroup label="Choice questions"><option value="checkbox">Confirmation checkbox</option><option value="select">Dropdown</option><option value="gallery">Image-choice gallery</option><option value="multiselect">Multiple choice checkboxes</option><option value="radio">Radio buttons</option><option value="cards">Selectable cards</option></optgroup>
+                <optgroup label="Contact details"><option value="email">Email address</option><option value="tel">Phone number</option><option value="url">Website address</option></optgroup>
+                <optgroup label="Content and layout"><option value="image">Image</option><option value="pagebreak">New page / step</option><option value="heading">Section heading</option><option value="content">Text / instructions</option></optgroup>
+                <optgroup label="Dates and times"><option value="date">Date</option><option value="time">Time</option></optgroup>
+                <optgroup label="Text and numbers"><option value="textarea">Long answer</option><option value="number">Number</option><option value="text" selected>Short answer</option></optgroup>
+                <optgroup label="Uploads and signatures"><option value="signature">Drawn signature</option><option value="file">Private file upload</option></optgroup>
+            </select></label>
+            <button type="button" class="btn" id="builder-add">Add block</button><span id="builder-count" role="status"></span>
+        </div>
+        <div id="builder-raw"><label {% if not builder_fields %}hidden{% endif %}>Advanced block settings (JSON)<textarea name="fields_json" id="builder-schema" rows="10" {% if not builder_fields %}disabled{% endif %}>{{ builder_fields }}</textarea></label><label {% if builder_fields %}hidden{% endif %}>Questions<textarea name="fields" id="builder-fields" rows="6">{{ submitted.get('fields', '') if submitted else edit_fields }}</textarea></label><p>Enable JavaScript for the visual block editor and image uploads. The advanced settings preserve all block types.</p></div>
+        </fieldset>
+        <fieldset {% if locked %}disabled{% endif %}>
+        <legend>3. Availability</legend>
+        <p>Optional dates use UK time, including daylight saving. Publishing is still required. Leave both blank to keep a published form open until you unpublish it.</p>
+        <div class="builder-dates">
+        <label>Opens<input type="datetime-local" name="starts_at" id="builder-start" value="{{ submitted.get('starts_at', '') if submitted else (local(edit_form.starts_at) if edit_form else '') }}"></label>
+        <label>Closes<input type="datetime-local" name="ends_at" id="builder-end" value="{{ submitted.get('ends_at', '') if submitted else (local(edit_form.ends_at) if edit_form else '') }}"></label>
+        </div>
+        <button type="button" class="btn" id="builder-clear-dates" hidden>Clear dates</button>
+        </fieldset>
+        <fieldset {% if locked %}disabled{% endif %}>
+        <legend>4. Confirmation messages</legend>
+        <p>Personalise the receipt with {first_name}, {form_title} and {reference}. Booking emails also keep their standard request details and review status.</p>
+        <label>Thank-you message<textarea name="confirmation_text" maxlength="2000" rows="3" placeholder="Thank you, {first_name}. We received your response to {form_title}.">{{ submitted.get('confirmation_text', '') if submitted else form_settings.get('confirmation_text', '') }}</textarea></label>
+        <label>Receipt email subject<input name="email_subject" maxlength="150" value="{{ submitted.get('email_subject', '') if submitted else form_settings.get('email_subject', '') }}" placeholder="Your {form_title} response — {reference}"></label>
+        <label>Receipt email message<textarea name="email_body" maxlength="5000" rows="5" placeholder="Hello {first_name}, your reference is {reference}.">{{ submitted.get('email_body', '') if submitted else form_settings.get('email_body', '') }}</textarea></label>
+        <p>Leave these blank to use the standard acknowledgement.</p>
+        </fieldset>
+        {% include '_builder_workflows.html' %}
+        <p id="builder-error" role="alert"></p>
+        <div class="builder-actions"><button class="btn primary" {% if locked %}disabled{% endif %}>{{ 'Save draft' if edit_form else 'Create draft' }}</button>{% if edit_form %}<a class="btn" href="{{ url_for('native_forms_admin') }}#your-forms">Back to your forms</a>{% endif %}<span id="builder-save-status" role="status"></span></div>
+    </form>
+</section>
+<section class="panel builder-preview" aria-label="Form preview">
+    <h2>Customer preview</h2><p>Try your wording and questions as a customer. Use the full preview for more room; standard booking and account details are described below.</p>
+    <div class="builder-actions" id="builder-preview-modes" hidden><button type="button" class="btn" id="builder-preview-desktop" aria-pressed="true">Desktop grid</button><button type="button" class="btn" id="builder-preview-mobile" aria-pressed="false">Phone stack</button></div>
+    <button type="button" class="btn builder-open-preview" hidden>Open full preview</button>
+    <div id="builder-preview"><p>Enable JavaScript to see the live preview.</p></div>
+</section>
+</div>
+<dialog id="builder-preview-dialog" aria-labelledby="builder-preview-dialog-title">
+    <div class="builder-preview-toolbar"><div><h2 id="builder-preview-dialog-title">Form preview</h2><p>Try the current draft. Preview answers are never submitted or saved.</p></div><button type="button" class="btn" id="builder-close-preview">Close preview</button></div>
+    <div class="builder-actions"><button type="button" class="btn" id="builder-dialog-desktop" aria-pressed="true">Desktop</button><button type="button" class="btn" id="builder-dialog-mobile" aria-pressed="false">Phone</button><button type="button" class="btn" id="builder-preview-reset">Clear preview answers</button></div>
+    <form id="builder-preview-test" novalidate><div id="builder-preview-slot"></div><button class="btn primary" type="submit">Check required fields</button><p id="builder-preview-result" role="status"></p></form>
+</dialog>
+{% if edit_form %}<section class="panel"><details><summary>Form version history ({{ versions|length }})</summary><p>Every saved or published version is retained. Restoring creates a new draft; existing responses keep their original form snapshot.</p>{% for version in versions %}<div class="builder-version"><strong>Version {{ version.number }}</strong><span>{{ version.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</span><form method="post" action="{{ url_for('native_form_restore', form_id=edit_form.id, version_id=version.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn" {% if locked %}disabled{% endif %}>Restore as draft</button></form></div>{% else %}<p>The next save will record the first full version of this form.</p>{% endfor %}{% if locked %}<p>Unpublish this form before restoring a version.</p>{% endif %}</details></section>{% endif %}
+<section class="panel" id="your-forms">
+<h2>Your forms</h2><p>Save edits as a draft first. Publish to accept responses; unpublish to stop responses and edit the form.</p>
+<div class="builder-actions" id="builder-filter-tools" hidden><label>Find a form<input type="search" id="builder-search" placeholder="Search by title"></label><label>Status<select id="builder-filter"><option value="all">All forms</option><option value="draft">Drafts</option><option value="open">Open now</option><option value="scheduled">Scheduled</option><option value="closed">Closed</option></select></label></div>
+<div class="client-grid">
+{% for form in forms %}
+{% set state = 'draft' if not form.enabled else ('open' if available(form) else ('scheduled' if form.starts_at and form.starts_at > now else 'closed')) %}
+<article class="panel builder-form-card" data-title="{{ form.title|lower }}" data-state="{{ state }}">
+<h3>{{ form.title }}</h3><p><strong>{{ {'draft':'Draft', 'open':'Open now', 'scheduled':'Scheduled', 'closed':'Closed'}[state] }}</strong> &middot; {{ {'giveaway':'Giveaway', 'photo':'Photo / video consent', 'booking':'Seasonal booking'}[form.kind] }}</p>
+{% if form.starts_at %}<p>Opens: {{ local(form.starts_at)|replace('T', ' ') }} UK time</p>{% endif %}
+{% if form.ends_at %}<p>Closes: {{ local(form.ends_at)|replace('T', ' ') }} UK time</p>{% endif %}
+<div class="builder-actions">
+<a class="btn" href="{{ url_for('native_forms_admin', edit=form.id, preview=1) }}#form-editor">Preview form</a>
+{% if not form.enabled %}<a class="btn" href="{{ url_for('native_forms_admin', edit=form.id) }}#form-editor">Edit draft</a>{% endif %}
+<a class="btn" href="{{ url_for('native_form_entries', form_id=form.id) }}">View submissions</a>
+<a class="btn" href="{{ url_for('form_insights',form_id=form.id) }}">Insights &amp; waiting list</a>
+{% if state == 'open' %}<a class="btn" href="{{ url_for('native_form_open', form_id=form.id) }}" target="_blank" rel="noopener">Open public form</a>{% endif %}
+{% if form.enabled %}<button type="button" class="btn builder-copy-link" data-url="{{ url_for('native_form_open', form_id=form.id, _external=True) }}" hidden>Copy link</button>{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="id" value="{{ form.id }}"><button class="btn" name="action" value="toggle">{{ 'Unpublish' if form.enabled else 'Publish' }}</button><button class="btn" name="action" value="duplicate">Duplicate as draft</button></form>
+</div></article>
+{% else %}<p>Create your first draft using a template or the builder above.</p>{% endfor %}
+</div><p id="builder-library-status" role="status"></p>
+</section>
+<script src="{{ url_for('static', filename='native-form-features.js') }}" defer></script><script src="{{ url_for('static', filename='form-builder.js') }}" defer></script>
+{% endblock %}

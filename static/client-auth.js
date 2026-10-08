@@ -10,11 +10,23 @@
             navigation.classList.toggle('is-expanded', expanded);
         });
         const groups = [...navigation.querySelectorAll('details')];
+        const closeMenu = () => {
+            menuToggle.setAttribute('aria-expanded', 'false');
+            navigation.classList.remove('is-expanded');
+            groups.forEach(group => { group.open = false; });
+        };
+        menuToggle.addEventListener('keydown', event => {
+            if (event.key === 'Escape') closeMenu();
+        });
+        window.matchMedia('(max-width: 700px)').addEventListener('change', closeMenu);
+        navigation.addEventListener('click', event => {
+            if (event.target.closest('a')) closeMenu();
+        });
         groups.forEach(group => group.addEventListener('toggle', () => {
             if (group.open) groups.forEach(other => { if (other !== group) other.open = false; });
         }));
         document.addEventListener('click', event => {
-            if (!navigation.contains(event.target)) groups.forEach(group => { group.open = false; });
+            if (!navigation.contains(event.target) && !menuToggle.contains(event.target)) closeMenu();
         });
         navigation.addEventListener('keydown', event => {
             if (event.key !== 'Escape') return;
@@ -53,7 +65,7 @@
         updateCountdown();
         window.setInterval(updateCountdown, 1000);
     }
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const reducedMotion = {get matches() { return document.documentElement.classList.contains('portal-reduced-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches; }};
     document.querySelectorAll('.client-main > .panel, .client-main > .client-welcome, .client-summary > .panel, .client-grid > .panel').forEach((card, index) => {
         if (card.classList.contains('client-auth')) return;
         card.classList.add('client-animated-card');

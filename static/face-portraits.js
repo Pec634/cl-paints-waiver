@@ -31,7 +31,7 @@ path(context){
  }
  context.closePath();
 },
-selected(){return this.templates[document.getElementById('paint-model')?.value];},active(){return !!this.selected();},
+selected(){const control=document.getElementById('paint-model');if(control && !this.templates[control.value])control.value='adult-male';return this.templates[control?.value];},active(){return !!this.selected();},
 face(){const t=this.selected();return {x:300,y:t.y,rx:t.rx,ry:t.ry};},
 draw(canvas){const t=this.selected(),image=t?.asset?this.images[t.asset]:this.image;if(!t||!image.complete||!image.naturalWidth)return false;const ctx=canvas.getContext('2d'),unit=image.naturalWidth/1536,width=768*unit,split=t.split||548,cellHeight=t.row?1024-split:split,top=t.row?split*unit:0,height=cellHeight*unit;ctx.clearRect(0,0,600,720);ctx.fillStyle='#fff';ctx.fillRect(0,0,600,720);ctx.drawImage(image,t.column*width,top,width,height,300-t.cx*t.scale,t.asset?80:(t.row?90:80),768*t.scale,cellHeight*t.scale);return true;}};
 window.CLPortraits.image.src='/static/face-assets/studio-face-grid.png';

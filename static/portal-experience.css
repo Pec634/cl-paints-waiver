@@ -1,0 +1,26 @@
+body { font-size: 1rem; }
+.portal-skip-link { position: fixed; left: 12px; top: -100px; z-index: 1000; padding: 12px 20px; background: white; color: var(--navy); border: 3px solid var(--pink); border-radius: 10px; }
+.portal-skip-link:focus { top: 12px; }
+.portal-display-controls { margin: 16px; max-width: 380px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.portal-display-controls summary { cursor: pointer; min-height: 32px; font-weight: 700; }
+.portal-display-controls > div { display: grid; gap: 12px; padding-top: 12px; }
+.portal-display-controls select { width: 100%; padding: 10px; }
+.portal-control-check { display: flex; align-items: center; gap: 10px; }
+.portal-control-check input { width: 20px; height: 20px; margin: 0; }
+.portal-display-controls p { font-size: .85rem; margin: 0; }
+.portal-admin-toolbar { display: flex !important; gap: 8px !important; flex-wrap: wrap; margin: 0 0 16px !important; }
+.admin .portal-admin-toolbar a { color: var(--navy); }
+.portal-filter { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin: 16px 0; }
+.portal-filter label { display: grid; gap: 8px; }
+.portal-filter select { padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.portal-timeline { list-style: none; padding: 0 0 0 18px; border-left: 3px solid var(--pink); }
+.portal-timeline li { margin: 0 0 24px; padding-left: 10px; overflow-wrap: anywhere; }
+.portal-timeline small { display: block; color: var(--muted); margin-top: 6px; }
+.portal-recovery-wrap { max-width: 760px; margin: 40px auto; padding: 16px; }
+.portal-recovery p { line-height: 1.6; }
+.portal-high-contrast { --muted: #334155; --border: #52637d; --pink: #aa0750; --green: #006d40; }
+.portal-high-contrast .panel, .portal-high-contrast .card, .portal-high-contrast .booking-message { background: white; color: #10213f; }
+.portal-high-contrast a:focus-visible, .portal-high-contrast button:focus-visible { outline: 3px solid #10213f; outline-offset: 3px; }
+.portal-reduced-motion *, .portal-reduced-motion *::before, .portal-reduced-motion *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (max-width: 600px) { .portal-filter { display: grid; } .portal-timeline { padding-left: 10px; } .portal-display-controls { margin: 12px; } }
+@media (max-width: 700px) { .client-shell > .portal-mobile-shortcuts { grid-template-columns: repeat(4,minmax(0,1fr)); } .client-shell > .portal-mobile-shortcuts a { font-size: .875rem; min-width: 0; overflow-wrap: anywhere; } }

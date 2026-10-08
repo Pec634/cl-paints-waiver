@@ -1,1 +1,54 @@
-{% for field in fields %}<label>{{ field.label }}{% if field.type == 'textarea' %}<textarea name="custom_{{ loop.index0 }}" maxlength="2000" {% if field.required %}required{% endif %}>{{ request.form.get('custom_' ~ loop.index0,'') }}</textarea>{% elif field.type == 'select' %}<select name="custom_{{ loop.index0 }}" {% if field.required %}required{% endif %}><option value="">Choose an option</option>{% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}</select>{% elif field.type == 'checkbox' %}<input type="checkbox" name="custom_{{ loop.index0 }}" value="yes" {% if field.required %}required{% endif %}>{% else %}<input type="{{ field.type }}" name="custom_{{ loop.index0 }}" value="{{ request.form.get('custom_' ~ loop.index0,'') }}" {% if field.type == 'number' %}step="any"{% endif %} maxlength="2000" {% if field.required %}required{% endif %}>{% endif %}</label>{% endfor %}
+<link rel="stylesheet" href="{{ url_for('static', filename='native-fields.css') }}">
+<div class="native-fields" data-native-fields data-native-schema="{{ fields|tojson|forceescape }}" data-activity-csrf="{{ workflow_csrf }}" data-activity-url="{{ url_for('form_activity',form_id=field_form.id) if field_form is defined and field_form else '' }}" data-draft-url="{{ url_for('native_form_draft', form_id=field_form.id) if field_form is defined and field_form else '' }}">
+{% include '_form_spam.html' %}
+{% for field in fields %}
+{% set index = loop.index0 %}
+{% set name = 'custom_' ~ index %}
+{% set condition = field.get('show_if', {}) %}
+{% set value = request.form.get(name, '') %}
+{% set layout = field.get('layout', {'row': index + 1, 'column': 1, 'width': 12}) %}
+<div class="native-block native-block-{{ field.type }}" style="--block-row: {{ layout.row }}; --block-column: {{ layout.column }}; --block-width: {{ layout.width }};" data-native-index="{{ index }}" data-field-label="{{ field.label }}" data-condition-field="{{ condition.get('field', '') }}" data-condition-value="{{ condition.get('equals', '') }}">
+{% if field.type in ['heading', 'pagebreak'] %}
+    <h3>{{ field.label }}</h3>{% if field.get('content') %}<p class="native-preserve">{{ field.content }}</p>{% endif %}
+{% elif field.type == 'content' %}
+    <h3>{{ field.label }}</h3><div class="native-preserve">{{ field.content }}</div>
+{% elif field.type == 'image' %}
+    <figure class="native-image native-image-{{ field.get('size', 'full') }} native-align-{{ field.get('align', 'center') }}"><img src="{{ field.src }}" alt="{{ field.alt }}" loading="lazy" referrerpolicy="no-referrer">{% if field.get('content') %}<figcaption class="native-preserve">{{ field.content }}</figcaption>{% endif %}</figure>
+{% elif field.type == 'calculation' %}
+    <label for="native-custom-{{ index }}">{{ field.label }}</label><output id="native-custom-{{ index }}" data-native-calculation aria-live="polite">Calculated from your answers</output><p class="native-help">Calculated estimates are checked again when you submit. This does not take payment.</p>
+{% elif field.type in ['signature', 'repeat'] %}
+    <label for="native-custom-{{ index }}">{{ field.label }} <small>{{ '(required)' if field.required else '(optional)' }}</small></label>
+    <textarea id="native-custom-{{ index }}" name="{{ name }}" data-native-value data-native-advanced rows="4" {% if field.required %}required{% endif %}>{{ value }}</textarea>
+    <noscript><p>Enable JavaScript for {{ 'drawing signatures' if field.type == 'signature' else 'adding repeating rows' }}, or contact CL Paints for assistance.</p></noscript>
+{% elif field.type == 'file' %}
+    <label for="native-custom-{{ index }}">{{ field.label }} <small>{{ '(required)' if field.required else '(optional)' }}</small></label><input id="native-custom-{{ index }}" type="file" name="{{ name }}" multiple accept="{{ 'image/jpeg,image/png,image/webp' if 'images' in field.file_types else '' }}{{ ',application/pdf' if 'pdf' in field.file_types else '' }}" {% if field.required %}required{% endif %}><p class="native-help">Up to {{ field.max_files }} files, each under 10 MB. Attachments stay private. Files must be selected again when resuming a draft.</p>
+{% elif field.type in ['radio', 'cards', 'gallery', 'multiselect'] %}
+    <fieldset class="native-choice-group" {% if field.type == 'multiselect' and field.required %}data-require-choice{% endif %}>
+    <legend>{{ field.label }} <small>{{ '(required)' if field.required else '(optional)' }}</small></legend>
+    {% if field.get('help') %}<p id="native-help-{{ index }}" class="native-help">{{ field.help }}</p>{% endif %}
+    <div class="{{ 'native-card-grid native-image-gallery' if field.type == 'gallery' else ('native-card-grid' if field.type == 'cards' else 'native-choice-list') }} native-spacing-{{ field.get('option_spacing', 'comfortable') }}" style="--choice-columns: {{ field.get('option_columns', 2 if field.type in ['cards', 'gallery'] else 1) }};">
+    {% for option in field.options %}
+        <label class="{{ 'native-choice-card' if field.type in ['cards', 'gallery'] else 'native-choice' }}">
+            <input type="{{ 'checkbox' if field.type == 'multiselect' else 'radio' }}" name="{{ name }}" value="{{ option }}" {% if field.type != 'multiselect' and field.required %}required{% endif %} {% if (field.type == 'multiselect' and option in request.form.getlist(name)) or (field.type != 'multiselect' and value == option) %}checked{% endif %} {% if field.get('help') %}aria-describedby="native-help-{{ index }}"{% endif %}>
+            <span>{% if field.type in ['cards', 'gallery'] and field.get('option_images', {}).get(option) %}<img src="{{ field.option_images[option] }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}{{ option }}</span>
+        </label>
+    {% endfor %}
+    </div>
+    {% if not field.required and field.type != 'multiselect' %}<button type="button" class="btn native-clear-choice" hidden>Clear selection</button>{% endif %}
+    </fieldset>
+{% else %}
+    <label for="native-custom-{{ index }}">{{ field.label }} <small>{{ '(required)' if field.required else '(optional)' }}</small></label>
+    {% if field.type == 'textarea' %}
+        <textarea id="native-custom-{{ index }}" name="{{ name }}" maxlength="{{ field.get('max_length', 2000) }}" placeholder="{{ field.get('placeholder', '') }}" {% if field.required %}required{% endif %} {% if field.get('help') %}aria-describedby="native-help-{{ index }}"{% endif %}>{{ value }}</textarea>
+    {% elif field.type == 'select' %}
+        <select id="native-custom-{{ index }}" name="{{ name }}" {% if field.required %}required{% endif %} {% if field.get('help') %}aria-describedby="native-help-{{ index }}"{% endif %}><option value="">Choose an option</option>{% for option in field.options %}<option value="{{ option }}" {% if value == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+    {% else %}
+        <input id="native-custom-{{ index }}" type="{{ field.type }}" name="{{ name }}" value="{{ 'yes' if field.type == 'checkbox' else value }}" {% if field.type == 'checkbox' and value == 'yes' %}checked{% endif %} {% if field.required %}required{% endif %} {% if field.type == 'number' %}step="any" {% if 'min' in field %}min="{{ field.min }}"{% endif %} {% if 'max' in field %}max="{{ field.max }}"{% endif %}{% endif %} maxlength="{{ field.get('max_length', 2000) }}" placeholder="{{ field.get('placeholder', '') }}" {% if field.get('help') %}aria-describedby="native-help-{{ index }}"{% endif %}>
+    {% endif %}
+    {% if field.get('help') %}<p id="native-help-{{ index }}" class="native-help">{{ field.help }}</p>{% endif %}
+{% endif %}
+</div>
+{% endfor %}
+</div>
+<script src="{{ url_for('static', filename='native-form-features.js') }}" defer></script><script src="{{ url_for('static', filename='native-fields.js') }}" defer></script>
+<script src="{{ url_for('static',filename='form-intake.js') }}" defer></script>

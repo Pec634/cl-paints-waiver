@@ -91,6 +91,24 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
             label = 'Mixed public/private' if {'Public', 'Private'} <= settings else next(iter(settings), 'Unspecified')
             setting_counts[label] += 1
         bookings = [booking for booking in bookings if matching_events(booking)]
+        # Count people by email, rather than event days or individual requests.
+        history = Booking.query.filter(Booking.submitted_at < upper).order_by(Booking.submitted_at, Booking.id).all()
+        request_counts = Counter()
+        confirmed_counts = Counter()
+        first_requests = {}
+        for booking in history:
+            identity = (booking.email or '').strip().casefold()
+            if not identity or not matching_events(booking):
+                continue
+            request_counts[identity] += 1
+            first_requests.setdefault(identity, booking.id)
+            if booking.status == 'Accepted':
+                confirmed_counts[identity] += 1
+        period_clients = {(booking.email or '').strip().casefold() for booking in bookings} - {''}
+        repeat_clients = sum(request_counts[identity] >= 2 for identity in period_clients)
+        loyal_clients = sum(confirmed_counts[identity] >= 2 for identity in period_clients)
+        repeat_requests = sum(bool((booking.email or '').strip()) and
+            first_requests.get(booking.email.strip().casefold()) != booking.id for booking in bookings)
         waivers = Waiver.query.filter(Waiver.signed_date >= lower, Waiver.signed_date < upper, Waiver.status != 'Superseded').all()
         participants = Participant.query.join(Waiver).filter(Waiver.signed_date >= lower, Waiver.signed_date < upper, Waiver.status != 'Superseded').all()
         if setting == 'Private':
@@ -171,7 +189,8 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
                     workload=chart_rows(workload, keys), referral_flow=referral_flow,
                     areas=areas, markers=[area for area in areas if area['latitude'] is not None],
                     missing_addresses=len(missing_bookings), unmapped_areas=sum(area['latitude'] is None for area in areas),
-                    unique_clients=len(latest_clients))
+                    unique_clients=len(latest_clients), repeat_clients=repeat_clients,
+                    loyal_clients=loyal_clients, repeat_requests=repeat_requests)
 
     @app.get('/admin/reports')
     @admin_required
@@ -199,7 +218,7 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
         writer.writerow(['Report', 'Category', 'Value', 'Start date', 'End date'])
         def row(report, label, value):
             writer.writerow([safe(report), safe(label), safe(value), data['start'], data['end']])
-        for field in ['booking_count', 'waiver_count', 'participant_count', 'average_age', 'estimated_value', 'unique_clients', 'missing_addresses']:
+        for field in ['booking_count', 'waiver_count', 'participant_count', 'average_age', 'estimated_value', 'unique_clients', 'missing_addresses', 'repeat_clients', 'loyal_clients', 'repeat_requests']:
             if data['setting'] == 'Private' and field in {'waiver_count', 'participant_count', 'average_age'}:
                 continue
             row('Summary', field, data[field] if data[field] is not None else '')

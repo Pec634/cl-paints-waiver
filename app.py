@@ -9,6 +9,7 @@ from io import StringIO
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.exceptions import BadRequest
 import hashlib
 import json
 import csv
@@ -506,6 +507,14 @@ from sumup_invoices import define_model as define_invoice_model
 BookingInvoice = define_invoice_model(db)
 from booking_requests import define_model as define_booking_request_model
 BookingRequest = define_booking_request_model(db)
+from booking_messages import define_model as define_booking_message_model
+BookingMessage = define_booking_message_model(db)
+from booking_lifecycle import define_models as define_booking_lifecycle_models
+booking_lifecycle_models = define_booking_lifecycle_models(db)
+from portal_experience import define_model as define_portal_read_model
+PortalRead = define_portal_read_model(db)
+from record_imports import define_models as define_record_import_models
+record_import_models = define_record_import_models(db)
 from client_features import define_model as define_client_preference_model
 ClientEmailPreference = define_client_preference_model(db)
 app.extensions['client_email_preference_model'] = ClientEmailPreference
@@ -518,6 +527,8 @@ from admin_security import define_models as define_admin_security_models
 admin_security_models = define_admin_security_models(db)
 from native_forms import define_models as define_native_form_models
 native_form_models = define_native_form_models(db)
+from sumup_checkout import define_model as define_sumup_checkout
+SumupCheckout = define_sumup_checkout(db)
 from staff_reports import define_models as define_staff_report_models
 staff_report_models = define_staff_report_models(db)
 from connecteam_rota import define_model as define_rota_model
@@ -1209,7 +1220,17 @@ def admin_login():
     credential = AdminCredential.query.order_by(AdminCredential.id.asc()).first()
 
     if request.method == "POST":
-        if not app.extensions['admin_login_check']():
+        try:
+            login_allowed = app.extensions['admin_login_check']()
+        except BadRequest:
+            token = secrets.token_urlsafe(32)
+            session['admin_login_csrf'] = token
+            return render_template(
+                'admin_login.html',
+                error='Your sign-in form expired or your browser session changed. Please enter your password again. If this keeps happening, allow cookies for this site.',
+                login_csrf=token,
+            ), 400
+        if not login_allowed:
             return render_template('admin_login.html', error='Too many sign-in attempts. Wait 15 minutes before trying again.', login_csrf=token), 429
         password = request.form.get("password", "")
         password_is_valid = (
@@ -1371,12 +1392,20 @@ def booking_availability_check():
     except ValueError:
         return jsonify({"success": False, "error": "Enter a valid event date and time."}), 400
 
-    if event_date < datetime.now().date():
+    from zoneinfo import ZoneInfo
+    if event_date < datetime.now(ZoneInfo('Europe/London')).date():
         return jsonify({"success": False, "error": "Choose a future event date."}), 400
     if requested_finish <= requested_start:
         return jsonify({"success": False, "error": "Finish time must be after start time."}), 400
     if not data.get("address", "").strip() or not data.get("event_type", "").strip():
         return jsonify({"success": False, "error": "Enter the event address and event type."}), 400
+
+    start = datetime.combine(event_date, requested_start.time())
+    finish = datetime.combine(event_date, requested_finish.time())
+    for row in app.extensions['calendar_rows']():
+        if row['booking'] and row['booking'].status != 'Accepted': continue
+        if start < row['occupied_end'] and finish > row['occupied_start']:
+            return jsonify(success=True, available=False, message='This time is unavailable or overlaps setup/travel time. Choose another time or contact CL Paints.')
 
     for booking in Booking.query.filter_by(status="Accepted").all():
         try:
@@ -1527,11 +1556,15 @@ def send_booking_request_confirmation(booking):
         "info@clpaints.com",
     ])
 
+    from native_form_records import confirmation
+    seasonal = schedule_data.get('seasonal_form') if 'schedule_data' in locals() else None
+    custom = confirmation(seasonal.get('snapshot', {}).get('settings', {}), booking.first_name, seasonal.get('title', ''), booking.public_reference) if seasonal else {}
+    if custom.get('email_body'): lines = [custom['email_body'], ''] + lines
     try:
         resend.Emails.send({
             "from": "CL Paints <info@clpaints.com>",
             "to": [booking.email],
-            "subject": f"Booking request received - {booking.public_reference} (Under Review)",
+            "subject": custom.get('email_subject') or f"Booking request received - {booking.public_reference} (Under Review)",
             "text": "\n".join(lines),
         })
         return True
@@ -1543,11 +1576,18 @@ def send_booking_request_confirmation(booking):
 @app.route("/booking", methods=["GET", "POST"])
 def booking_request():
     from native_forms import available as native_available, answers as native_answers, design_uploads
+    from native_form_records import read_form_files, upload_names, confirmation
     NativeForm = native_form_models[0]
     seasonal_id = request.form.get('seasonal_id', type=int) if request.method == 'POST' else request.args.get('seasonal', type=int)
     seasonal_form = db.session.get(NativeForm, seasonal_id) if seasonal_id else None
     if seasonal_id and (not seasonal_form or seasonal_form.kind != 'booking' or not native_available(seasonal_form)):
         abort(404)
+    workflow_options = app.extensions['form_workflows']['options'](seasonal_form)
+    if request.method=='GET' and seasonal_form and app.extensions['form_workflows']['full'](seasonal_form):
+        if workflow_options.get('waitlist_enabled')=='yes':return redirect(url_for('form_waiting_list',form_id=seasonal_form.id))
+        abort(404)
+    if request.method=='GET' and seasonal_form:
+        app.extensions['form_workflows']['track'](seasonal_form);db.session.commit()
     settings = get_business_settings()
     pricing_rules = {key: settings[key] for key in ['hourly_rate', 'minimum_hours', 'max_event_dates', 'free_miles', 'mile_rate', 'travel_cap']}
     offer = app.extensions['active_hourly_discount'](pricing_rules['hourly_rate'])
@@ -1569,12 +1609,19 @@ def booking_request():
             form_data.update(billing.details)
             if billing.details.get('date_of_birth'):
                 form_data['is_over_18'] = 'yes'
+        repeat_id = request.args.get('repeat', type=int)
+        if repeat_id:
+            form_data.update(app.extensions['repeat_booking_details'](portal_account, repeat_id))
+    elif request.method == 'GET' and request.args.get('repeat'):
+        return redirect(url_for('client.login'))
     error = None
 
     if request.method == "POST":
         try:
+            app.extensions['form_workflows']['guard']()
             request_type = request.form.get("request_type", "")
-            seasonal_answers = native_answers(seasonal_form, request.form) if seasonal_form else {}
+            seasonal_field_uploads = read_form_files(seasonal_form, request.files) if seasonal_form else []
+            seasonal_answers = native_answers(seasonal_form, request.form, upload_names(seasonal_field_uploads)) if seasonal_form else {}
             seasonal_uploads = design_uploads(request.files.getlist('design_images')) if seasonal_form else []
             if seasonal_form and seasonal_form.terms and request.form.get('seasonal_agree') != 'yes':
                 raise ValueError('Accept the seasonal booking information to continue.')
@@ -1746,6 +1793,10 @@ def booking_request():
                     "estimated_cost": str(day_cost),
                 })
 
+            from form_workflows import booking_options
+            possible_duplicates = app.extensions['form_workflows']['booking_check'](seasonal_form, normalized_schedule, email)
+            total_event_cost, intake_options = booking_options(workflow_options, request.form, normalized_schedule, total_event_cost)
+            intake_options['possible_duplicates'] = possible_duplicates
             payment_preference = request.form.get("payment_preference", "")
             if payment_preference not in {"Full payment", "50% deposit"}:
                 raise ValueError("Choose a payment preference.")
@@ -1783,7 +1834,8 @@ def booking_request():
                 additional_event_dates=", ".join(item["date"] for item in normalized_schedule[1:]) or None,
                 event_schedule=json.dumps({
                     "pricing_rules": pricing_rules,
-                    "seasonal_form": {'id': seasonal_form.id, 'title': seasonal_form.title, 'terms': seasonal_form.terms, 'answers': seasonal_answers} if seasonal_form else None,
+                    "intake_options": intake_options,
+                    "seasonal_form": {'id': seasonal_form.id, 'title': seasonal_form.title, 'terms': seasonal_form.terms, 'answers': seasonal_answers, 'snapshot': app.extensions['native_form_records']['snapshot'](seasonal_form)} if seasonal_form else None,
                     "same_details": all_dates_same_details,
                     "events": normalized_schedule,
                 }),
@@ -1814,11 +1866,17 @@ def booking_request():
                 status="Under Review",
             )
             db.session.add(booking)
+            if seasonal_form:
+                app.extensions['native_form_records']['record_booking'](seasonal_form, booking, seasonal_answers, seasonal_field_uploads)
+                app.extensions['native_form_records']['clear_draft'](seasonal_form)
+                app.extensions['form_workflows']['track'](seasonal_form,completed=True)
             if seasonal_uploads:
                 db.session.flush()
                 for upload in seasonal_uploads:
                     db.session.add(app.extensions['native_booking_media'](booking_id=booking.id,**upload))
             db.session.commit()
+            if seasonal_form:
+                session['native_booking_confirmation'] = {'reference': booking.public_reference, 'message': confirmation(app.extensions['native_form_records']['settings'](seasonal_form), first_name, seasonal_form.title, booking.public_reference).get('confirmation_text', '')}
             email_sent = send_booking_request_confirmation(booking)
             if booking.promo_code and booking.referral_verified:
                 app.extensions['client_reward_code_notice'](booking.promo_code,
@@ -1843,6 +1901,8 @@ def booking_request():
         error=error,
         form_data=form_data,
         seasonal_form=seasonal_form,
+        workflow_options=workflow_options,
+        seasonal_confirmation=session.get('native_booking_confirmation', {}).get('message', '') if session.get('native_booking_confirmation', {}).get('reference') == request.args.get('submitted') else '',
         submitted=request.args.get("submitted"),
         portal_account=portal_account,
         google_maps_api_key=GOOGLE_MAPS_API_KEY,
@@ -2621,6 +2681,8 @@ register_tools(app, db, tool_models, Booking, ClientAccount, ClientEnquiry, Part
 
 from sumup_invoices import register as register_sumup_invoices
 register_sumup_invoices(app, db, BookingInvoice, Booking, admin_required, get_current_client, booking_schedule_events)
+from sumup_checkout import register as register_sumup_checkout
+register_sumup_checkout(app, db, SumupCheckout, Booking, tool_models[1], get_current_client, admin_required, get_business_settings)
 
 from booking_requests import register as register_booking_requests
 register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_current_client,
@@ -2628,12 +2690,27 @@ register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_c
 from client_features import register as register_client_features
 register_client_features(app, db, ClientEmailPreference, Booking, BookingInvoice, BookingRequest,
     get_current_client, booking_schedule_events)
+from booking_messages import register as register_booking_messages
+register_booking_messages(app, db, BookingMessage, Booking, BookingRequest, get_current_client, admin_required)
+app.extensions['portal_booking_change_model'] = notification_models[0]
+app.extensions['availability_block_model'] = tool_models[2]
+from booking_lifecycle import register as register_booking_lifecycle
+register_booking_lifecycle(app, db, booking_lifecycle_models, Booking, Event, notification_models[0],
+    BookingMessage, BookingRequest, tool_models[1], get_current_client, admin_required,
+    booking_schedule_events, ADMIN_EMAIL, lambda *args: send_client_email(*args), get_business_settings)
+from portal_experience import register as register_portal_experience
+register_portal_experience(app, db, PortalRead, Booking, ClientAccount, Waiver, BookingMessage, BookingRequest,
+    notification_models[0], notification_models[1], tool_models[1], native_form_models[0], native_form_models[1],
+    booking_lifecycle_models, get_current_client, admin_required, ClientEnquiry, tool_models[3], BookingInvoice)
+from record_imports import register as register_record_imports
+register_record_imports(app, db, record_import_models, ClientAccount, Booking, get_current_client, admin_required)
 
 from kiosk import register as register_kiosk
 register_kiosk(app, db, KioskSession, BusinessSetting, Event, Waiver, get_current_client,
     admin_required, waiver_event, create_waiver, Participant, ClientAccount, ClientLoginCode, loyalty_models[3],
     lambda *args: send_client_email(*args))
 
+app.extensions['booking_schedule'] = booking_schedule_events
 register_native_forms(app, db, native_form_models, ClientAccount, Booking, get_current_client, admin_required, lambda *args: send_client_email(*args))
 from staff_reports import register as register_staff_reports
 register_staff_reports(app, db, staff_report_models, admin_required)

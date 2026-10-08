@@ -13,6 +13,7 @@
       <summary>My events</summary>
       <div class="client-nav-dropdown">
         <a href="{{ url_for('client.bookings') }}" {% if request.endpoint == 'client.bookings' %}aria-current="page"{% endif %}>Bookings</a>
+        <a href="{{ url_for('client_payments') }}" {% if request.endpoint == 'client_payments' %}aria-current="page"{% endif %}>Payments &amp; invoices</a>
         <a href="{{ url_for('loyalty.waivers') }}" {% if request.endpoint == 'loyalty.waivers' %}aria-current="page"{% endif %}>My waivers</a>
       </div>
     </details>
@@ -21,7 +22,7 @@
     {% endfor %}
   </div>
   <div class="client-nav-tools">
-    <a class="client-nav-updates" href="{{ url_for('client.dashboard') }}#recent-updates">Updates {% if client_unread_count %}<span class="client-unread-badge">{{ client_unread_count }} unread</span>{% endif %}</a>
+    <a class="client-nav-updates" href="{{ url_for('client_notification_centre') }}">Notifications {% if client_unread_count %}<span class="client-unread-badge">{{ client_unread_count }} unread</span>{% endif %}</a>
     <details class="client-nav-group{% if request.endpoint in ['client.account', 'client.contact', 'client_preferences', 'client_help'] %} active{% endif %}">
       <summary>Account</summary>
       <div class="client-nav-dropdown">
@@ -29,11 +30,13 @@
         <a href="{{ url_for('client.contact') }}" {% if request.endpoint == 'client.contact' %}aria-current="page"{% endif %}>Contact us</a>
         <a href="{{ url_for('client_preferences') }}" {% if request.endpoint == 'client_preferences' %}aria-current="page"{% endif %}>Email preferences</a>
         <a href="{{ url_for('client_help') }}" {% if request.endpoint == 'client_help' %}aria-current="page"{% endif %}>Help &amp; aftercare</a>
+        <a href="#portal-text-size" data-open-display>Display settings</a>
         <form method="post" action="{{ url_for('client.logout') }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="client-nav-signout" type="submit">Sign out</button></form>
       </div>
     </details>
   </div>
 </nav>{% endif %}</header>
+{% if client_account %}<nav class="portal-mobile-shortcuts" aria-label="Quick navigation"><a href="{{ url_for('client.dashboard') }}" {% if request.endpoint == 'client.dashboard' %}aria-current="page"{% endif %}>Home</a><a href="{{ url_for('client.bookings') }}" {% if request.endpoint in ['client.bookings','client.booking_detail','client_booking_messages'] %}aria-current="page"{% endif %}>Bookings</a><a href="{{ url_for('client_payments') }}" {% if request.endpoint == 'client_payments' %}aria-current="page"{% endif %}>Payments</a><a href="{{ url_for('loyalty.waivers') }}" {% if request.endpoint == 'loyalty.waivers' %}aria-current="page"{% endif %}>Waivers</a></nav>{% endif %}
 <main class="client-main">
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}{% if category == 'client_login_success' %} client-login-celebration{% endif %}" role="status">{{ message }}</p>{% endfor %}
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
