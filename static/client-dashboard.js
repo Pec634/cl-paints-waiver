@@ -13,6 +13,16 @@
         details.setAttribute('name', 'client-dashboard-sections');
         const summary = document.createElement('summary');
         summary.textContent = heading ? heading.textContent.trim() : 'Booking and reward overview';
+        if (panel.classList.contains('portal-next-steps')) {
+            const count = panel.querySelector('.dashboard-count');
+            if (count) {
+                const badge = count.cloneNode(true);
+                badge.classList.add('client-dashboard-action-count');
+                const total = Number(count.textContent.trim());
+                badge.setAttribute('aria-label', `${total} outstanding action${total === 1 ? '' : 's'}`);
+                summary.append(badge);
+            }
+        }
         container.append(details);
         details.append(summary, panel);
         details.addEventListener('toggle', () => {

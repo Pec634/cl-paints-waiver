@@ -71,6 +71,7 @@ body { font-size: 1rem; }
 }
 .client-dashboard-dropdown { padding:0;overflow:hidden; }
 .client-dashboard-dropdown > summary { padding:18px 20px;cursor:pointer;font-weight:700; }
+.client-dashboard-action-count { display:inline-block;margin-left:12px;padding:3px 10px;border-radius:999px;vertical-align:middle;font-size:.9rem;background:#fce2ee;color:#9b174f; }
 .client-dashboard-dropdown > summary:focus-visible { outline:3px solid #f72585;outline-offset:-3px; }
 .client-dashboard-dropdown[open] > summary { border-bottom:1px solid #eed8e4;background:#fff3f8; }
 .client-dashboard-dropdown > section.panel { margin:0;border:0;box-shadow:none; }

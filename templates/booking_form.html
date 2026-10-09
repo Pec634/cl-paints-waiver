@@ -12,7 +12,7 @@ Client Booking Request | CL Paints
         <a class="brand" href="/">{{ business_settings.business_name }}</a>
         <small>CLIENT BOOKING REQUEST</small>
         <h1>Let's plan your event.</h1><p>Read our <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener">Privacy policy</a> for how we handle your information.</p>
-        <p>Send us your details and we will review availability and costs with you.</p><p><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% if business_settings.phone %} · {{ business_settings.phone }}{% endif %}{% if business_settings.website %} · <a href="{{ business_settings.website }}" target="_blank" rel="noopener noreferrer">www.clpaints.com</a>{% endif %}</p>
+        <p>Send us your details and we will review availability and costs with you.</p><p><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% if business_settings.phone %} · {{ business_settings.phone }}{% endif %}{% if business_settings.website %} · <a href="{{ business_settings.website }}" target="_blank" rel="noopener noreferrer">{{ business_settings.website.replace('https://','').replace('http://','').rstrip('/') }}</a>{% endif %}</p>
     </header>
 
     {% if submitted %}

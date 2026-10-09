@@ -7,14 +7,14 @@ import json
 from login_reviews import DEFAULT_REVIEWS, read_reviews, validate_reviews
 
 DEFAULTS = dict(business_name='CL Paints', contact_email='info@clpaints.com', phone='',
-                website='https://www.clpaints.com', hourly_rate='45.00', minimum_hours='2',
+                website='https://my.clpaints.com/', hourly_rate='45.00', minimum_hours='2',
                 max_event_dates='10', free_miles='10', mile_rate='1.00', travel_cap='50.00',
                 recovery_email='')
 from client_notifications import EMAIL_DEFAULTS, validate_email_settings
 DEFAULTS.update(EMAIL_DEFAULTS)
 DEFAULTS['login_reviews'] = json.dumps(DEFAULT_REVIEWS, ensure_ascii=False)
 DEFAULTS.update(website_giveaway_announcement='')
-DEFAULTS.update(calendar_buffer_minutes='60', reminder_days='2', public_app_url='')
+DEFAULTS.update(calendar_buffer_minutes='60', reminder_days='2', public_app_url='https://my.clpaints.com')
 DEFAULTS.update(facebook_url='https://www.facebook.com/profile.php?id=61578784131483&locale=en_GB',
                 instagram_url='https://www.instagram.com/cl.paints_/',
                 trustpilot_url='https://uk.trustpilot.com/review/clpaints.com')
@@ -23,6 +23,11 @@ DEFAULTS.update(facebook_url='https://www.facebook.com/profile.php?id=6157878413
 def read_settings(db, Setting, recovery_default=''):
     values = dict(DEFAULTS, recovery_email=recovery_default)
     values.update({row.key: row.value for row in Setting.query.all() if row.key in DEFAULTS})
+    # Existing deployments may still hold the previous public website address.
+    if values['website'].rstrip('/') in ('https://www.clpaints.com', 'https://clpaints.com'):
+        values['website'] = DEFAULTS['website']
+    if values['public_app_url'].rstrip('/') in ('https://cl-paints-waiver.onrender.com', 'https://www.clpaints.com', 'https://clpaints.com'):
+        values['public_app_url'] = 'https://my.clpaints.com'
     return values
 
 

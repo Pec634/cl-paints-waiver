@@ -6,7 +6,7 @@ def register(app):
     def public_url(endpoint, **values):
         context = {}
         app.update_template_context(context)
-        origin = (context['business_settings']['website'] or 'https://www.clpaints.com').rstrip('/')
+        origin = (context['business_settings']['website'] or 'https://my.clpaints.com/').rstrip('/')
         return origin + url_for(endpoint, **values)
 
     @app.context_processor
