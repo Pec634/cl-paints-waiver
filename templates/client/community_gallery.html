@@ -1,4 +1,4 @@
-{% extends 'client/gallery_frame.html' if request.args.get('embed')=='1' else 'client/base.html' %}
+{% set seo_title = 'Community Gallery | CL Paints' %}{% set seo_description = 'Explore approved face painting designs shared by the CL Paints community.' %}{% extends 'client/gallery_frame.html' if request.args.get('embed')=='1' else 'website/base.html' %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static',filename='studio-community.css') }}">
 <header class="panel"><h1>Community gallery</h1><p>Discover designs created by other CL Paints clients. Every published design has been reviewed by our team.</p><a class="btn" href="{{ url_for('client.studio') }}">Create and share a design</a></header>

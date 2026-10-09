@@ -13,6 +13,7 @@ DEFAULTS = dict(business_name='CL Paints', contact_email='info@clpaints.com', ph
 from client_notifications import EMAIL_DEFAULTS, validate_email_settings
 DEFAULTS.update(EMAIL_DEFAULTS)
 DEFAULTS['login_reviews'] = json.dumps(DEFAULT_REVIEWS, ensure_ascii=False)
+DEFAULTS.update(website_giveaway_announcement='')
 DEFAULTS.update(calendar_buffer_minutes='60', reminder_days='2', public_app_url='')
 DEFAULTS.update(facebook_url='https://www.facebook.com/profile.php?id=61578784131483&locale=en_GB',
                 instagram_url='https://www.instagram.com/cl.paints_/',
@@ -56,6 +57,11 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                     values['contact_email'] = validate_email(values['contact_email'], check_deliverability=False).normalized
                     if values['website'] and not values['website'].startswith(('https://', 'http://')):
                         raise ValueError('The website must begin with https:// or http://.')
+                elif section == 'website_giveaway':
+                    announcement = request.form.get('website_giveaway_announcement', '').strip()
+                    if len(announcement) > 2000:
+                        raise ValueError('Keep giveaway announcements under 2001 characters.')
+                    values['website_giveaway_announcement'] = announcement
                 elif section == 'login_reviews':
                     values['login_reviews'] = validate_reviews(request.form)
                 elif section == 'social':

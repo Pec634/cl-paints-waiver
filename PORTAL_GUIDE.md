@@ -233,3 +233,17 @@ Account, preference, booking and profile editing forms warn before leaving with
 unsaved edits. Browser confirmation wording is controlled by the browser.
 Empty dashboard payment/change panels are hidden until relevant records exist.
 The dashboard's request and reward counts remain visible below the welcome area.
+
+Public website and studio
+-------------------------
+The public website is at /, with /services, /about, /gallery and /contact.
+Pricing comes from General settings; login review settings also supply the public
+review carousel. Giveaway announcements are editable in General settings and
+currently available giveaway forms appear automatically.
+The Face Paint Studio is now at /face-paint-studio and is available to guests.
+The legacy client studio URL redirects to it. Sharing, favourites and community
+interactions continue to require an account and existing CSRF checks. Guest
+painting, downloads and browser-local studio progress remain available.
+
+## Signed photo uploads and website library
+Clients use My events > Upload photos to submit up to three images with per-photo identities, descriptions for group photographs, a responsible person and a drawn signature. Review images in Business settings > Photo library before approval. Public captions are separate from private identities. Select website placements or choose an approved photo as an event story cover under Event stories. Legacy photography form images also enter the library; a signed authority record is required for approval. Clients can withdraw a release: website photo links and covered stories then stop displaying. Remove social media and printed copies separately when a withdrawal arrives. Database backups now also contain private photographs and releases.

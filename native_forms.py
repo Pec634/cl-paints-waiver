@@ -263,6 +263,7 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                     except ValueError:raise ValueError('Check the participant details.')
                     if not isinstance(participants,list) or not 1<=len(participants)<=20:raise ValueError('Add one to twenty participants.')
                     if any(not isinstance(p,dict) or not isinstance(p.get('name'),str) or not p['name'].strip() or len(p['name'])>150 or p.get('consent') is not True for p in participants):raise ValueError('Name every participant and confirm their photography permission.')
+                    if len(participants)>1 and any(not isinstance(p.get('description'),str) or not p['description'].strip() or len(p['description'])>300 for p in participants):raise ValueError('Describe each person’s position, clothing or face paint so we can identify them in group photographs.')
                     data['Participants']=participants
                     people='; '.join(p['name'].strip() for p in participants)
                 if not people or len(people)>2000 or request.form.get('authority')!='yes':raise ValueError('Name the people shown and confirm you have authority to submit their media and consent.')

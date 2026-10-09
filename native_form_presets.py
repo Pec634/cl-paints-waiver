@@ -1,12 +1,8 @@
 """Editable draft templates transcribed from CL Paints' supplied form screenshots."""
 
-PHOTO_TERMS = """Photographs and videos can be used for CL Paints’ website, portfolio, marketing and social media only where consent has been given. You may withdraw your consent at any time by emailing info@clpaints.com. Withdrawal of consent will not affect images already published before your request was received.
+from photo_library import PHOTO_TERMS as CLIENT_PHOTO_TERMS
 
-When withdrawing consent, include the event date, location and names of the people involved to help identify the photograph or video.
-
-No names will be published alongside photographs without further permission. Any request by CL Paints for this permission will be made in writing or by email, never over the phone.
-
-Once images are posted online, CL Paints cannot control third-party sharing. Our privacy policy is available through the link on this page."""
+PHOTO_TERMS = CLIENT_PHOTO_TERMS + '\nThese permissions also apply to any videos uploaded through this photography form.'
 
 GIVEAWAY_TERMS = """Promoter
 This giveaway is organised and promoted by CL Paints (‘the Promoter’).

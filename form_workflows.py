@@ -105,9 +105,8 @@ def booking_options(settings, data, events, hourly_total):
     extra_total = sum((Decimal(row['price']) for row in additions), Decimal(0))
     if additions and any(event['pitch_fee_required'] or event['charge_type'] != 'Client' for event in events):
         raise ValueError('Priced extras require Client pays and no pitch fee for every event.')
-    try: miles = Decimal(data.get('travel_miles','0') or '0')
-    except InvalidOperation: raise ValueError('Enter a valid estimated travel distance.')
-    if not miles.is_finite() or not 0 <= miles <= 10000: raise ValueError('Travel miles must be between 0 and 10,000.')
+    # Mileage is assessed by staff; ignore any value supplied by a public form.
+    miles = Decimal('0')
     captions = data.get('design_captions','').strip()
     if len(captions) > 3000: raise ValueError('Keep photo captions under 3,000 characters.')
     return total+extra_total, dict(package=package, extras=additions, extras_total=str(extra_total), travel_miles=str(miles), design_captions=captions)
@@ -319,7 +318,7 @@ def register(app,db,models,Booking,current_client,admin_required,available,recor
             if intake.get('package'):
                 package=intake['package'];lines += [package['name']+' - £'+package['price']+' per event, '+package['hours']+' hours']
             for extra in intake.get('extras',[]): lines += [extra['name']+' - £'+extra['price']]
-            if intake.get('travel_miles'):lines += ['Estimated one-way miles: '+intake['travel_miles']]
+            if intake.get('travel_miles') and intake['travel_miles'] != '0':lines += ['Previously supplied one-way estimate: '+intake['travel_miles']]
             if intake.get('design_captions'):lines += ['Photo captions: '+intake['design_captions']]
         lines+=['Terms accepted: '+str(booking.terms_accepted_at)+' (version '+booking.terms_version+')','Liability acknowledged: '+str(booking.liability_acknowledged),'', 'This is a copy of your request. Current status appears above; estimates remain subject to review.']
         return download(lines,'CL-Paints-'+booking.public_reference+'.pdf')

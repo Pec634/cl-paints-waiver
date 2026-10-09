@@ -12,7 +12,7 @@ Client Booking Request | CL Paints
         <a class="brand" href="/">{{ business_settings.business_name }}</a>
         <small>CLIENT BOOKING REQUEST</small>
         <h1>Let's plan your event.</h1><p>Read our <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener">Privacy policy</a> for how we handle your information.</p>
-        <p>Send us your details and we will review availability and costs with you.</p><p><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% if business_settings.phone %} · {{ business_settings.phone }}{% endif %}{% if business_settings.website %} · <a href="{{ business_settings.website }}" target="_blank" rel="noopener">Website</a>{% endif %}</p>
+        <p>Send us your details and we will review availability and costs with you.</p><p><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% if business_settings.phone %} · {{ business_settings.phone }}{% endif %}{% if business_settings.website %} · <a href="{{ business_settings.website }}" target="_blank" rel="noopener noreferrer">www.clpaints.com</a>{% endif %}</p>
     </header>
 
     {% if submitted %}
@@ -33,13 +33,15 @@ Client Booking Request | CL Paints
     <div class="booking-error" role="alert">{{ error }}</div>
     {% endif %}
 
-    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('booking_request') }}">{% if seasonal_form %}<section class="booking-section panel"><h2>{{ seasonal_form.title }}</h2><p>{{ seasonal_form.description }}</p><input type="hidden" name="seasonal_id" value="{{ seasonal_form.id }}"><div class="client-form">{% with fields=native_form_fields(seasonal_form), field_form=seasonal_form %}{% include '_native_fields.html' %}{% endwith %}</div><label class="booking-field booking-field-wide"><span>Upload your design ideas (optional)</span><input type="file" name="design_images" accept="image/jpeg,image/png,image/webp" multiple><small>Up to six images, each no larger than 15 MB. Stored privately for CL Paints to review.</small></label>{% if seasonal_form.terms %}<p class="rota-note">{{ seasonal_form.terms }}</p><label><input type="checkbox" name="seasonal_agree" value="yes" required> I have read and accept this seasonal booking information.</label>{% endif %}</section>{% endif %}
-<p><a class="btn" href="{{ url_for('client_availability_calendar') }}">Check a preferred date and time</a></p>
+    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('booking_request') }}">
+<section class="booking-section panel booking-availability-check"><h2>Check availability</h2><p>After entering your dates, times and venue, check them together here. Availability is provisional until CL Paints confirms your booking.</p><button type="button" class="btn" id="booking-check-dates">Check dates and times</button><p id="booking-dates-result" role="status"></p></section>
+{% if seasonal_form %}<section class="booking-section panel"><h2>{{ seasonal_form.title }}</h2><p>{{ seasonal_form.description }}</p><input type="hidden" name="seasonal_id" value="{{ seasonal_form.id }}"><div class="client-form">{% with fields=native_form_fields(seasonal_form), field_form=seasonal_form %}{% include '_native_fields.html' %}{% endwith %}</div><label class="booking-field booking-field-wide"><span>Upload your design ideas (optional)</span><input type="file" name="design_images" accept="image/jpeg,image/png,image/webp" multiple><small>Up to six images, each no larger than 15 MB. Stored privately for CL Paints to review.</small></label>{% if seasonal_form.terms %}<p class="rota-note">{{ seasonal_form.terms }}</p><label><input type="checkbox" name="seasonal_agree" value="yes" required> I have read and accept this seasonal booking information.</label>{% endif %}</section>{% endif %}
+
         <div class="booking-error" id="bookingValidationError" role="alert" tabindex="-1" hidden></div>
         {% if not seasonal_form %}{% include '_form_spam.html' %}{% endif %}
         <link rel="stylesheet" href="{{ url_for('static',filename='native-fields.css') }}">
         {% include '_booking_packages.html' %}
-        <section class="booking-section panel"><h2>Check your event dates</h2><p>Enter the event date, times and venue below, then check availability. Results include accepted bookings, blocked time and setup buffers. Your request still needs CL Paints approval.</p><button type="button" class="btn" id="booking-check-dates">Check dates and times</button><p id="booking-dates-result" role="status"></p></section>
+
         {% if portal_account %}<input type="hidden" name="csrf_token" value="{{ session.get('client_csrf', '') }}">{% endif %}
         <section class="booking-section">
             <div class="booking-section-heading">
@@ -58,7 +60,7 @@ Client Booking Request | CL Paints
                     <li>£{{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate) }} per hour, charged to the client.</li>
                     <li>Customers pay directly; no charge to the client.</li>
                     <li>CL Paints pays a pitch or stall fee.</li>
-                    <li>Revenue sharing by separate agreement.</li>
+                    <li>Revenue sharing: individual customers pay; client hourly fee £0. Percentage subject to agreement.</li>
                 </ul>
                 <p>All bookings require a minimum of {{ business_settings.minimum_hours }} hours. Travel costs are confirmed during review.</p>
             </div>
@@ -249,7 +251,16 @@ Client Booking Request | CL Paints
                                 <option value="">Choose one</option>
                                 <option value="Client">Client</option>
                                 <option value="Customers">Customers</option>
+                                <option value="Revenue sharing">Individual customers pay — revenue sharing</option>
                             </select>
+                        </label>
+                        <label class="booking-field" data-revenue-share-field hidden>
+                            <span>Revenue share payable to the organiser</span>
+                            <select data-event-field="revenue_share_percent" disabled>
+                                <option value="">Choose a percentage</option>
+                                {% for percentage in [5,10,15,20,25] %}<option value="{{ percentage }}">{{ percentage }}%</option>{% endfor %}
+                            </select>
+                            <small>Client hourly fee: £0. Individual customers pay for their designs. This proposed share of event face painting revenue is subject to agreement with CL Paints.</small>
                         </label>
                         <label class="booking-field" data-holiday-preference-field hidden>
                             <span>Do attendees celebrate Christmas and Easter?</span>
@@ -269,6 +280,7 @@ Client Booking Request | CL Paints
             </template>
             <input type="hidden" name="event_schedule" id="eventScheduleInput" value="{{ form_data.get('event_schedule', '') }}">
 
+
         </section>
 
         <section class="booking-section" data-full-booking>
@@ -286,7 +298,7 @@ Client Booking Request | CL Paints
                 <div><span>Estimated event cost</span><strong id="estimatedEventCost">£0.00</strong></div>
                 <div id="depositEstimateRow" hidden><span>Estimated 50% deposit</span><strong id="depositEstimateAmount">£0.00</strong></div>
                 <p>Pitch / stall fees are costs to CL Paints and are not included in your event cost or deposit.</p>
-                <p>£{{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate) }} per hour, excluding dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
+                <p>£{{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate) }} per hour for hourly bookings, excluding revenue-sharing dates and dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
                 <p id="paymentEstimate">Choose a payment arrangement to see the estimated amount.</p>
             </div>
 
@@ -593,6 +605,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 publicity_type: repeatedValues.publicity_type || "",
                 location_type: repeatedValues.location_type || "",
                 charge_type: repeatedValues.charge_type || "",
+                revenue_share_percent: repeatedValues.charge_type === "Revenue sharing" ? repeatedValues.revenue_share_percent || "" : "",
                 celebrates_christmas_easter: repeatedValues.publicity_type === "Private" ? repeatedValues.celebrates_christmas_easter || "" : "",
                 additional_info: repeatedValues.additional_info || ""
             };
@@ -622,9 +635,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updatePricing() {
+        dayList.querySelectorAll('[data-event-day]').forEach(card => {
+            const applies = card.querySelector('[data-event-field="charge_type"]').value === 'Revenue sharing';
+            const label = card.querySelector('[data-revenue-share-field]');
+            const select = label.querySelector('select');
+            label.hidden = !applies;
+            select.disabled = !applies || card.querySelector('[data-day-details]').hidden;
+            select.required = applies && !select.disabled;
+            if (!applies) select.value = '';
+        });
         syncPitchFees();
         syncHolidayPreferences();
         const schedule = readSchedule();
+        const sharing = schedule.some(day => ['Revenue sharing','Customers'].includes(day.charge_type));
+        form.querySelectorAll('[name="booking_package"], [name="booking_extras"]').forEach(control => {
+            control.disabled = sharing && !!control.value;
+            if (sharing) control.checked = control.name === 'booking_package' && !control.value;
+        });
         const pitchFeePence = schedule.reduce((total, eventDay) => {
             const amount = Number(eventDay.pitch_fee_amount);
             return eventDay.pitch_fee_required === "yes" && Number.isFinite(amount) && amount >= 0
@@ -657,7 +684,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 durationDisplay.textContent = `Duration: ${Number.isInteger(dayHours) ? dayHours : dayHours.toFixed(2)} hours`;
             }
             totalMinutes += minutes;
-            if (eventDay.pitch_fee_required !== "yes") {
+            if (eventDay.pitch_fee_required !== "yes" && !['Revenue sharing','Customers'].includes(eventDay.charge_type)) {
                 totalCost += (minutes / 60) * Number({{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate)|tojson }});
             }
         });
@@ -767,14 +794,7 @@ document.addEventListener("DOMContentLoaded", () => {
         form.requestSubmit(submitButton);
     });
     form.querySelectorAll('[name="booking_package"], [name="booking_extras"]').forEach(control => control.addEventListener('change', updatePricing));
-    const travelMiles = document.getElementById('booking-travel-miles');
     const travelNote = document.getElementById('booking-travel-estimate');
-    const updateTravelEstimate = () => {
-        const miles = Number(travelMiles.value);
-        const fee = Math.min(Number({{ business_settings.travel_cap|tojson }}), Math.max(0,miles-Number({{ business_settings.free_miles|tojson }}))*Number({{ business_settings.mile_rate|tojson }}));
-        travelNote.textContent = travelMiles.value && Number.isFinite(miles) && miles>=0 ? `Provisional travel charge: ${new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(fee)}. Route and final cost are checked before confirmation.` : '';
-    };
-    travelMiles.addEventListener('input',updateTravelEstimate);updateTravelEstimate();
     const availabilityButton = document.getElementById('booking-check-dates');
     const availabilityResult = document.getElementById('booking-dates-result');
     availabilityButton.addEventListener('click',async () => {
@@ -848,11 +868,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 `Ethnicity: ${value('ethnicity')} · ${value('ethnicity_detail')}; Religion: ${value('religion')}`
             ], sections[1]);
             reviewSection('Event details', readSchedule().map((day, index) =>
-                `Day ${index+1}: ${day.date}, ${day.start_time}–${day.finish_time} · ${day.event_type} · ${day.event_address} · ${day.publicity_type} · ${day.charge_type} · Theme: ${day.theme}${day.additional_info ? ' · '+day.additional_info : ''}`), sections[2]);
+                `Day ${index+1}: ${day.date}, ${day.start_time}–${day.finish_time} · ${day.event_type} · ${day.event_address} · ${day.publicity_type} · ${day.charge_type}${day.revenue_share_percent ? ' · '+day.revenue_share_percent+'% to organiser' : ''} · Theme: ${day.theme}${day.additional_info ? ' · '+day.additional_info : ''}`), sections[2]);
             reviewSection('Payment preference', [value('payment_preference'),
                 `Estimated event cost: ${totalCostOutput.textContent}. Travel charges are confirmed after review.`,
                 `Referral code: ${value('promo_code') || 'None'}`], paymentChoice.closest('.booking-section'));
-            reviewSection('Package, extras and travel', [value('booking_package') || 'Standard hourly pricing', [...form.querySelectorAll('[name="booking_extras"]:checked')].map(control=>control.value).join(', ') || 'No extras', travelNote.textContent || 'Travel to be confirmed',value('design_captions')].filter(Boolean),document.getElementById('booking-packages') || travelMiles.closest('.booking-section'));
+            reviewSection('Package, extras and travel', [value('booking_package') || 'Standard hourly pricing', [...form.querySelectorAll('[name="booking_extras"]:checked')].map(control=>control.value).join(', ') || 'No extras', travelNote.textContent || 'Travel to be confirmed',value('design_captions')].filter(Boolean),document.getElementById('booking-packages') || document.getElementById('booking-travel-details'));
             const nativeRoot=form.querySelector('[data-native-fields]');
             if (nativeRoot && window.CLFormReviewItems) reviewSection('Additional questions', window.CLFormReviewItems(nativeRoot), nativeRoot);
             reviewDialog.showModal();

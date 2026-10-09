@@ -265,9 +265,8 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                                pending=sum(b.status == 'Under Review' for b in bookings), rewards=owned_rewards(account))
 
     @portal.get('/face-paint-studio')
-    @client_required
-    def studio(account):
-        return render_template('client/studio.html')
+    def studio():
+        return redirect(url_for('website_studio'))
 
     @portal.get('/bookings')
     @client_required

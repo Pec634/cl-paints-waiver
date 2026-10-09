@@ -61,7 +61,7 @@ class RewardsWorkflowTest(unittest.TestCase):
         self.assertTrue(response.data.startswith(b'SQLite format 3'))
 
     def test_dashboard_empty_and_authentication(self):
-        for path in ['/', '/admin/dashboard']:
+        for path in ['/admin/dashboard']:
             self.assertEqual(main.app.test_client().get(path).status_code, 302)
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
@@ -89,11 +89,11 @@ class RewardsWorkflowTest(unittest.TestCase):
         main.db.session.add(booking)
         main.db.session.commit()
         self.assertFalse(main.booking_code_is_valid(row['code']))
-        self.assertIn(b'Friend Client', self.client.get('/').data)
+        self.assertIn(b'Friend Client', self.client.get('/admin/dashboard').data)
         booking.status = 'Accepted'
         booking.event_date = date(2099, 12, 1)
         main.db.session.commit()
-        self.assertIn(b'Test venue', self.client.get('/').data)
+        self.assertIn(b'Test venue', self.client.get('/admin/dashboard').data)
         response = self.client.get('/admin/rewards/?section=all')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Used in 1 booking request', response.data)

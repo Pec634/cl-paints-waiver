@@ -537,6 +537,8 @@ from admin_security import define_models as define_admin_security_models
 admin_security_models = define_admin_security_models(db)
 from native_forms import define_models as define_native_form_models
 native_form_models = define_native_form_models(db)
+from photo_library import define_models as define_photo_library_models, ensure_schema as ensure_photo_library_schema
+photo_library_models = define_photo_library_models(db)
 from sumup_checkout import define_model as define_sumup_checkout
 SumupCheckout = define_sumup_checkout(db)
 from staff_reports import define_models as define_staff_report_models
@@ -556,6 +558,7 @@ def billing_address_context():
 
 with app.app_context():
     db.create_all()
+    ensure_photo_library_schema(db)
     ensure_kiosk_schema(db)
     event_columns = {
         column["name"]
@@ -640,7 +643,6 @@ def generate_customer_number():
         if not existing:
             return customer_number
 
-@app.get("/")
 @app.get("/admin/dashboard")
 @admin_required
 def admin_dashboard():
@@ -1545,6 +1547,7 @@ def send_booking_request_confirmation(booking):
             f"Event setting: {event.get('publicity_type', '')}",
             f"Painting location: {event.get('location_type', '')}",
             f"Who pays for face painting: {event.get('charge_type', '')}",
+            f"Proposed revenue share to organiser: {str(event['revenue_share_percent']) + '%' if event.get('revenue_share_percent') else 'Not applicable'}",
             f"CL Paints pitch fee: {'Yes' if event.get('pitch_fee_required') else 'No'}",
             f"Pitch fee payable by CL Paints (excluded from client cost): {'£' + str(event['pitch_fee_amount']) if event.get('pitch_fee_amount') is not None else 'Not applicable or not recorded'}",
             f"Estimated event cost: £{Decimal(event.get('estimated_cost', '0')):.2f}",
@@ -1773,8 +1776,14 @@ def booking_request():
                     raise ValueError(f"Choose the event setting for event day {day_number}.")
                 if location_type not in {"Indoors", "Outdoors"}:
                     raise ValueError(f"Choose the painting location for event day {day_number}.")
-                if charge_type not in {"Client", "Customers"}:
+                if charge_type not in {"Client", "Customers", "Revenue sharing"}:
                     raise ValueError(f"Choose who pays for event day {day_number}.")
+                revenue_share_percent = None
+                if charge_type == 'Revenue sharing':
+                    share = str(event_item.get('revenue_share_percent', ''))
+                    if share not in {'5', '10', '15', '20', '25'}:
+                        raise ValueError(f'Choose a revenue share of 5%, 10%, 15%, 20% or 25% for event day {day_number}.')
+                    revenue_share_percent = int(share)
                 attendees_raw = str(event_item.get("expected_attendees", "")).strip()
                 try:
                     expected_attendees = int(attendees_raw) if attendees_raw else None
@@ -1796,7 +1805,7 @@ def booking_request():
                         raise ValueError(f"Enter a pitch fee between £0 and £999,999.99 for event day {day_number}.")
                     if pitch_fee_amount != pitch_fee_amount.quantize(Decimal("0.01")):
                         raise ValueError(f"Enter the pitch fee with no more than two decimal places for event day {day_number}.")
-                day_cost = Decimal("0.00") if pitch_fee_required else (duration_hours * Decimal(pricing_rules["hourly_rate"])).quantize(Decimal("0.01"))
+                day_cost = Decimal("0.00") if pitch_fee_required or charge_type in {'Revenue sharing', 'Customers'} else (duration_hours * Decimal(pricing_rules["hourly_rate"])).quantize(Decimal("0.01"))
                 total_event_cost += day_cost
                 normalized_schedule.append({
                     "date": event_date.isoformat(),
@@ -1812,6 +1821,7 @@ def booking_request():
                     "publicity_type": publicity_type,
                     "location_type": location_type,
                     "charge_type": charge_type,
+                    "revenue_share_percent": revenue_share_percent,
                     "celebrates_christmas_easter": celebrates or None,
                     "additional_info": str(event_item.get("additional_info", "")).strip() or None,
                     "estimated_cost": str(day_cost),
@@ -2759,6 +2769,11 @@ register_admin_client_profiles(app, db, AdminClientNote, ClientAccount, Booking,
 from communications import register as register_communications
 register_communications(app, db, Booking, BookingMessage, notification_models[1], marketing_models,
     get_business_settings, admin_required, ClientEnquiry, ClientAccount, tool_models[3])
+
+from public_website import register as register_public_website
+from photo_library import register as register_photo_library
+register_photo_library(app, db, photo_library_models, native_form_models, get_current_client, admin_required)
+register_public_website(app)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

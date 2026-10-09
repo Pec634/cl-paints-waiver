@@ -115,7 +115,7 @@ Bookings | CL Paints
                                         <dt>Attendees</dt><dd>{{ event.expected_attendees or "Not provided" }}</dd>
                                         <dt>Setting</dt><dd>{{ event.publicity_type }}</dd>
                                         <dt>Painting location</dt><dd>{{ event.location_type }}</dd>
-                                        <dt>Who pays</dt><dd>{{ event.charge_type }}</dd>
+                                        <dt>Who pays</dt><dd>{{ event.charge_type }}{% if event.revenue_share_percent %} · {{ event.revenue_share_percent }}% to the organiser{% endif %}</dd>
                                         <dt>Christmas/Easter</dt><dd>{{ event.celebrates_christmas_easter or "Not provided" }}</dd>
                                         <dt>Additional information</dt><dd>{{ event.additional_info or "None" }}</dd>
                                         {% endfor %}

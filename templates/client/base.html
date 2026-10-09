@@ -9,15 +9,16 @@
 <nav id="client-navigation" class="client-navigation" aria-label="Client navigation">
   <div class="client-nav-main">
     <a href="{{ url_for('client.dashboard') }}" {% if request.endpoint == 'client.dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
-    <details class="client-nav-group{% if request.endpoint in ['client.bookings', 'client.booking_detail', 'loyalty.waivers', 'loyalty.waiver_detail', 'loyalty.new_waiver'] %} active{% endif %}">
+    <details class="client-nav-group{% if request.endpoint in ['client.bookings', 'client.booking_detail', 'loyalty.waivers', 'loyalty.waiver_detail', 'loyalty.new_waiver', 'client_photos'] %} active{% endif %}">
       <summary>My events</summary>
       <div class="client-nav-dropdown">
         <a href="{{ url_for('client.bookings') }}" {% if request.endpoint == 'client.bookings' %}aria-current="page"{% endif %}>Bookings</a>
         <a href="{{ url_for('client_payments') }}" {% if request.endpoint == 'client_payments' %}aria-current="page"{% endif %}>Payments &amp; invoices</a>
         <a href="{{ url_for('loyalty.waivers') }}" {% if request.endpoint == 'loyalty.waivers' %}aria-current="page"{% endif %}>My waivers</a>
+        <a href="{{ url_for('client_photos') }}" {% if request.endpoint == 'client_photos' %}aria-current="page"{% endif %}>Upload photos</a>
       </div>
     </details>
-    {% for endpoint, label in [('rewards','Rewards'),('studio','Face Paint Studio')] %}
+    {% for endpoint, label in [('rewards','Rewards')] %}
     <a href="{{ url_for('client.' + endpoint) }}" {% if request.endpoint == 'client.' + endpoint %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
     {% endfor %}
   </div>

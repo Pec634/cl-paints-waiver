@@ -1,0 +1,20 @@
+{% extends 'client/base.html' %}{% block content %}
+<section class="panel"><h1>Share your colourful moments</h1><p>Upload up to three photographs for CL Paints to review. Your account email and account number are included automatically. Uploading is optional.</p>
+<form method="post" enctype="multipart/form-data" class="client-form" data-warn-unsaved>
+<input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="submission_token" value="{{ token }}"><input type="hidden" name="terms_version" value="1">
+<p><strong>{{ client_account.account_number }}</strong> · {{ client_account.email }}</p>
+<label>Responsible person’s full name<input name="responsible_name" value="{{ request.form.get('responsible_name',client_account.first_name ~ ' ' ~ client_account.last_name) }}" maxlength="150" autocomplete="name" required></label>
+{% for index in range(3) %}<fieldset class="photo-upload-card"><legend>Photo {{ index+1 }} {{ '(required)' if index==0 else '(optional)' }}</legend>
+<label>Image<input type="file" name="photo_{{ index }}" accept="image/jpeg,image/png,image/webp" {% if index==0 %}required{% endif %}></label>
+<p>JPG, PNG or WebP; under 10 MB and up to 25 megapixels. Photos must be selected again after a validation error.</p>
+<label>Number of people shown<select name="people_count_{{ index }}">{% for count in range(1,21) %}<option value="{{ count }}" {% if request.form.get('people_count_' ~ index,'1')==count|string %}selected{% endif %}>{{ count }}</option>{% endfor %}</select></label>
+<label>People in this photograph<textarea name="people_{{ index }}" maxlength="2000" rows="3" {% if index==0 %}required{% endif %} placeholder="Alex Smith | On the left, wearing a blue top&#10;Sam Smith | On the right, with butterfly face paint">{{ request.form.get('people_' ~ index,'') }}</textarea></label><p>Use one line per person: name | identifying description. A description is required for every person when two or more people are shown. These details remain private.</p>
+</fieldset>{% endfor %}
+<details open><summary>Photography permissions and terms</summary><div class="client-message">{{ terms }}</div><a href="{{ url_for('privacy_policy') }}">Privacy policy</a></details>
+<fieldset><legend>Your permission</legend>
+{% for key,label in [('portfolio','I permit CL Paints to use these images in its portfolio.'),('website','I permit CL Paints to use these images on its website.'),('social','I permit CL Paints to use these images on its social media accounts.'),('authority','I have permission from the photographer and everyone shown, including appropriate parent/guardian authority for children.'),('agree','I have read and accept the permissions and terms above.')] %}<label class="photo-consent-check"><input type="checkbox" name="{{ key }}" value="yes" {% if request.form.get(key)=='yes' %}checked{% endif %} required>{{ label }}</label>{% endfor %}
+</fieldset>
+{% include '_native_fields.html' %}
+<button class="btn primary" type="submit">Submit photographs and signed permission</button></form></section>
+<section class="panel"><h2>Your photo submissions</h2>{% for item in entries %}{% set answers=photo_answers(item) %}<article class="client-record"><strong>F-{{ item.id }} · {{ item.created_at.strftime('%d %b %Y') }}</strong><span>{{ 'Permission withdrawn' if answers.get('withdrawn_at') else 'Permission active · submitted for review' }}</span><a href="{{ url_for('native_form_submission',submission_id=item.id) }}">View submission and photographs</a>{% if not answers.get('withdrawn_at') %}<form method="post"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="action" value="withdraw"><input type="hidden" name="submission_id" value="{{ item.id }}"><button class="btn" type="submit">Withdraw permission for these photographs</button></form>{% endif %}</article>{% else %}<p>No photographs submitted yet.</p>{% endfor %}</section>
+{% endblock %}

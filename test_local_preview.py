@@ -28,7 +28,7 @@ class LocalPreviewTest(unittest.TestCase):
             with self.client.session_transaction() as session:
                 account=fixtures.main.db.session.get(fixtures.main.ClientAccount,session['client_id'])
                 self.assertEqual(account.email,'portal-preview@example.invalid')
-            self.assertEqual(self.client.get('/client/face-paint-studio').status_code,200)
+            self.assertEqual(self.client.get('/face-paint-studio').status_code,200)
             self.assertEqual(self.client.post('/client/local-preview',environ_overrides={'REMOTE_ADDR':'192.168.1.2'}).status_code,404)
             self.assertEqual(self.client.post('/client/local-preview',base_url='https://example.com').status_code,404)
             self.app.debug=False

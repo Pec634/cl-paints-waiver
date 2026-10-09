@@ -38,13 +38,49 @@ class FormWorkflowTest(unittest.TestCase):
         total,details=booking_options(settings,data,events,Decimal('90'))
         self.assertEqual(total,Decimal('135'));self.assertEqual(events[0]['estimated_cost'],'120')
         self.assertEqual(details['extras_total'],'15')
-        for changes in [dict(booking_package='Unlisted'),dict(booking_extras='Unlisted'),dict(travel_miles='NaN')]:
+        for changes in [dict(booking_package='Unlisted'),dict(booking_extras='Unlisted')]:
             with self.assertRaises(ValueError):booking_options(settings,MultiDict(dict(data,**changes)),events,Decimal('90'))
+        for posted_miles in ['12','NaN','-100','100000']:
+            _, details = booking_options(settings,MultiDict(dict(data,travel_miles=posted_miles)),events,Decimal('90'))
+            self.assertEqual(details['travel_miles'],'0')
         for text in ['Bad | NaN | 2','Bad | 1e9999 | 2','Bad | 1 | -2','Bad | 1.111 | 2','Bad | 1 | 2\nBad | 2 | 3']:
             with self.assertRaises(ValueError):catalog(text,'Packages')
         with self.assertRaises(ValueError):validate_options(dict(extras='Extra | 20 | 2'))
         self.assertEqual(catalog('Party | 120 | 2 | Painting | https://example.com/party.jpg','Packages')[0]['image'],'https://example.com/party.jpg')
         with self.assertRaises(ValueError):catalog('Party | 120 | 2 | Painting | javascript:bad','Packages')
+
+    def test_revenue_sharing_percentage_is_validated_and_saved(self):
+        form=self.fixture.create('booking')
+        for percentage in ['', '7', '30']:
+            data=self.booking_data(form)
+            schedule=json.loads(data['event_schedule'])
+            schedule['events'][0].update(charge_type='Revenue sharing',revenue_share_percent=percentage)
+            data['event_schedule']=json.dumps(schedule)
+            self.assertEqual(self.client.post('/booking',data=data).status_code,200)
+        before=main.Booking.query.count()
+        for percentage in ['5','10','15','20','25']:
+            data=self.booking_data(form)
+            schedule=json.loads(data['event_schedule'])
+            schedule['events'][0].update(charge_type='Revenue sharing',revenue_share_percent=percentage)
+            data['event_schedule']=json.dumps(schedule)
+            with patch.object(main,'send_booking_request_confirmation',return_value=True):
+                self.assertEqual(self.client.post('/booking',data=data).status_code,302)
+            booking=main.Booking.query.order_by(main.Booking.id.desc()).first()
+            self.assertEqual(json.loads(booking.event_schedule)['events'][0]['revenue_share_percent'],int(percentage))
+            self.assertEqual(booking.total_event_cost,Decimal('0'))
+        self.assertEqual(main.Booking.query.count(),before+5)
+
+    def test_customers_pay_has_zero_client_cost(self):
+        form=self.fixture.create('booking')
+        data=self.booking_data(form)
+        schedule=json.loads(data['event_schedule'])
+        schedule['events'][0]['charge_type']='Customers'
+        data['event_schedule']=json.dumps(schedule)
+        with patch.object(main,'send_booking_request_confirmation',return_value=True):
+            self.assertEqual(self.client.post('/booking',data=data).status_code,302)
+        booking=main.Booking.query.order_by(main.Booking.id.desc()).first()
+        self.assertEqual(booking.total_event_cost,Decimal('0'))
+        self.assertEqual(json.loads(booking.event_schedule)['events'][0]['estimated_cost'],'0.00')
 
     def test_booking_package_snapshots_captions_pdf_and_duplicate_flags(self):
         form=self.fixture.create('booking')
@@ -57,6 +93,7 @@ class FormWorkflowTest(unittest.TestCase):
         self.assertEqual(booking.total_event_cost,Decimal('135'))
         options=json.loads(booking.event_schedule)['intake_options']
         self.assertEqual(options['design_captions'],'Photo 1: pink butterflies')
+        self.assertEqual(options['travel_miles'],'0')
         path=f'/client/bookings/{booking.id}/pdf'
         pdf=self.client.get(path)
         self.assertEqual(pdf.status_code,200);self.assertTrue(pdf.data.startswith(b'%PDF-'))

@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import re
 import test_native_forms as fixtures
 from native_form_fields import validate_fields
 
@@ -28,6 +29,7 @@ class NativeFormBrowserTest(unittest.TestCase):
     def browser(self, markup, assertions, width=1280, setup=''):
         static = (Path(__file__).resolve().parent / 'static').as_uri()+'/'
         markup = markup.decode().replace('src="/static/', 'src="'+static).replace('href="/static/', 'href="'+static)
+        markup = re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="' + match.group(1).replace('/static/', static) + '"', markup)
         if setup: markup=markup.replace('<head>','<head><script>'+setup+'</script>',1)
         probe = '''<p id="browser-result">PENDING</p><script>
         window.addEventListener('DOMContentLoaded', async () => {
@@ -268,7 +270,7 @@ class NativeFormBrowserTest(unittest.TestCase):
         ''',setup='''window.fetch=async()=>({ok:true,json:async()=>({url:'/form-images/123',mime:'image/png'})});''')
 
     def test_studio_uses_photo_templates_without_illustrated_controls(self):
-        page=self.fixture.client.get('/client/face-paint-studio')
+        page=self.fixture.client.get('/face-paint-studio')
         self.assertEqual(page.status_code,200)
         self.browser(page.data, '''
             const model=document.getElementById('paint-model');
@@ -370,7 +372,7 @@ class NativeFormBrowserTest(unittest.TestCase):
         ''')
 
     def test_mobile_studio_layout_and_tools(self):
-        page=self.fixture.client.get('/client/face-paint-studio')
+        page=self.fixture.client.get('/face-paint-studio')
         self.browser(page.data, '''
             const studio=document.querySelector('.paint-studio');
             assert(window.CLStudioCore && window.CLStudioEdits,'Painting tools initialize');
@@ -414,8 +416,25 @@ class NativeFormBrowserTest(unittest.TestCase):
             assert(document.getElementById('estimatedEventCost').textContent.includes('135.00'),'package estimate incorrect');
             const payment=form.querySelector('[name=payment_preference]');payment.value='50% deposit';change(payment);
             assert(document.getElementById('depositEstimateAmount').textContent.includes('67.50'),'deposit estimate incorrect');
-            const miles=form.querySelector('[name=travel_miles]');miles.value='20';input(miles);
-            assert(document.getElementById('booking-travel-estimate').textContent.includes('Provisional travel charge:'),'travel estimate missing');
+            assert(!form.querySelector('[name=travel_miles]'),'Clients cannot edit mileage');
+            assert(document.querySelectorAll('#booking-check-dates').length===1,'One availability checker');
+            assert(!document.querySelector('a[href="/booking/calendar"]'),'No duplicate date checker link');
+            assert(form.firstElementChild.classList.contains('booking-availability-check'),'Availability check at top of form');
+            assert(document.getElementById('booking-travel-estimate').textContent.includes('CL Paints calculates travel distance'),'Staff travel assessment explained');
+            const payer=form.querySelector('[data-event-field="charge_type"]');
+            payer.value='Revenue sharing';change(payer);
+            const share=form.querySelector('[data-event-field="revenue_share_percent"]');
+            assert(!share.disabled && share.required,'Revenue share required when selected');
+            assert([...share.options].map(o=>o.value).join(',')===',5,10,15,20,25','Five percent increments');
+            share.value='15';change(share);
+            assert(document.getElementById('estimatedEventCost').textContent.includes('0.00'),'No client hourly charge for revenue sharing');
+            assert(!form.querySelector('[name=booking_extras]:checked'),'Client extras cleared for revenue sharing');
+            form.dispatchEvent(new Event('native-draft-collect'));
+            assert(JSON.parse(document.getElementById('eventScheduleInput').value).events[0].revenue_share_percent==='15','Revenue share included in schedule');
+            payer.value='Client';change(payer);
+            assert(share.disabled && !share.required,'Revenue share hidden for other payment options');
+            payer.value='Customers';change(payer);
+            assert(document.getElementById('estimatedEventCost').textContent.includes('0.00'),'Customers pay means no client hourly charge');
             document.getElementById('booking-check-dates').click();await new Promise(resolve=>setTimeout(resolve,10));
             assert(document.getElementById('booking-dates-result').textContent.includes('unavailable'),'availability result missing');
         ''',setup='''window.fetch=async url=>({ok:true,json:async()=>String(url).includes('availability-check')?{success:true,available:false,message:'This time is unavailable.'}:{answers:{},csrf_token:'test',fingerprint:'test'}});''')

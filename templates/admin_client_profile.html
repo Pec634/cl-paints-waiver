@@ -1,5 +1,6 @@
 {% extends 'rewards/base.html' %}{% block title %}Client profile | CL Paints{% endblock %}{% block content %}
 <a href="{{ url_for('admin_clients') }}">Back to clients</a>
+<a class="btn" href="{{ url_for('admin_photo_library',q=account.email) }}">Client photographs and permissions</a>
 <h1>{{ account.first_name }} {{ account.last_name }}</h1><p class="admin-account-number">Account {{ account.account_number }}</p>
 <section class="panel"><h2>Contact details</h2><dl class="client-detail"><dt>Email</dt><dd>{{ account.email }}</dd><dt>Phone</dt><dd>{{ account.phone or 'Not provided' }}</dd><dt>Address</dt><dd class="client-message">{{ account.address or 'Not provided' }}</dd><dt>Account created</dt><dd>{{ account.created_at.strftime('%d/%m/%Y') }}</dd></dl>
 <div class="client-action-row"><span class="dashboard-tag">{{ summary.bookings }} booking requests</span><span class="dashboard-tag">{{ summary.confirmed }} accepted bookings</span>{% if summary.repeat %}<span class="dashboard-tag">Repeat client</span>{% endif %}{% if summary.loyal %}<span class="dashboard-tag">Loyal client</span>{% endif %}</div><p>Repeat means two or more booking requests; loyal means two or more accepted bookings.</p></section>
