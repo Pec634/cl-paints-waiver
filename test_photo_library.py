@@ -181,6 +181,18 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(!iframe.contentDocument.getElementById('builder-resize-handle'),'undo clears resize selection');
             document.getElementById('builder-redo').click();
             assert(iframe.contentWindow.websiteEditor.nodes[imageIndex].style.height===resizedHeight,'redo must preserve image size');
+            const dragImage=iframe.contentWindow.websiteEditor.nodes[imageIndex],doc=iframe.contentDocument;
+            dragImage.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:7,clientX:100,clientY:100}));
+            doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointermove',{pointerId:7,clientX:140,clientY:120}));
+            doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerup',{pointerId:7}));
+            assert(dragImage.style.left==='40px'&&dragImage.style.top==='20px','image drag must update position live');
+            document.getElementById('builder-undo').click();
+            assert(dragImage.style.left==='0px','undo must restore image position');
+            const addedCell=doc.querySelector('[data-builder-cell]');
+            addedCell.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:8,clientX:100,clientY:100}));
+            doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointermove',{pointerId:8,clientX:130,clientY:150}));
+            doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerup',{pointerId:8}));
+            assert(doc.querySelector('[data-builder-cell]').style.left==='30px','added blocks must remain draggable after rerender');
             document.getElementById('builder-device').click();
             await new Promise(resolve=>setTimeout(resolve,100));
             assert(iframe.contentWindow.getComputedStyle(iframe.contentDocument.querySelector('.wb-row')).gridTemplateColumns.split(' ').length===1,'mobile row failed');
