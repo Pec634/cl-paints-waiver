@@ -158,6 +158,7 @@
          if(event.button!==0)return;event.preventDefault();event.stopPropagation();
          const target=selectedNode(),photo=target.tagName==='IMG'?target:target.querySelector('img'),rect=target.getBoundingClientRect(),photoRect=(photo||target).getBoundingClientRect();
          const parentStyle=frame.contentWindow.getComputedStyle(target.parentElement),parentWidth=target.parentElement.clientWidth-parseFloat(parentStyle.paddingLeft)-parseFloat(parentStyle.paddingRight);if(!parentWidth)return;
+         const initialWidth=parseFloat(frame.contentWindow.getComputedStyle(target).width)||target.offsetWidth;
          const item=current(),device=deviceName,initial=clone(item[device]||item.desktop||{}),startX=event.clientX,startY=event.clientY,handleRect=handle.getBoundingClientRect(),anchors=snapAnchors(target);
          const west=direction.includes('w'),north=direction.includes('n'),horizontal=west||direction.includes('e'),vertical=north||direction.includes('s');
          checkpoint();resizing=true;handle.setPointerCapture(event.pointerId);
@@ -165,19 +166,19 @@
            const dx=move.clientX-startX,dy=move.clientY-startY;if(Math.hypot(dx,dy)<3)return;
            handle.style.left=handleRect.left+(horizontal?dx:0)+'px';handle.style.top=handleRect.top+(vertical?dy:0)+'px';
            const delta=value=>field('snap').checked?Math.round(value/10)*10:value;
-           let width=rect.width+(horizontal?(west?-1:1)*delta(dx):0),height=photoRect.height+(vertical?(north?-1:1)*delta(dy):0);
+           let width=initialWidth+(horizontal?(west?-1:1)*delta(dx):0),height=photoRect.height+(vertical?(north?-1:1)*delta(dy):0);
            clearAlignmentGuides();
            if(field('snap').checked){
              const sx=horizontal?nearestSnap([west?rect.left+dx:rect.right+dx],anchors.x):null;
              const sy=vertical?nearestSnap([north?photoRect.top+dy:photoRect.bottom+dy],anchors.y):null;
-             if(sx){width=west?rect.right-sx.anchor:sx.anchor-rect.left;showAlignmentGuide('x',sx.anchor);}
+             if(sx){width=initialWidth+(west?-1:1)*(dx+sx.delta);showAlignmentGuide('x',sx.anchor);}
              if(sy){height=north?photoRect.bottom-sy.anchor:sy.anchor-photoRect.top;showAlignmentGuide('y',sy.anchor);}
            }
            width=Math.max(parentWidth*.05,Math.min(parentWidth,width));height=Math.max(20,Math.min(1200,height));
-           if(move.shiftKey&&horizontal&&vertical){height=width*photoRect.height/rect.width;if(height>1200||height<20){height=Math.max(20,Math.min(1200,height));width=height*rect.width/photoRect.height;}}
+           if(move.shiftKey&&horizontal&&vertical){height=width*photoRect.height/initialWidth;if(height>1200||height<20){height=Math.max(20,Math.min(1200,height));width=height*initialWidth/photoRect.height;}}
            item[device]={...initial};
            if(horizontal)item[device].width=width/parentWidth*100;
-           if(west)item[device].x=(initial.x||0)+rect.width-width;
+           if(west)item[device].x=(initial.x||0)+initialWidth-width;
            if(north)item[device].y=(initial.y||0)+photoRect.height-height;
            if(vertical){item.style??={};item.style.height=Math.round(height);if(photo)item.style.objectFit||='cover';}
            field('width').value=item[device].width||0;field('x').value=item[device].x||0;field('y').value=item[device].y||0;

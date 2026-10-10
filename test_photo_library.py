@@ -194,6 +194,9 @@ class PhotoLibraryTest(unittest.TestCase):
             const resizedHeight=resizedImage.style.height;
             const sideHandle=iframe.contentDocument.getElementById('builder-resize-w');
             sideHandle.setPointerCapture=()=>{};
+            const transformedParent=resizedImage.parentElement,originalTransform=transformedParent.style.transform;
+            transformedParent.style.transform='rotate(12deg)';
+            const layoutStartWidth=parseFloat(iframe.contentWindow.getComputedStyle(resizedImage).width);
             const sideStartWidth=resizedImage.style.width,sideStartHeight=resizedImage.style.height;
             document.getElementById('builder-snap').checked=false;
             sideHandle.onpointerdown({button:0,clientX:100,clientY:100,pointerId:2,preventDefault(){},stopPropagation(){}});
@@ -201,6 +204,8 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(parseFloat(resizedImage.style.width)<parseFloat(sideStartWidth),'left handle must reduce width when dragged right');
             assert(resizedImage.style.height===sideStartHeight,'side handle must preserve height');
             assert(parseFloat(resizedImage.style.left)>0,'left handle must shift image to keep opposite edge fixed');
+            assert(Math.abs(parseFloat(iframe.contentWindow.getComputedStyle(resizedImage).width)-(layoutStartWidth-20))<1,'horizontal resizing must use layout width even inside a rotated parent');
+            transformedParent.style.transform=originalTransform;
             document.getElementById('builder-undo').click();
             document.getElementById('builder-snap').checked=true;
             document.getElementById('builder-undo').click();
