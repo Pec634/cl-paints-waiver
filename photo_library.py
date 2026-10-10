@@ -205,8 +205,8 @@ def register(app, db, models, native_models, current_client, admin_required):
                     raise ValueError('Each photograph must be under 10 MB.')
                 try:
                     with Image.open(BytesIO(raw)) as source:
-                        if source.format not in ('JPEG','PNG','WEBP'):
-                            raise ValueError('Use JPG, PNG or WebP photographs.')
+                        if source.format not in ('JPEG','MPO','PNG','WEBP'):
+                            raise ValueError(f'This file contains {source.format or "an unknown format"} image data, despite its filename. Export it as JPEG, PNG or WebP and try again.')
                         image=ImageOps.exif_transpose(source).convert('RGB')
                         image.thumbnail((1600,1600)); output=BytesIO()
                         image.save(output,'JPEG',quality=88,optimize=True)
@@ -323,7 +323,7 @@ def register(app, db, models, native_models, current_client, admin_required):
                         raise ValueError('Each photograph must be under 10 MB.')
                     try:
                         with Image.open(BytesIO(raw)) as image:
-                            if image.format not in ('JPEG', 'PNG', 'WEBP'):
+                            if image.format not in ('JPEG', 'MPO', 'PNG', 'WEBP'):
                                 raise ValueError('Use a JPG, PNG or WebP photograph.')
                             image.load()
                             clean = ImageOps.exif_transpose(image).convert('RGB')
@@ -390,7 +390,7 @@ def register(app, db, models, native_models, current_client, admin_required):
                 if status == 'approved':
                     try:
                         with Image.open(BytesIO(media.content)) as image:
-                            if image.format not in ('JPEG', 'PNG', 'WEBP'):
+                            if image.format not in ('JPEG', 'MPO', 'PNG', 'WEBP'):
                                 raise ValueError('This image is not suitable for website publication.')
                             image.verify()
                     except (UnidentifiedImageError, OSError, Image.DecompressionBombError):

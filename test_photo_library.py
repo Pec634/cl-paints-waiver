@@ -13,6 +13,16 @@ Form, Submission, Media = main.native_form_models
 
 
 class PhotoLibraryTest(unittest.TestCase):
+    def test_camera_multi_picture_jpeg_upload(self):
+        image=BytesIO()
+        Image.new('RGB',(60,60),'pink').save(image,format='MPO',save_all=True,append_images=[Image.new('RGB',(60,60),'blue')])
+        image.seek(0)
+        self.assertEqual(Image.open(image).format,'MPO')
+        image.seek(0)
+        response=self.admin.post('/admin/photo-library/upload',headers={'Accept':'application/json'},data=dict(csrf_token='admin-token',permissions='Permission recorded',authority='yes',images=(image,'camera.jpeg')))
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(Image.open(BytesIO(main.db._website_admin_photo.query.one().content)).format,'JPEG')
+
     def test_website_editor_drafts_versions_seo_and_safe_blocks(self):
         base=dict(csrf_token='admin-token',page='about')
         layout={'_blocks':[{'cells':[{'kind':'heading','text':'New colourful section','animation':{'kind':'slide-up','duration':2,'delay':0.5,'repeat':2,'trigger':'scroll','easing':'ease-out'}},{'kind':'button','text':'Plan it','link':'/booking'}],'style':{'gap':32,'background':'#ffffff'}}], '_seo':{'title':'Custom face painting title','description':'Our custom description'}}
