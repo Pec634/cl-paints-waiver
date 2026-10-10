@@ -6,7 +6,7 @@
 <label>Responsible person’s full name<input name="responsible_name" value="{{ request.form.get('responsible_name',client_account.first_name ~ ' ' ~ client_account.last_name) }}" maxlength="150" autocomplete="name" required></label>
 {% for index in range(3) %}<fieldset class="photo-upload-card"><legend>Photo {{ index+1 }} {{ '(required)' if index==0 else '(optional)' }}</legend>
 <label>Image<input type="file" name="photo_{{ index }}" accept="image/jpeg,image/png,image/webp" {% if index==0 %}required{% endif %}></label>
-<p>JPG, PNG or WebP; under 10 MB and up to 25 megapixels. Photos must be selected again after a validation error.</p>
+<p>JPG, PNG or WebP; under 10 MB. Photos must be selected again after a validation error.</p>
 <label>Number of people shown<select name="people_count_{{ index }}">{% for count in range(1,21) %}<option value="{{ count }}" {% if request.form.get('people_count_' ~ index,'1')==count|string %}selected{% endif %}>{{ count }}</option>{% endfor %}</select></label>
 <label>People in this photograph<textarea name="people_{{ index }}" maxlength="2000" rows="3" {% if index==0 %}required{% endif %} placeholder="Alex Smith | On the left, wearing a blue top&#10;Sam Smith | On the right, with butterfly face paint">{{ request.form.get('people_' ~ index,'') }}</textarea></label><p>Use one line per person: name | identifying description. A description is required for every person when two or more people are shown. These details remain private.</p>
 </fieldset>{% endfor %}

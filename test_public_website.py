@@ -6,6 +6,28 @@ import test_native_form_browser as browsers
 
 
 class PublicWebsiteTest(unittest.TestCase):
+    def test_availability_google_address_and_manual_entry(self):
+        from unittest.mock import patch
+        with patch.dict('os.environ',{'GOOGLE_MAPS_API_KEY':'test-browser-key'}):
+            page=self.client.get('/booking/calendar')
+        self.assertEqual(page.status_code,200)
+        self.assertIn('callback=initializeAvailabilityAddressAutocomplete',page.text)
+        self.assertIn('name="address"',page.text)
+        markup=re.sub(r'<script async src="https://maps.googleapis.com[^>]+></script>','',page.text).encode()
+        browsers.NativeFormBrowserTest().browser(markup, '''
+            let widget;
+            window.google={maps:{importLibrary:async()=>({PlaceAutocompleteElement:function(){widget=document.createElement('div');return widget;}})}};
+            await window.initializeAvailabilityAddressAutocomplete();
+            assert(!document.getElementById('availability-address-search').hidden,'search missing');
+            widget.dispatchEvent(Object.assign(new Event('gmp-select'),{placePrediction:{toPlace:()=>({fetchFields:async()=>{},formattedAddress:'123 Test Road, Doncaster, DN1 1AA'})}}));
+            await new Promise(resolve=>setTimeout(resolve,0));
+            const inputField=document.getElementById('availability-address');
+            assert(inputField.value==='123 Test Road, Doncaster, DN1 1AA','selected address missing');
+            inputField.value='Manual address';
+            assert(new FormData(document.getElementById('availability-form')).get('address')==='Manual address','manual address not submitted');
+            await window.initializeAvailabilityAddressAutocomplete();
+            assert(document.getElementById('availability-address-search').children.length===2,'duplicate search created');
+        ''')
     def setUp(self):
         self.fixture=fixtures.ClientPortalTest();self.fixture.setUp()
         self.client=fixtures.main.app.test_client()

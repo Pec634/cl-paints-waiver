@@ -539,6 +539,8 @@ from native_forms import define_models as define_native_form_models
 native_form_models = define_native_form_models(db)
 from photo_library import define_models as define_photo_library_models, ensure_schema as ensure_photo_library_schema
 photo_library_models = define_photo_library_models(db)
+from website_reports import define_models as define_website_report_models
+website_report_model = define_website_report_models(db)
 from sumup_checkout import define_model as define_sumup_checkout
 SumupCheckout = define_sumup_checkout(db)
 from staff_reports import define_models as define_staff_report_models
@@ -2774,6 +2776,8 @@ from public_website import register as register_public_website
 from photo_library import register as register_photo_library
 register_photo_library(app, db, photo_library_models, native_form_models, get_current_client, admin_required)
 register_public_website(app)
+from website_reports import register as register_website_reports
+register_website_reports(app, db, website_report_model, admin_required)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

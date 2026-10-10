@@ -25,9 +25,45 @@ def ensure_schema(db):
         with db.engine.begin() as connection:
             for name in missing:
                 connection.execute(text(f'ALTER TABLE website_photo ADD COLUMN {name} BOOLEAN NOT NULL DEFAULT FALSE'))
+    if not inspect(db.engine).has_table('website_story'):
+        return
+    story_columns = {column['name'] for column in inspect(db.engine).get_columns('website_story')}
+    if 'admin_cover_id' not in story_columns:
+        with db.engine.begin() as connection:
+            connection.execute(text('ALTER TABLE website_story ADD COLUMN admin_cover_id INTEGER'))
 
 
 def define_models(db):
+    class WebsiteLayout(db.Model):
+        page = db.Column(db.String(20), primary_key=True)
+        content = db.Column(db.Text, nullable=False, default='{}')
+    db._website_layout = WebsiteLayout
+    class WebsiteDraft(db.Model):
+        page = db.Column(db.String(20), primary_key=True)
+        content = db.Column(db.Text, nullable=False, default='{}')
+    class WebsiteRevision(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        page = db.Column(db.String(20), nullable=False, index=True)
+        content = db.Column(db.Text, nullable=False)
+        created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    db._website_draft = WebsiteDraft
+    db._website_revision = WebsiteRevision
+    class AdminPhotoAsset(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        content = db.Column(db.LargeBinary, nullable=False)
+        mime = db.Column(db.String(50), nullable=False, default='image/jpeg')
+        permissions = db.Column(db.Text, nullable=False)
+        created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+        status = db.Column(db.String(20), nullable=False, default='pending')
+        alt = db.Column(db.String(300), nullable=False, default='')
+        caption = db.Column(db.String(500), nullable=False, default='')
+        gallery = db.Column(db.Boolean, nullable=False, default=False)
+        home = db.Column(db.Boolean, nullable=False, default=False)
+        hero = db.Column(db.Boolean, nullable=False, default=False)
+        about = db.Column(db.Boolean, nullable=False, default=False)
+        services = db.Column(db.Boolean, nullable=False, default=False)
+        contact = db.Column(db.Boolean, nullable=False, default=False)
+    db._website_admin_photo = AdminPhotoAsset
     class WebsitePhoto(db.Model):
         id = db.Column(db.Integer, primary_key=True)
         media_id = db.Column(db.Integer, db.ForeignKey('consent_media.id'), nullable=False, unique=True)
@@ -48,6 +84,7 @@ def define_models(db):
         location = db.Column(db.String(150), nullable=False, default='')
         body = db.Column(db.Text, nullable=False)
         cover_id = db.Column(db.Integer, db.ForeignKey('website_photo.id'))
+        admin_cover_id = db.Column(db.Integer, db.ForeignKey('admin_photo_asset.id'))
         published = db.Column(db.Boolean, nullable=False, default=False)
     return WebsitePhoto, WebsiteStory
 
@@ -55,6 +92,7 @@ def define_models(db):
 def register(app, db, models, native_models, current_client, admin_required):
     Photo, Story = models
     Form, Submission, Media = native_models
+    Asset = db._website_admin_photo
     app.extensions['website_photo_models'] = models
 
     def csrf():
@@ -70,6 +108,8 @@ def register(app, db, models, native_models, current_client, admin_required):
         return bool(item.terms_snapshot and data.get('authority_confirmed') and signed and not data.get('withdrawn_at'))
 
     def visible(photo):
+        if isinstance(photo, Asset):
+            return photo.status == 'approved'
         if not photo or photo.status != 'approved':
             return False
         media = Media.query.options(defer(Media.content)).filter_by(id=photo.media_id).first()
@@ -77,15 +117,149 @@ def register(app, db, models, native_models, current_client, admin_required):
         return bool(item and media.mime.startswith('image/') and evidence(item))
 
     def image_url(photo):
+        if isinstance(photo, Asset):
+            return url_for('website_admin_photo_image', asset_id=photo.id)
         return url_for('website_photo_image', photo_id=photo.id)
+
+    def cover(story):
+        return db.session.get(Asset, story.admin_cover_id) if story.admin_cover_id else db.session.get(Photo, story.cover_id) if story.cover_id else None
 
     @app.context_processor
     def library_context():
         photos = [p for p in Photo.query.filter_by(status='approved').order_by(Photo.id.desc()).all() if visible(p)]
+        photos += Asset.query.options(defer(Asset.content)).filter_by(status='approved').order_by(Asset.id.desc()).all()
         stories = [s for s in Story.query.filter_by(published=True).order_by(Story.id.desc()).all()
-                   if not s.cover_id or visible(db.session.get(Photo, s.cover_id))]
-        return dict(website_library_photos=photos, website_event_stories=stories,
-                    website_library_image=image_url, website_story_cover=lambda s: db.session.get(Photo, s.cover_id) if s.cover_id else None)
+                   if not (s.cover_id or s.admin_cover_id) or visible(cover(s))]
+        layout = db.session.get(db._website_layout, request.endpoint.removeprefix('website_')) if request.endpoint else None
+        edits = json.loads(layout.content) if layout else {}
+        def resolve(edit):
+            if edit.get('photo'):
+                key=edit['photo']; photo=db.session.get(Asset,int(key[6:])) if key.startswith('admin-') else db.session.get(Photo,int(key))
+                edit['image']=image_url(photo) if visible(photo) else ''
+                edit['alt']=photo.alt if visible(photo) else ''
+        for key,edit in edits.items():
+            if not key.startswith('_'):resolve(edit)
+        for row in edits.get('_blocks',[]):
+            for cell in row['cells']:resolve(cell)
+        return dict(website_layout=edits, website_library_photos=photos, website_event_stories=stories,
+                    website_library_image=image_url, website_story_cover=cover,
+                    website_photo_key=lambda photo: 'admin-'+str(photo.id) if isinstance(photo, Asset) else str(photo.id))
+
+    @app.route('/admin/website-builder', methods=['GET','POST'])
+    @admin_required
+    def admin_website_builder():
+        page=request.values.get('page','home')
+        if page not in ('home','about','services','gallery','contact'): abort(400)
+        Layout=db._website_layout
+        Draft=db._website_draft
+        Revision=db._website_revision
+        layout=db.session.get(Layout,page)
+        draft=db.session.get(Draft,page)
+        if request.method=='POST':
+            check()
+            try:
+                action=request.form.get('action','publish')
+                if action not in ('publish','draft','restore'):raise ValueError('Choose save draft or publish')
+                raw=json.loads(request.form.get('layout','{}'))
+                if action=='restore':
+                    revision=db.session.get(Revision,request.form.get('revision',type=int))
+                    if not revision or revision.page!=page:abort(404)
+                    raw=json.loads(revision.content)
+                def validate_photo(key):
+                    photo=db.session.get(Asset,int(key[6:])) if key.startswith('admin-') else db.session.get(Photo,int(key))
+                    if not visible(photo):raise ValueError('Choose an approved photograph')
+                from website_editor import validate
+                clean=validate(raw,validate_photo)
+                if not draft:
+                    draft=Draft(page=page);db.session.add(draft)
+                draft.content=json.dumps(clean)
+                if action=='publish':
+                    db.session.add(Revision(page=page,content=layout.content if layout else '{}'))
+                    if not layout:
+                        layout=Layout(page=page);db.session.add(layout)
+                    layout.content=draft.content
+                db.session.commit()
+                return {'saved':True,'layout':clean,'published':action=='publish'}
+            except (ValueError,TypeError,AttributeError,KeyError) as error:
+                db.session.rollback();return {'error':str(error) or 'Check the layout settings.'},400
+        revisions=Revision.query.filter_by(page=page).order_by(Revision.id.desc()).limit(30).all()
+        return render_template('admin_website_builder.html',page=page,layout=json.loads(draft.content if draft else layout.content if layout else '{}'),csrf=csrf(),revisions=revisions)
+
+    @app.post('/admin/photo-library/upload')
+    @admin_required
+    def admin_photo_upload():
+        check()
+        try:
+            if request.content_length and request.content_length > 32_000_000:
+                abort(413)
+            permissions = request.form.get('permissions','').strip()
+            if request.form.get('authority') != 'yes' or not permissions or len(permissions)>3000:
+                raise ValueError('Record ownership or permission details and confirm you have permission to use the photos.')
+            uploads = [f for f in request.files.getlist('images') if f.filename]
+            created=[]
+            if not 1 <= len(uploads) <= 3:
+                raise ValueError('Choose one to three photographs.')
+            for upload in uploads:
+                raw=upload.stream.read(10_000_001)
+                if not raw or len(raw)>10_000_000:
+                    raise ValueError('Each photograph must be under 10 MB.')
+                try:
+                    with Image.open(BytesIO(raw)) as source:
+                        if source.format not in ('JPEG','PNG','WEBP'):
+                            raise ValueError('Use JPG, PNG or WebP photographs.')
+                        image=ImageOps.exif_transpose(source).convert('RGB')
+                        image.thumbnail((1600,1600)); output=BytesIO()
+                        image.save(output,'JPEG',quality=88,optimize=True)
+                except (UnidentifiedImageError,OSError,Image.DecompressionBombError):
+                    raise ValueError('Choose a readable JPG, PNG or WebP photograph.')
+                asset=Asset(content=output.getvalue(),permissions=permissions)
+                db.session.add(asset);created.append(asset)
+            db.session.commit()
+            if request.headers.get('Accept')=='application/json':
+                return {'photos':[{'id':asset.id,'key':'admin-'+str(asset.id),'url':image_url(asset)} for asset in created]}
+            flash('Photographs uploaded. Review them below and choose their website placements.','success')
+        except ValueError as error:
+            db.session.rollback();flash(str(error),'error')
+            if request.headers.get('Accept')=='application/json':return {'error':str(error)},400
+        return redirect(url_for('admin_photo_library'))
+
+    @app.route('/admin/photo-library/assets/<int:asset_id>',methods=['GET','POST'])
+    @admin_required
+    def admin_photo_asset(asset_id):
+        asset=db.get_or_404(Asset,asset_id)
+        if request.method=='GET':
+            response=send_file(BytesIO(asset.content),mimetype=asset.mime)
+            response.headers['Cache-Control']='no-store'
+            return response
+        check()
+        try:
+            status=request.form.get('status')
+            alt=request.form.get('alt','').strip();caption=request.form.get('caption','').strip()
+            if status not in ('pending','approved','rejected') or len(alt)>300 or len(caption)>500:
+                raise ValueError('Choose a review status and use short image descriptions.')
+            if status=='approved' and (not alt or request.form.get('reviewed_permissions')!='yes'):
+                raise ValueError('Add an image description and confirm you have reviewed permission before approving.')
+            asset.status,asset.alt,asset.caption=status,alt,caption
+            for placement in ('gallery','home','hero','about','services','contact'):
+                setattr(asset,placement,status=='approved' and request.form.get(placement)=='yes')
+            if asset.hero:
+                Photo.query.update({'hero':False})
+                Asset.query.filter(Asset.id!=asset.id).update({'hero':False})
+            db.session.commit();flash('Photo review and website placements saved.','success')
+            if request.headers.get('Accept')=='application/json':return {'saved':True}
+        except ValueError as error:
+            db.session.rollback();flash(str(error),'error')
+            if request.headers.get('Accept')=='application/json':return {'error':str(error)},400
+        return redirect(url_for('admin_photo_library'))
+
+    @app.get('/website/admin-photos/<int:asset_id>.jpg')
+    def website_admin_photo_image(asset_id):
+        asset=db.get_or_404(Asset,asset_id)
+        if not visible(asset):abort(404)
+        response=send_file(BytesIO(asset.content),mimetype=asset.mime)
+        response.headers['Cache-Control']='no-store'
+        response.headers['X-Content-Type-Options']='nosniff'
+        return response
 
     @app.route('/client/photos', methods=['GET', 'POST'])
     def client_photos():
@@ -149,8 +323,8 @@ def register(app, db, models, native_models, current_client, admin_required):
                         raise ValueError('Each photograph must be under 10 MB.')
                     try:
                         with Image.open(BytesIO(raw)) as image:
-                            if image.format not in ('JPEG', 'PNG', 'WEBP') or image.width * image.height > 25_000_000:
-                                raise ValueError('Use a JPG, PNG or WebP photograph up to 25 megapixels.')
+                            if image.format not in ('JPEG', 'PNG', 'WEBP'):
+                                raise ValueError('Use a JPG, PNG or WebP photograph.')
                             image.load()
                             clean = ImageOps.exif_transpose(image).convert('RGB')
                             clean.thumbnail((1600, 1600))
@@ -216,7 +390,7 @@ def register(app, db, models, native_models, current_client, admin_required):
                 if status == 'approved':
                     try:
                         with Image.open(BytesIO(media.content)) as image:
-                            if image.format not in ('JPEG', 'PNG', 'WEBP') or image.width * image.height > 25_000_000:
+                            if image.format not in ('JPEG', 'PNG', 'WEBP'):
                                 raise ValueError('This image is not suitable for website publication.')
                             image.verify()
                     except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
@@ -234,6 +408,7 @@ def register(app, db, models, native_models, current_client, admin_required):
                 if photo.hero:
                     db.session.flush()
                     Photo.query.filter(Photo.id != photo.id).update({'hero': False})
+                    Asset.query.update({'hero': False})
                 photo.reviewed_at = datetime.utcnow()
                 db.session.commit()
                 flash('Photo review and website placements saved.', 'success')
@@ -247,7 +422,8 @@ def register(app, db, models, native_models, current_client, admin_required):
             rows = rows.filter(or_(Submission.name.ilike('%'+query+'%'), Submission.email.ilike('%'+query+'%'), Submission.answers_json.ilike('%'+query+'%')))
         pagination = rows.order_by(Media.id.desc()).paginate(page=max(1, request.args.get('page', 1, type=int)), per_page=24, error_out=False)
         return render_template('admin_photo_library.html', rows=pagination.items, pagination=pagination, query=query,
-            csrf=csrf(), photo_answers=lambda item: json.loads(item.answers_json), signed_evidence=evidence, signature_path=signature_path)
+            csrf=csrf(), photo_answers=lambda item: json.loads(item.answers_json), signed_evidence=evidence, signature_path=signature_path,
+            admin_assets=Asset.query.options(defer(Asset.content)).filter(or_(Asset.permissions.ilike('%'+query+'%'),Asset.alt.ilike('%'+query+'%'))).order_by(Asset.id.desc()).all())
 
     @app.get('/admin/photo-library/<int:media_id>/image')
     @admin_required
@@ -269,8 +445,6 @@ def register(app, db, models, native_models, current_client, admin_required):
         # Re-encode legacy uploads too: metadata and unrelated bytes stay private.
         try:
             with Image.open(BytesIO(media.content)) as source:
-                if source.width * source.height > 25_000_000:
-                    abort(404)
                 image = ImageOps.exif_transpose(source).convert('RGB')
                 image.thumbnail((1600, 1600))
                 output = BytesIO()
@@ -294,11 +468,15 @@ def register(app, db, models, native_models, current_client, admin_required):
                 occasion, location = request.form.get('occasion', '').strip(), request.form.get('location', '').strip()
                 if not title or len(title) > 150 or not body or len(body) > 5000 or max(len(occasion), len(location)) > 150:
                     raise ValueError('Add a title, a story up to 5,000 characters and short occasion/location details.')
-                cover_id = request.form.get('cover_id', type=int)
-                if cover_id and not visible(db.session.get(Photo, cover_id)):
+                cover_value=request.form.get('cover_id','')
+                admin_cover_id=int(cover_value[6:]) if cover_value.startswith('admin-') else None
+                cover_id=int(cover_value) if cover_value and not admin_cover_id else None
+                chosen=db.session.get(Asset,admin_cover_id) if admin_cover_id else db.session.get(Photo,cover_id) if cover_id else None
+                if (cover_id or admin_cover_id) and not visible(chosen):
                     raise ValueError('Choose an approved photograph with active consent.')
                 story.title, story.body, story.occasion, story.location = title, body, occasion, location
                 story.cover_id, story.published = cover_id, request.form.get('published') == 'yes'
+                story.admin_cover_id=admin_cover_id
                 db.session.add(story)
                 db.session.commit()
                 flash('Event story saved.', 'success')
@@ -307,4 +485,5 @@ def register(app, db, models, native_models, current_client, admin_required):
                 db.session.rollback()
                 flash(str(exc), 'error')
         photos = [p for p in Photo.query.filter_by(status='approved').all() if visible(p)]
+        photos += Asset.query.options(defer(Asset.content)).filter_by(status='approved').all()
         return render_template('admin_website_stories.html', stories=Story.query.order_by(Story.id.desc()).all(), photos=photos, csrf=csrf())

@@ -13,16 +13,189 @@ Form, Submission, Media = main.native_form_models
 
 
 class PhotoLibraryTest(unittest.TestCase):
+    def test_website_editor_drafts_versions_seo_and_safe_blocks(self):
+        base=dict(csrf_token='admin-token',page='about')
+        layout={'_blocks':[{'cells':[{'kind':'heading','text':'New colourful section','animation':{'kind':'slide-up','duration':2,'delay':0.5,'repeat':2,'trigger':'scroll','easing':'ease-out'}},{'kind':'button','text':'Plan it','link':'/booking'}],'style':{'gap':32,'background':'#ffffff'}}], '_seo':{'title':'Custom face painting title','description':'Our custom description'}}
+        response=self.admin.post('/admin/website-builder',data=dict(base,action='draft',layout=json.dumps(layout)))
+        self.assertEqual(response.status_code,200)
+        self.assertNotIn('New colourful section',self.guest.get('/about').text)
+        self.assertIn('New colourful section',self.admin.get('/admin/website-builder?page=about').text)
+        response=self.admin.post('/admin/website-builder',data=dict(base,action='publish',layout=json.dumps(layout)))
+        self.assertEqual(response.status_code,200)
+        public=self.guest.get('/about').text
+        self.assertIn('<title>Custom face painting title</title>',public)
+        self.assertIn('New colourful section',public)
+        revision=main.db._website_revision.query.one()
+        response=self.admin.post('/admin/website-builder',data=dict(base,action='restore',revision=revision.id))
+        self.assertEqual(response.status_code,200)
+        self.assertIn('New colourful section',self.guest.get('/about').text)
+        self.assertNotIn('New colourful section',self.admin.get('/admin/website-builder?page=about').text)
+        for malicious in ({'_blocks':[{'cells':[{'kind':'button','link':'javascript:alert(1)'}]}]}, {'_blocks':[{'cells':[{'kind':'video','video':'https://evil.example/embed/1'}]}]}, {'0':{'style':{'background':'url(evil)'}}}, {'0':{'animation':{'kind':'flash'}}}, {'0':{'animation':{'duration':0}}}, {'0':{'desktop':{'x':float('nan')}}}):
+            self.assertEqual(self.admin.post('/admin/website-builder',data=dict(base,action='publish',layout=json.dumps(malicious))).status_code,400)
+        self.assertIn('New colourful section',self.guest.get('/about').text)
+
+    def test_website_editor_grid_and_animation_browser(self):
+        browser=browsers.NativeFormBrowserTest()
+        browser.browser(self.guest.get('/').data, '''
+            window.websiteEditor.apply({_blocks:[{cells:[{kind:'heading',text:'Live new block',animation:{kind:'pulse',duration:2,delay:0,repeat:2,easing:'linear',trigger:'load'}},{kind:'text',text:'Next column'}]}]});
+            const row=document.querySelector('.wb-row'),cell=row.firstElementChild;
+            assert(row.children.length===2,'columns missing');
+            assert(cell.classList.contains('wb-pulse'),'animation missing');
+            assert(getComputedStyle(cell).animationDuration==='2s','animation speed incorrect');
+            assert(row.textContent.includes('Live new block'),'block text missing');
+            assert(getComputedStyle(row).gridTemplateColumns.split(' ').length===1,'mobile columns must stack');
+            window.websiteEditor.apply({});
+            assert(!document.querySelector('.wb-row'),'reset rows failed');
+        ''',width=390)
+
+    def test_website_editor_full_browser_editing_flow(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const iframe=document.getElementById('builder-preview');
+            assert(iframe.contentWindow.websiteEditor,'preview failed: '+iframe.contentWindow.previewError);
+            document.getElementById('builder-columns').value='2';
+            document.getElementById('builder-kind').value='heading';
+            document.getElementById('builder-add').click();
+            assert(iframe.contentDocument.querySelector('.wb-row').children.length===2,'add row failed');
+            const text=document.getElementById('builder-text');text.value='My new headline';input(text);
+            assert(iframe.contentDocument.querySelector('.wb-row h2').textContent==='My new headline','live block edit failed');
+            const animation=document.getElementById('builder-animation');animation.value='float';input(animation);
+            assert(iframe.contentDocument.querySelector('.wb-cell').classList.contains('wb-float'),'live animation failed');
+            document.getElementById('builder-undo').click();
+            assert(!iframe.contentDocument.querySelector('.wb-cell').classList.contains('wb-float'),'undo animation failed');
+            document.getElementById('builder-redo').click();
+            assert(iframe.contentDocument.querySelector('.wb-cell').classList.contains('wb-float'),'redo failed');
+            document.getElementById('builder-device').click();
+            await new Promise(resolve=>setTimeout(resolve,100));
+            assert(iframe.contentWindow.getComputedStyle(iframe.contentDocument.querySelector('.wb-row')).gridTemplateColumns.split(' ').length===1,'mobile row failed');
+            document.getElementById('builder-rows').querySelector('button').click();
+            document.getElementById('builder-resize').click();
+            assert(iframe.contentDocument.getElementById('builder-resize-handle'),'resize handle missing');
+            iframe.contentDocument.getElementById('builder-resize-handle').remove();
+            document.getElementById('builder-template-name').value='Reusable test section';
+            document.getElementById('builder-template-save').click();
+            document.getElementById('builder-template-add').click();
+            assert(iframe.contentDocument.querySelectorAll('.wb-row').length===2,'reusable section insertion failed');
+            document.getElementById('builder-layers').querySelector('button').click();
+            document.getElementById('builder-lock').click();
+            assert(document.getElementById('builder-layers').textContent.includes('Locked'),'layer locking failed');
+            document.getElementById('builder-hide').click();
+            assert(iframe.contentWindow.websiteEditor.nodes[0].hidden,'layer hiding failed');
+            const size=document.getElementById('builder-size');size.value='tablet';change(size);
+            assert(iframe.style.width==='820px','tablet preview failed');
+            document.getElementById('builder-check').click();
+            assert(document.getElementById('builder-checks').textContent.length>0,'prepublish report missing');
+            document.getElementById('builder-compare').click();
+            assert(!iframe.contentWindow.websiteEditor.nodes[0].hidden,'published comparison failed');
+            document.getElementById('builder-compare').click();
+            assert(iframe.contentWindow.websiteEditor.nodes[0].hidden,'return to draft failed');
+        ''')
+
+    def test_website_editor_mobile_layout_and_reduced_motion(self):
+        browsers.NativeFormBrowserTest().browser(self.admin.get('/admin/website-builder').data, '''
+            assert(document.querySelectorAll('.admin aside').length===1,'editor tools must not become another navigation bar');
+            assert(document.documentElement.scrollWidth<=innerWidth+2,'editor overflows mobile screen');
+            assert(getComputedStyle(document.querySelector('.builder-tools')).display!=='none','mobile editor tools missing');
+        ''',width=390)
+        self.assertIn('@media(prefers-reduced-motion:reduce)',(__import__('pathlib').Path(__file__).parent/'static/website-editor.css').read_text())
+
+    def test_website_builder_save_and_validation(self):
+        self.assertEqual(self.guest.get('/admin/website-builder').status_code,302)
+        self.assertEqual(self.admin.get('/admin/website-builder').status_code,200)
+        self.assertEqual(self.admin.post('/admin/website-builder',data={'layout':'{}'}).status_code,400)
+        data=dict(csrf_token='admin-token',page='home',layout=json.dumps({'1':{'text':'A colourful celebration','desktop':{'x':20,'width':80},'mobile':{'x':0}}}))
+        self.assertEqual(self.admin.post('/admin/website-builder',data=data).status_code,200)
+        self.assertIn('A colourful celebration',self.guest.get('/').text)
+        self.assertNotIn('A colourful celebration',self.guest.get('/about').text)
+        data['layout']=json.dumps({'1':{'desktop':{'x':3000}}})
+        self.assertEqual(self.admin.post('/admin/website-builder',data=data).status_code,400)
+        data['layout']=json.dumps({'1':{'photo':'admin-999'}})
+        self.assertEqual(self.admin.post('/admin/website-builder',data=data).status_code,400)
+        data['layout']='{}'
+        self.assertEqual(self.admin.post('/admin/website-builder',data=data).status_code,200)
+        self.assertNotIn('A colourful celebration',self.guest.get('/').text)
+
+    def test_website_builder_browser_controls_and_positions(self):
+        browser=browsers.NativeFormBrowserTest()
+        browser.browser(self.admin.get('/admin/website-builder').data, '''
+            const device=document.getElementById('builder-device');
+            device.click();
+            assert(document.getElementById('builder-preview').style.width==='390px','mobile preview width');
+            assert(typeof document.getElementById('builder-save').onclick==='function','save handler missing');
+            assert(typeof document.getElementById('builder-upload').onsubmit==='function','upload handler missing');
+        ''')
+        browser.browser(self.guest.get('/').data, '''
+            assert(window.websiteEditor.nodes.length>10,'editable page elements missing');
+            const node=window.websiteEditor.nodes[1];
+            window.websiteEditor.apply({'1':{text:'New heading',desktop:{x:35,y:10,width:75}}});
+            assert(node.textContent==='New heading','live text change failed');
+            assert(node.style.left==='35px' && node.style.width==='75%','position failed');
+            window.websiteEditor.apply({});
+            assert(node.textContent!=='New heading','reset failed');
+        ''')
+
+    def test_admin_upload_review_placements_and_story(self):
+        Asset = main.db._website_admin_photo
+        image = BytesIO()
+        exif = Image.Exif()
+        exif[270] = 'PRIVATE METADATA'
+        Image.new('RGB', (80, 100), 'pink').save(image, 'JPEG', exif=exif)
+        image.seek(0)
+        self.assertEqual(self.guest.post('/admin/photo-library/upload').status_code, 302)
+        self.assertEqual(self.admin.post('/admin/photo-library/upload', data={}).status_code, 400)
+        response = self.admin.post('/admin/photo-library/upload', data=dict(csrf_token='admin-token', permissions='Own setup photograph, no people.', authority='yes', images=(image,'setup.jpg')))
+        self.assertEqual(response.status_code, 302)
+        asset = Asset.query.one()
+        self.assertFalse(Image.open(BytesIO(asset.content)).getexif())
+        path = f'/website/admin-photos/{asset.id}.jpg'
+        self.assertEqual(self.guest.get(path).status_code, 404)
+        self.assertEqual(self.admin.get('/admin/photo-library').status_code, 200)
+        self.admin.post(f'/admin/photo-library/assets/{asset.id}', data=dict(csrf_token='admin-token', status='approved', alt='Colourful painting setup', reviewed_permissions='yes', gallery='yes', hero='yes'))
+        self.assertEqual(self.guest.get(path).status_code, 200)
+        self.assertIn(path, self.guest.get('/gallery').text)
+        self.admin.post('/admin/website-stories', data=dict(csrf_token='admin-token', title='Our setup', body='Ready for a celebration.', cover_id=f'admin-{asset.id}', published='yes'))
+        self.assertEqual(Story.query.one().admin_cover_id, asset.id)
+        self.assertEqual(self.admin.get('/admin/website-stories').status_code, 200)
+        self.assertIn('Our setup', self.guest.get('/').text)
+        self.admin.post(f'/admin/photo-library/assets/{asset.id}', data=dict(csrf_token='admin-token', status='rejected'))
+        self.assertEqual(self.guest.get(path).status_code, 404)
+        self.assertNotIn('Our setup', self.guest.get('/').text)
+
+    def test_admin_invalid_upload_is_atomic(self):
+        Asset = main.db._website_admin_photo
+        image = BytesIO()
+        Image.new('RGB', (20,20)).save(image,'PNG')
+        image.seek(0)
+        self.admin.post('/admin/photo-library/upload', data=dict(csrf_token='admin-token', permissions='Own pictures', authority='yes', images=[(image,'valid.png'),(BytesIO(b'bad'),'bad.png')]))
+        self.assertEqual(Asset.query.count(),0)
+        self.admin.post('/admin/photo-library/upload', data=dict(csrf_token='admin-token', permissions='', authority='yes', images=(BytesIO(b'bad'),'bad.png')))
+        self.assertEqual(Asset.query.count(),0)
+
     def test_existing_library_schema_upgrade_preserves_rows(self):
         from photo_library import ensure_schema
         engine = create_engine('sqlite:///:memory:')
         try:
             with engine.begin() as connection:
                 connection.execute(text('CREATE TABLE website_photo (id INTEGER PRIMARY KEY, caption TEXT)'))
+                connection.execute(text('CREATE TABLE website_story (id INTEGER PRIMARY KEY, title TEXT)'))
                 connection.execute(text("INSERT INTO website_photo (id, caption) VALUES (7, 'Saved photograph')"))
             ensure_schema(SimpleNamespace(engine=engine))
             ensure_schema(SimpleNamespace(engine=engine))
             self.assertTrue({'about','services','contact'}.issubset({c['name'] for c in inspect(engine).get_columns('website_photo')}))
+            self.assertIn('admin_cover_id', {c['name'] for c in inspect(engine).get_columns('website_story')})
             with engine.connect() as connection:
                 self.assertEqual(tuple(connection.execute(text('SELECT caption, about, services, contact FROM website_photo WHERE id=7')).one()), ('Saved photograph',0,0,0))
         finally:

@@ -5,6 +5,7 @@ from functools import wraps
 from contextlib import closing
 from io import BytesIO
 import json
+import os
 import secrets
 import sqlite3
 import tempfile
@@ -205,7 +206,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
 
     @app.get('/booking/calendar')
     def client_availability_calendar():
-        return render_template('client/availability_calendar.html', today=datetime.now(ZoneInfo('Europe/London')).date().isoformat())
+        return render_template('client/availability_calendar.html', today=datetime.now(ZoneInfo('Europe/London')).date().isoformat(), google_maps_api_key=os.environ.get('GOOGLE_MAPS_API_KEY',''))
 
     @app.route('/admin/calendar',methods=['GET','POST'])
     @admin_required

@@ -17,7 +17,9 @@
             ('admin_reports', 'Reports', current == 'admin_reports'),
             ('admin_rewards', 'Rewards', current == 'admin_rewards' or current.startswith('rewards.')),
             ('admin_settings', 'Settings', current == 'admin_settings' and request.args.get('tab')!='email'),
-            ('studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin')
+            ('studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin'),
+            ('admin_website_builder', 'Website builder', current == 'admin_website_builder'),
+            ('admin_website_report', 'Website report', current == 'admin_website_report')
         ] %}
         {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards'] else ('Communications' if endpoint == 'admin_notification_centre' else 'Business settings')) %}
         <span data-nav-group="{{ group }}" hidden></span><a href="{{ url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
