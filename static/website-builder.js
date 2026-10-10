@@ -120,7 +120,7 @@
  field('size').onchange=()=>{deviceName=field('size').value;mobile=deviceName==='mobile';frame.style.width=deviceName==='mobile'?'390px':deviceName==='tablet'?'820px':'100%';if(selected!==null)choose(selected);};
  field('replay').onclick=()=>{const doc=frame.contentDocument;doc.querySelectorAll('.wb-animated').forEach(node=>{node.style.animationName='none';void node.offsetWidth;node.style.animationName='';});};
  ['hide','lock'].forEach(action=>field(action).onclick=()=>{if(selected===null)return;checkpoint();const item=current(),key=action==='hide'?'hidden':'locked';item[key]=!item[key];apply();choose(selected);});
- let resizeRequested=false;
+ let resizeRequested=false,resizing=false;
  function updateResizeHandle(){
    const doc=frame.contentDocument;if(!doc?.body)return;
    let handle=doc.getElementById('builder-resize-handle');
@@ -137,9 +137,12 @@
        const target=selectedNode(),photo=target.tagName==='IMG'?target:target.querySelector('img'),rect=target.getBoundingClientRect(),photoRect=photo?.getBoundingClientRect();
        const parentWidth=target.parentElement.clientWidth;if(!parentWidth)return;
        const item=current(),device=deviceName,startX=event.clientX,startY=event.clientY;
+       const handleRect=handle.getBoundingClientRect();
        const anchors=snapAnchors(target);
-       checkpoint();handle.setPointerCapture(event.pointerId);
+       checkpoint();resizing=true;handle.setPointerCapture(event.pointerId);
        handle.onpointermove=move=>{
+         handle.style.left=handleRect.left+move.clientX-startX+'px';
+         handle.style.top=handleRect.top+move.clientY-startY+'px';
          let width=Math.max(5,Math.min(100,(rect.width+move.clientX-startX)/parentWidth*100));
          let height=Math.max(20,Math.min(1200,(photoRect?.height||rect.height)+move.clientY-startY));
          if(field('snap').checked){width=Math.round(width/5)*5;height=Math.round(height/10)*10;}
@@ -156,12 +159,12 @@
          field('width').value=width;styles.find(input=>input.dataset.builderStyle==='height').value=item.style.height;
          apply();
        };
-       const finish=()=>{clearAlignmentGuides();handle.onpointermove=null;handle.onpointerup=null;handle.onpointercancel=null;updateResizeHandle();};
+       const finish=()=>{resizing=false;clearAlignmentGuides();handle.onpointermove=null;handle.onpointerup=null;handle.onpointercancel=null;updateResizeHandle();};
        handle.onpointerup=finish;handle.onpointercancel=finish;
      };
      doc.body.append(handle);
    }
-   const rect=(image||node).getBoundingClientRect();handle.style.left=Math.max(0,Math.min(frame.contentWindow.innerWidth-44,rect.right-22))+'px';handle.style.top=rect.bottom-22+'px';
+   if(!resizing){const rect=(image||node).getBoundingClientRect();handle.style.left=Math.max(0,Math.min(frame.contentWindow.innerWidth-44,rect.right-22))+'px';handle.style.top=rect.bottom-22+'px';}
    if(image){image.draggable=false;image.style.touchAction='none';image.style.cursor='move';}
  }
  field('resize').onclick=()=>{resizeRequested=true;updateResizeHandle();};

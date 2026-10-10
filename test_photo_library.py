@@ -178,8 +178,12 @@ class PhotoLibraryTest(unittest.TestCase):
             const handle=iframe.contentDocument.getElementById('builder-resize-handle');
             assert(handle,'selected image must show a resize handle automatically');
             handle.setPointerCapture=()=>{};
+            const initialHandleRect=handle.getBoundingClientRect();
             handle.onpointerdown({button:0,clientX:100,clientY:100,pointerId:1,preventDefault(){},stopPropagation(){}});
+            assert(handle.getBoundingClientRect().left===initialHandleRect.left,'resize handle must not jump on initial press');
             handle.onpointermove({clientX:70,clientY:140});
+            assert(Math.abs(handle.getBoundingClientRect().left-(initialHandleRect.left-30))<1,'resize handle must follow cursor horizontally despite snapping');
+            assert(Math.abs(handle.getBoundingClientRect().top-(initialHandleRect.top+40))<1,'resize handle must follow cursor vertically despite snapping');
             handle.onpointerup();
             const resizedImage=iframe.contentWindow.websiteEditor.nodes[imageIndex];
             assert(resizedImage.style.width.endsWith('%'),'drag must set image width');
