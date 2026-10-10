@@ -12,7 +12,7 @@
  let edits=JSON.parse(document.getElementById('website-layout').textContent),observer;
  function decorate(n,e={}){
    n.hidden=!!e.hidden;const p=e[innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop']||e.desktop||{};n.style.position='relative';n.style.left=(p.x||0)+'px';n.style.top=(p.y||0)+'px';if(p.width)n.style.width=p.width+'%';
-   Object.entries(e.style||{}).forEach(([k,v])=>{n.style[k]=['fontSize','height','padding','gap','borderRadius','borderWidth'].includes(k)?(v?v+'px':''):v;});if(e.style?.borderWidth)n.style.borderStyle='solid';
+   Object.entries(e.style||{}).forEach(([k,v])=>{n.style[k]=['fontSize','height','padding','gap','borderRadius','borderWidth'].includes(k)?(v||['borderRadius','borderWidth'].includes(k)?v+'px':''):v;});if(e.style?.borderWidth)n.style.borderStyle='solid';
    const a=e.animation||{};n.classList.remove('wb-animated',...['fade','slide-up','slide-left','zoom','bounce','float','pulse','rotate'].map(k=>'wb-'+k));n.onmouseenter=null;n.onmouseleave=null;
    if(!a.kind||a.kind==='none')return;
    n.style.setProperty('--wb-duration',a.duration+'s');n.style.setProperty('--wb-delay',a.delay+'s');n.style.setProperty('--wb-repeat',a.repeat||1);n.style.setProperty('--wb-easing',a.easing||'ease');
@@ -31,7 +31,7 @@
        else if(cell.kind==='video'){n=document.createElement('iframe');n.title=cell.text||'Video';n.loading='lazy';if(cell.video){try{const url=new URL(cell.video);if(url.protocol==='https:'&&['www.youtube-nocookie.com','www.youtube.com','player.vimeo.com'].includes(url.hostname)&&/^\/(embed|video)\//.test(url.pathname))n.src=url.href;}catch{}}n.setAttribute('allowfullscreen','');}
        else{n=document.createElement(cell.kind==='heading'?'h2':cell.kind==='review'?'blockquote':'p');n.textContent=cell.text||'';}
        article.append(n);if(cell.kind==='review'&&cell.caption){const p=document.createElement('p');p.textContent=cell.caption;article.append(p);}if(cell.kind==='image'&&cell.link){const a=document.createElement('a');a.href=cell.link;n.replaceWith(a);a.append(n);}
-       decorate(article,cell);if(cell.kind==='image'){for(const key of ['objectFit','objectPosition'])if(cell.style?.[key])n.style[key]=cell.style[key];if(cell.style?.height){n.style.height=cell.style.height+'px';article.style.height='';}}section.append(article);
+       decorate(article,cell);if(cell.kind==='image'){for(const key of ['objectFit','objectPosition'])if(cell.style?.[key])n.style[key]=cell.style[key];if(cell.style?.borderRadius!==undefined)n.style.borderRadius=cell.style.borderRadius+'px';if(cell.style?.height){n.style.height=cell.style.height+'px';article.style.height='';}}section.append(article);
      });if(row.before>=0&&sections[row.before])main.insertBefore(section,sections[row.before]);else extra.append(section);
    });
  }

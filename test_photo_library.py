@@ -131,6 +131,14 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(getComputedStyle(cell).animationDuration==='2s','animation speed incorrect');
             assert(row.textContent.includes('Live new block'),'block text missing');
             assert(getComputedStyle(row).gridTemplateColumns.split(' ').length===1,'mobile columns must stack');
+            const imageIndex=window.websiteEditor.nodes.findIndex(node=>node.tagName==='IMG');
+            const key=window.websiteEditor.keys[imageIndex];
+            window.websiteEditor.apply({[key]:{style:{borderRadius:32}},_blocks:[{cells:[{kind:'image',image:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',link:'/gallery',style:{borderRadius:24}}]}]});
+            assert(getComputedStyle(window.websiteEditor.nodes[imageIndex]).borderTopLeftRadius==='32px','existing image radius must apply');
+            assert(getComputedStyle(document.querySelector('.wb-cell img')).borderTopLeftRadius==='24px','linked added image radius must apply to photo');
+            window.websiteEditor.apply({[key]:{style:{borderRadius:0}},_blocks:[{cells:[{kind:'image',style:{borderRadius:0}}]}]});
+            assert(getComputedStyle(window.websiteEditor.nodes[imageIndex]).borderTopLeftRadius==='0px','zero must remove original image rounding');
+            assert(getComputedStyle(document.querySelector('.wb-cell img')).borderTopLeftRadius==='0px','zero must make added image square');
             window.websiteEditor.apply({});
             assert(!document.querySelector('.wb-row'),'reset rows failed');
         ''',width=390)
