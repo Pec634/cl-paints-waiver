@@ -185,8 +185,13 @@ class PhotoLibraryTest(unittest.TestCase):
             handle.onpointerdown({button:0,clientX:100,clientY:100,pointerId:1,preventDefault(){},stopPropagation(){}});
             assert(handle.getBoundingClientRect().left===initialHandleRect.left,'resize handle must not jump on initial press');
             handle.onpointermove({clientX:70,clientY:140});
-            assert(Math.abs(handle.getBoundingClientRect().left-(initialHandleRect.left-30))<1,'resize handle must follow cursor horizontally despite snapping');
-            assert(Math.abs(handle.getBoundingClientRect().top-(initialHandleRect.top+40))<1,'resize handle must follow cursor vertically despite snapping');
+            const liveRect=iframe.contentWindow.websiteEditor.nodes[imageIndex].getBoundingClientRect();
+            for(const resizeHandle of iframe.contentDocument.querySelectorAll('.builder-resize-handle')){
+                const direction=resizeHandle.dataset.direction,r=resizeHandle.getBoundingClientRect();
+                const expectedX=direction.includes('w')?liveRect.left:direction.includes('e')?liveRect.right:liveRect.left+liveRect.width/2;
+                const expectedY=direction.includes('n')?liveRect.top:direction.includes('s')?liveRect.bottom:liveRect.top+liveRect.height/2;
+                assert(Math.abs(r.left+r.width/2-expectedX)<1&&Math.abs(r.top+r.height/2-expectedY)<1,'all resize handles must stay on current image edges during resizing');
+            }
             handle.onpointerup();
             const resizedImage=iframe.contentWindow.websiteEditor.nodes[imageIndex];
             assert(resizedImage.style.width.endsWith('%'),'drag must set image width');

@@ -159,12 +159,11 @@
          const target=selectedNode(),photo=target.tagName==='IMG'?target:target.querySelector('img'),rect=target.getBoundingClientRect(),photoRect=(photo||target).getBoundingClientRect();
          const parentStyle=frame.contentWindow.getComputedStyle(target.parentElement),parentWidth=target.parentElement.clientWidth-parseFloat(parentStyle.paddingLeft)-parseFloat(parentStyle.paddingRight);if(!parentWidth)return;
          const initialWidth=parseFloat(frame.contentWindow.getComputedStyle(target).width)||target.offsetWidth;
-         const item=current(),device=deviceName,initial=clone(item[device]||item.desktop||{}),startX=event.clientX,startY=event.clientY,handleRect=handle.getBoundingClientRect(),anchors=snapAnchors(target);
+         const item=current(),device=deviceName,initial=clone(item[device]||item.desktop||{}),startX=event.clientX,startY=event.clientY,anchors=snapAnchors(target);
          const west=direction.includes('w'),north=direction.includes('n'),horizontal=west||direction.includes('e'),vertical=north||direction.includes('s');
          checkpoint();resizing=true;handle.setPointerCapture(event.pointerId);
          handle.onpointermove=move=>{
            const dx=move.clientX-startX,dy=move.clientY-startY;if(Math.hypot(dx,dy)<3)return;
-           handle.style.left=handleRect.left+(horizontal?dx:0)+'px';handle.style.top=handleRect.top+(vertical?dy:0)+'px';
            const delta=value=>field('snap').checked?Math.round(value/10)*10:value;
            let width=initialWidth+(horizontal?(west?-1:1)*delta(dx):0),height=photoRect.height+(vertical?(north?-1:1)*delta(dy):0);
            clearAlignmentGuides();
@@ -190,12 +189,20 @@
        };
        doc.body.append(handle);
      }
-     if(!resizing){const rect=(image||node).getBoundingClientRect(),x=direction.includes('w')?rect.left:direction.includes('e')?rect.right:rect.left+rect.width/2,y=direction.includes('n')?rect.top:direction.includes('s')?rect.bottom:rect.top+rect.height/2;handle.style.left=Math.max(0,Math.min(frame.contentWindow.innerWidth-32,x-16))+'px';handle.style.top=y-16+'px';}
+     const rect=(image||node).getBoundingClientRect(),x=direction.includes('w')?rect.left:direction.includes('e')?rect.right:rect.left+rect.width/2,y=direction.includes('n')?rect.top:direction.includes('s')?rect.bottom:rect.top+rect.height/2;handle.style.left=x-16+'px';handle.style.top=y-16+'px';
    }
    if(image){image.draggable=false;image.style.touchAction='none';image.style.cursor='move';}
+   if(handleObserver&&observedPreviewImage!==image){if(observedPreviewImage)handleObserver.unobserve(observedPreviewImage);observedPreviewImage=image;if(image)handleObserver.observe(image);}
  }
  field('resize').onclick=()=>{resizeRequested=true;updateResizeHandle();};
- frame.addEventListener('load',()=>{frame.contentWindow.addEventListener('scroll',updateResizeHandle,true);frame.contentWindow.addEventListener('resize',updateResizeHandle);});
+ let handleObserver,observedPreviewImage;
+ frame.addEventListener('load',()=>{
+   frame.contentWindow.addEventListener('scroll',updateResizeHandle,true);frame.contentWindow.addEventListener('resize',updateResizeHandle);
+   frame.contentDocument.addEventListener('load',updateResizeHandle,true);
+   handleObserver?.disconnect();
+   handleObserver=new frame.contentWindow.ResizeObserver(()=>updateResizeHandle());
+   handleObserver.observe(frame.contentDocument.getElementById('content'));
+ });
  field('crop').onclick=()=>{const selectedElement=selectedNode(),image=selectedElement?.tagName==='IMG'?selectedElement:selectedElement?.querySelector('img');if(!image){field('status').textContent='Select an image first.';return;}field('status').textContent='Click the important area of the image to choose its focal point.';image.addEventListener('click',event=>{event.preventDefault();event.stopImmediatePropagation();const rect=image.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width,y=(event.clientY-rect.top)/rect.height;checkpoint();current().style??={};current().style.objectPosition=x<.25?'left':x>.75?'right':y<.25?'top':y>.75?'bottom':'center';current().style.objectFit='cover';apply();choose(selected);},{once:true,capture:true});};
  field('check').onclick=()=>{const messages=[];frame.contentDocument.querySelectorAll('#content img:not([hidden])').forEach(n=>{if(!n.alt?.trim())messages.push('An image needs a description.');});frame.contentDocument.querySelectorAll('#content a').forEach(n=>{if(!n.getAttribute('href')||n.getAttribute('href')==='#')messages.push('A button or link needs a destination.');});frame.contentDocument.querySelectorAll('#content img,#content p,#content h1,#content h2,.wb-cell').forEach(n=>{const r=n.getBoundingClientRect();if(!n.hidden&&(r.left<0||r.right>frame.contentWindow.innerWidth+2))messages.push('Content extends beyond the preview width.');});field('checks').textContent=[...new Set(messages)].join(' ')||'No missing descriptions, placeholder links or horizontal overflow found in this preview.';};
  let compare=false;field('compare').onclick=()=>{if(!editor())return;compare=!compare;if(compare){editor().apply(JSON.parse(frame.contentDocument.getElementById('website-layout').textContent));field('compare').textContent='Return to draft';}else{apply();field('compare').textContent='Compare published version';}};
