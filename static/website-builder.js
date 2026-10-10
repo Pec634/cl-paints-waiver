@@ -140,49 +140,57 @@
  let resizeRequested=false,resizing=false;
  function updateResizeHandle(){
    const doc=frame.contentDocument;if(!doc?.body)return;
-   let handle=doc.getElementById('builder-resize-handle');
    const node=selected===null?null:selectedNode(),image=node?.tagName==='IMG'?node:node?.querySelector('img');
-   if(!node||current().locked||node.hidden||(!image&&!resizeRequested)){handle?.remove();return;}
-   if(!handle){
-     handle=doc.createElement('button');handle.id='builder-resize-handle';handle.type='button';handle.textContent='↘';
-     handle.setAttribute('aria-label','Drag to resize selected image or block');
-     handle.title='Drag to resize. Hold Shift to keep the image proportions.';
-     handle.style.cssText='position:fixed;z-index:99999;background:#f52f83;color:white;width:44px;height:44px;font-size:28px;padding:0;cursor:nwse-resize;border:3px solid white;border-radius:10px;box-shadow:0 2px 8px #0006;touch-action:none;';
-     handle.onclick=event=>{event.preventDefault();event.stopPropagation();};
-     handle.onpointerdown=event=>{
-       if(event.button!==0)return;event.preventDefault();event.stopPropagation();
-       const target=selectedNode(),photo=target.tagName==='IMG'?target:target.querySelector('img'),rect=target.getBoundingClientRect(),photoRect=photo?.getBoundingClientRect();
-       const parentStyle=frame.contentWindow.getComputedStyle(target.parentElement),parentWidth=target.parentElement.clientWidth-parseFloat(parentStyle.paddingLeft)-parseFloat(parentStyle.paddingRight);if(!parentWidth)return;
-       const item=current(),device=deviceName,startX=event.clientX,startY=event.clientY;
-       const handleRect=handle.getBoundingClientRect();
-       const anchors=snapAnchors(target);
-       checkpoint();resizing=true;handle.setPointerCapture(event.pointerId);
-       handle.onpointermove=move=>{
-         if(Math.hypot(move.clientX-startX,move.clientY-startY)<3)return;
-         handle.style.left=handleRect.left+move.clientX-startX+'px';
-         handle.style.top=handleRect.top+move.clientY-startY+'px';
-         const delta=value=>field('snap').checked?Math.round(value/10)*10:value;
-         let width=Math.max(5,Math.min(100,(rect.width+delta(move.clientX-startX))/parentWidth*100));
-         let height=Math.max(20,Math.min(1200,(photoRect?.height||rect.height)+delta(move.clientY-startY)));
-         if(move.shiftKey&&photoRect?.width)height=Math.max(20,Math.min(1200,photoRect.height*(parentWidth*width/100)/rect.width));
-         clearAlignmentGuides();
-         if(field('snap').checked){
-           const horizontal=nearestSnap([rect.left+rect.width+move.clientX-startX],anchors.x);
-           const vertical=nearestSnap([(photoRect?.top||rect.top)+(photoRect?.height||rect.height)+move.clientY-startY],anchors.y);
-           if(horizontal){width=Math.max(5,Math.min(100,(horizontal.anchor-rect.left)/parentWidth*100));showAlignmentGuide('x',horizontal.anchor);if(move.shiftKey&&photoRect?.width)height=Math.max(20,Math.min(1200,photoRect.height*(parentWidth*width/100)/rect.width));}
-           if(vertical&&!move.shiftKey){height=Math.max(20,Math.min(1200,vertical.anchor-(photoRect?.top||rect.top)));showAlignmentGuide('y',vertical.anchor);}
-         }
-         item[device]??={};item[device].width=width;item.style??={};item.style.height=Math.round(height);
-         if(photo)item.style.objectFit||='cover';
-         field('width').value=width;styles.find(input=>input.dataset.builderStyle==='height').value=item.style.height;
-         apply();showSpacingGuides();
+   if(!node||current().locked||node.hidden||(!image&&!resizeRequested)){doc.querySelectorAll('.builder-resize-handle').forEach(handle=>handle.remove());return;}
+   const directions=['nw','n','ne','e','se','s','sw','w'];
+   for(const direction of directions){
+     const id=direction==='se'?'builder-resize-handle':'builder-resize-'+direction;
+     let handle=doc.getElementById(id);
+     if(!handle){
+       handle=doc.createElement('button');handle.id=id;handle.className='builder-resize-handle';handle.type='button';handle.dataset.direction=direction;
+       handle.textContent=direction.length===1?(direction==='n'||direction==='s'?'↕':'↔'):(direction==='nw'||direction==='se'?'⤡':'⤢');
+       handle.setAttribute('aria-label','Resize '+({n:'top',s:'bottom',e:'right',w:'left',nw:'top left',ne:'top right',sw:'bottom left',se:'bottom right'}[direction]));
+       handle.title='Drag to resize. Hold Shift on a corner to keep proportions.';
+       const cursor=direction.length===1?(direction==='n'||direction==='s'?'ns':'ew'):(direction==='nw'||direction==='se'?'nwse':'nesw');
+       handle.style.cssText='position:fixed;z-index:99999;background:#f52f83;color:white;width:32px;height:32px;font-size:22px;padding:0;cursor:'+cursor+'-resize;border:2px solid white;border-radius:8px;box-shadow:0 2px 8px #0006;touch-action:none;';
+       handle.onclick=event=>{event.preventDefault();event.stopPropagation();};
+       handle.onpointerdown=event=>{
+         if(event.button!==0)return;event.preventDefault();event.stopPropagation();
+         const target=selectedNode(),photo=target.tagName==='IMG'?target:target.querySelector('img'),rect=target.getBoundingClientRect(),photoRect=(photo||target).getBoundingClientRect();
+         const parentStyle=frame.contentWindow.getComputedStyle(target.parentElement),parentWidth=target.parentElement.clientWidth-parseFloat(parentStyle.paddingLeft)-parseFloat(parentStyle.paddingRight);if(!parentWidth)return;
+         const item=current(),device=deviceName,initial=clone(item[device]||item.desktop||{}),startX=event.clientX,startY=event.clientY,handleRect=handle.getBoundingClientRect(),anchors=snapAnchors(target);
+         const west=direction.includes('w'),north=direction.includes('n'),horizontal=west||direction.includes('e'),vertical=north||direction.includes('s');
+         checkpoint();resizing=true;handle.setPointerCapture(event.pointerId);
+         handle.onpointermove=move=>{
+           const dx=move.clientX-startX,dy=move.clientY-startY;if(Math.hypot(dx,dy)<3)return;
+           handle.style.left=handleRect.left+(horizontal?dx:0)+'px';handle.style.top=handleRect.top+(vertical?dy:0)+'px';
+           const delta=value=>field('snap').checked?Math.round(value/10)*10:value;
+           let width=rect.width+(horizontal?(west?-1:1)*delta(dx):0),height=photoRect.height+(vertical?(north?-1:1)*delta(dy):0);
+           clearAlignmentGuides();
+           if(field('snap').checked){
+             const sx=horizontal?nearestSnap([west?rect.left+dx:rect.right+dx],anchors.x):null;
+             const sy=vertical?nearestSnap([north?photoRect.top+dy:photoRect.bottom+dy],anchors.y):null;
+             if(sx){width=west?rect.right-sx.anchor:sx.anchor-rect.left;showAlignmentGuide('x',sx.anchor);}
+             if(sy){height=north?photoRect.bottom-sy.anchor:sy.anchor-photoRect.top;showAlignmentGuide('y',sy.anchor);}
+           }
+           width=Math.max(parentWidth*.05,Math.min(parentWidth,width));height=Math.max(20,Math.min(1200,height));
+           if(move.shiftKey&&horizontal&&vertical){height=width*photoRect.height/rect.width;if(height>1200||height<20){height=Math.max(20,Math.min(1200,height));width=height*rect.width/photoRect.height;}}
+           item[device]={...initial};
+           if(horizontal)item[device].width=width/parentWidth*100;
+           if(west)item[device].x=(initial.x||0)+rect.width-width;
+           if(north)item[device].y=(initial.y||0)+photoRect.height-height;
+           if(vertical){item.style??={};item.style.height=Math.round(height);if(photo)item.style.objectFit||='cover';}
+           field('width').value=item[device].width||0;field('x').value=item[device].x||0;field('y').value=item[device].y||0;
+           if(item.style?.height!==undefined)styles.find(input=>input.dataset.builderStyle==='height').value=item.style.height;
+           apply();showSpacingGuides();
+         };
+         const finish=()=>{resizing=false;clearAlignmentGuides();handle.onpointermove=null;handle.onpointerup=null;handle.onpointercancel=null;updateResizeHandle();};
+         handle.onpointerup=finish;handle.onpointercancel=finish;
        };
-       const finish=()=>{resizing=false;clearAlignmentGuides();handle.onpointermove=null;handle.onpointerup=null;handle.onpointercancel=null;updateResizeHandle();};
-       handle.onpointerup=finish;handle.onpointercancel=finish;
-     };
-     doc.body.append(handle);
+       doc.body.append(handle);
+     }
+     if(!resizing){const rect=(image||node).getBoundingClientRect(),x=direction.includes('w')?rect.left:direction.includes('e')?rect.right:rect.left+rect.width/2,y=direction.includes('n')?rect.top:direction.includes('s')?rect.bottom:rect.top+rect.height/2;handle.style.left=Math.max(0,Math.min(frame.contentWindow.innerWidth-32,x-16))+'px';handle.style.top=y-16+'px';}
    }
-   if(!resizing){const rect=(image||node).getBoundingClientRect();handle.style.left=Math.max(0,Math.min(frame.contentWindow.innerWidth-44,rect.right-22))+'px';handle.style.top=rect.bottom-22+'px';}
    if(image){image.draggable=false;image.style.touchAction='none';image.style.cursor='move';}
  }
  field('resize').onclick=()=>{resizeRequested=true;updateResizeHandle();};

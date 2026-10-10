@@ -179,6 +179,7 @@ class PhotoLibraryTest(unittest.TestCase):
             document.getElementById('builder-layers').querySelectorAll('button')[imageIndex].click();
             const handle=iframe.contentDocument.getElementById('builder-resize-handle');
             assert(handle,'selected image must show a resize handle automatically');
+            assert(iframe.contentDocument.querySelectorAll('.builder-resize-handle').length===8,'images must have four side and four corner handles');
             handle.setPointerCapture=()=>{};
             const initialHandleRect=handle.getBoundingClientRect();
             handle.onpointerdown({button:0,clientX:100,clientY:100,pointerId:1,preventDefault(){},stopPropagation(){}});
@@ -191,6 +192,17 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(resizedImage.style.width.endsWith('%'),'drag must set image width');
             assert(parseInt(resizedImage.style.height)>0,'drag must set image height');
             const resizedHeight=resizedImage.style.height;
+            const sideHandle=iframe.contentDocument.getElementById('builder-resize-w');
+            sideHandle.setPointerCapture=()=>{};
+            const sideStartWidth=resizedImage.style.width,sideStartHeight=resizedImage.style.height;
+            document.getElementById('builder-snap').checked=false;
+            sideHandle.onpointerdown({button:0,clientX:100,clientY:100,pointerId:2,preventDefault(){},stopPropagation(){}});
+            sideHandle.onpointermove({clientX:120,clientY:100});sideHandle.onpointerup();
+            assert(parseFloat(resizedImage.style.width)<parseFloat(sideStartWidth),'left handle must reduce width when dragged right');
+            assert(resizedImage.style.height===sideStartHeight,'side handle must preserve height');
+            assert(parseFloat(resizedImage.style.left)>0,'left handle must shift image to keep opposite edge fixed');
+            document.getElementById('builder-undo').click();
+            document.getElementById('builder-snap').checked=true;
             document.getElementById('builder-undo').click();
             assert(!iframe.contentDocument.getElementById('builder-resize-handle'),'undo clears resize selection');
             document.getElementById('builder-redo').click();
