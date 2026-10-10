@@ -51,6 +51,7 @@
    if(event.button!==0)return;event.preventDefault();event.stopPropagation();choose(selection);
    const item=current();if(item.locked)return;
    const doc=frame.contentDocument,device=deviceName,initial=clone(item[device]||item.desktop||{}),startX=event.clientX,startY=event.clientY,pointerId=event.pointerId;
+   const target=selectedNode(),rect=target.getBoundingClientRect(),anchors=snapAnchors(target);
    if(event.isTrusted)doc.body.setPointerCapture(pointerId);
    let moved=false;
    const move=event=>{
@@ -59,11 +60,37 @@
      if(!moved&&Math.hypot(dx,dy)<3)return;
      if(!moved){checkpoint();moved=true;}
      const snap=value=>field('snap').checked?Math.round(value/10)*10:Math.round(value);
-     item[device]={...initial,x:Math.max(-2000,Math.min(2000,snap((initial.x||0)+dx))),y:Math.max(-2000,Math.min(2000,snap((initial.y||0)+dy)))};
+     let x=snap((initial.x||0)+dx),y=snap((initial.y||0)+dy);
+     clearAlignmentGuides();
+     if(field('snap').checked){
+       const horizontal=nearestSnap([rect.left+dx,rect.left+rect.width/2+dx,rect.right+dx],anchors.x);
+       const vertical=nearestSnap([rect.top+dy,rect.top+rect.height/2+dy,rect.bottom+dy],anchors.y);
+       if(horizontal){x=(initial.x||0)+dx+horizontal.delta;showAlignmentGuide('x',horizontal.anchor);}
+       if(vertical){y=(initial.y||0)+dy+vertical.delta;showAlignmentGuide('y',vertical.anchor);}
+     }
+     item[device]={...initial,x:Math.max(-2000,Math.min(2000,x)),y:Math.max(-2000,Math.min(2000,y))};
      apply();field('x').value=item[device].x;field('y').value=item[device].y;
    };
-   const end=event=>{if(event.pointerId!==pointerId)return;if(doc.body.hasPointerCapture(pointerId))doc.body.releasePointerCapture(pointerId);doc.removeEventListener('pointermove',move);doc.removeEventListener('pointerup',end);doc.removeEventListener('pointercancel',end);};
+   const end=event=>{if(event.pointerId!==pointerId)return;clearAlignmentGuides();if(doc.body.hasPointerCapture(pointerId))doc.body.releasePointerCapture(pointerId);doc.removeEventListener('pointermove',move);doc.removeEventListener('pointerup',end);doc.removeEventListener('pointercancel',end);};
    doc.addEventListener('pointermove',move);doc.addEventListener('pointerup',end);doc.addEventListener('pointercancel',end);
+ }
+ function snapAnchors(target){
+   const doc=frame.contentDocument,parent=target.parentElement.getBoundingClientRect();
+   const anchors={x:[parent.left,(parent.left+parent.right)/2,parent.right,0,frame.contentWindow.innerWidth/2,frame.contentWindow.innerWidth],y:[parent.top,parent.bottom]};
+   doc.querySelectorAll('#content img').forEach(node=>{
+     if(node===target||target.contains(node)||node.contains(target)||node.hidden)return;
+     const rect=node.getBoundingClientRect();if(!rect.width||!rect.height)return;
+     anchors.x.push(rect.left,rect.left+rect.width/2,rect.right);anchors.y.push(rect.top,rect.top+rect.height/2,rect.bottom);
+   });return anchors;
+ }
+ function nearestSnap(points,anchors){
+   let best=null;for(const point of points)for(const anchor of anchors){const delta=anchor-point;if(Math.abs(delta)<=8&&(!best||Math.abs(delta)<Math.abs(best.delta)))best={delta,anchor};}return best;
+ }
+ function clearAlignmentGuides(){frame.contentDocument?.querySelectorAll('.builder-alignment-guide').forEach(node=>node.remove());}
+ function showAlignmentGuide(axis,value){
+   const guide=frame.contentDocument.createElement('div');guide.className='builder-alignment-guide';
+   guide.style.cssText='position:fixed;pointer-events:none;z-index:99998;background:#00a6b8;box-shadow:0 0 0 1px white;'+(axis==='x'?`left:${value}px;top:0;bottom:0;width:2px;`:`top:${value}px;left:0;right:0;height:2px;`);
+   frame.contentDocument.body.append(guide);
  }
  function changeControls(){if(selected===null||current().locked)return;checkpoint();const edit=current();edit[deviceName]={x:Number(field('x').value),y:Number(field('y').value),width:Number(field('width').value)};
    if(!field('text').parentElement.hidden)edit.text=field('text').value;if(!field('caption').parentElement.hidden)edit.caption=field('caption').value;
@@ -110,18 +137,26 @@
        const target=selectedNode(),photo=target.tagName==='IMG'?target:target.querySelector('img'),rect=target.getBoundingClientRect(),photoRect=photo?.getBoundingClientRect();
        const parentWidth=target.parentElement.clientWidth;if(!parentWidth)return;
        const item=current(),device=deviceName,startX=event.clientX,startY=event.clientY;
+       const anchors=snapAnchors(target);
        checkpoint();handle.setPointerCapture(event.pointerId);
        handle.onpointermove=move=>{
          let width=Math.max(5,Math.min(100,(rect.width+move.clientX-startX)/parentWidth*100));
          let height=Math.max(20,Math.min(1200,(photoRect?.height||rect.height)+move.clientY-startY));
          if(field('snap').checked){width=Math.round(width/5)*5;height=Math.round(height/10)*10;}
          if(move.shiftKey&&photoRect?.width)height=Math.max(20,Math.min(1200,photoRect.height*(parentWidth*width/100)/rect.width));
+         clearAlignmentGuides();
+         if(field('snap').checked){
+           const horizontal=nearestSnap([rect.left+rect.width+move.clientX-startX],anchors.x);
+           const vertical=nearestSnap([(photoRect?.top||rect.top)+(photoRect?.height||rect.height)+move.clientY-startY],anchors.y);
+           if(horizontal){width=Math.max(5,Math.min(100,(horizontal.anchor-rect.left)/parentWidth*100));showAlignmentGuide('x',horizontal.anchor);if(move.shiftKey&&photoRect?.width)height=Math.max(20,Math.min(1200,photoRect.height*(parentWidth*width/100)/rect.width));}
+           if(vertical&&!move.shiftKey){height=Math.max(20,Math.min(1200,vertical.anchor-(photoRect?.top||rect.top)));showAlignmentGuide('y',vertical.anchor);}
+         }
          item[device]??={};item[device].width=width;item.style??={};item.style.height=Math.round(height);
          if(photo)item.style.objectFit||='cover';
          field('width').value=width;styles.find(input=>input.dataset.builderStyle==='height').value=item.style.height;
          apply();
        };
-       const finish=()=>{handle.onpointermove=null;handle.onpointerup=null;handle.onpointercancel=null;updateResizeHandle();};
+       const finish=()=>{clearAlignmentGuides();handle.onpointermove=null;handle.onpointerup=null;handle.onpointercancel=null;updateResizeHandle();};
        handle.onpointerup=finish;handle.onpointercancel=finish;
      };
      doc.body.append(handle);

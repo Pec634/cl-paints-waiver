@@ -190,6 +190,7 @@ class PhotoLibraryTest(unittest.TestCase):
             document.getElementById('builder-redo').click();
             assert(iframe.contentWindow.websiteEditor.nodes[imageIndex].style.height===resizedHeight,'redo must preserve image size');
             const dragImage=iframe.contentWindow.websiteEditor.nodes[imageIndex],doc=iframe.contentDocument;
+            document.getElementById('builder-snap').checked=false;
             dragImage.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:7,clientX:100,clientY:100}));
             doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointermove',{pointerId:7,clientX:140,clientY:120}));
             doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerup',{pointerId:7}));
@@ -201,6 +202,14 @@ class PhotoLibraryTest(unittest.TestCase):
             doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointermove',{pointerId:8,clientX:130,clientY:150}));
             doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerup',{pointerId:8}));
             assert(doc.querySelector('[data-builder-cell]').style.left==='30px','added blocks must remain draggable after rerender');
+            document.getElementById('builder-snap').checked=true;
+            const snapImage=iframe.contentWindow.websiteEditor.nodes[imageIndex],snapRect=snapImage.getBoundingClientRect(),parentRect=snapImage.parentElement.getBoundingClientRect();
+            snapImage.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:9,clientX:100,clientY:100}));
+            doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointermove',{pointerId:9,clientX:100+parentRect.left-snapRect.left+3,clientY:120}));
+            assert(doc.querySelector('.builder-alignment-guide'),'snapping must show alignment guides');
+            assert(Math.abs(snapImage.getBoundingClientRect().left-parentRect.left)<1,'image must snap to parent edge');
+            doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerup',{pointerId:9}));
+            assert(!doc.querySelector('.builder-alignment-guide'),'guides must clear after dragging');
             document.getElementById('builder-device').click();
             await new Promise(resolve=>setTimeout(resolve,100));
             assert(iframe.contentWindow.getComputedStyle(iframe.contentDocument.querySelector('.wb-row')).gridTemplateColumns.split(' ').length===1,'mobile row failed');
