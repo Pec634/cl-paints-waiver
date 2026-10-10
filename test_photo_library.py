@@ -13,6 +13,70 @@ Form, Submission, Media = main.native_form_models
 
 
 class PhotoLibraryTest(unittest.TestCase):
+    def test_builder_permission_checkbox_records_confirmation(self):
+        markup = self.admin.get('/admin/website-builder').text
+        self.assertIn('name="permissions_confirmed" value="yes" required', markup)
+        self.assertNotIn('<textarea name="permissions"', markup)
+        payload = dict(csrf_token='admin-token', authority='yes')
+        def photo():
+            image = BytesIO()
+            Image.new('RGB', (60, 60), 'pink').save(image, format='PNG')
+            image.seek(0)
+            return image, 'own-items.png'
+        response = self.admin.post('/admin/photo-library/upload', headers={'Accept':'application/json'},
+                                   data=dict(payload, images=photo()))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(main.db._website_admin_photo.query.count(), 0)
+        response = self.admin.post('/admin/photo-library/upload', headers={'Accept':'application/json'},
+                                   data=dict(payload, permissions_confirmed='yes', images=photo()))
+        self.assertEqual(response.status_code, 200)
+        record = main.db._website_admin_photo.query.one().permissions
+        self.assertIn('own items', record)
+        self.assertIn('completed photo consent', record)
+
+    def test_drive_import_uses_existing_image_validation(self):
+        from unittest.mock import patch
+        image = BytesIO()
+        Image.new('RGB', (60, 60), 'pink').save(image, format='PNG')
+        payload = dict(csrf_token='admin-token', permissions='Permission recorded', authority='yes',
+                       drive_url='https://drive.google.com/file/d/abcdefghijk/view')
+        with patch('photo_library.download_drive_photo', return_value=image.getvalue()) as download:
+            response = self.admin.post('/admin/photo-library/upload', headers={'Accept':'application/json'}, data=payload)
+            self.assertEqual(response.status_code, 200)
+            download.assert_called_once_with(payload['drive_url'])
+        self.assertEqual(Image.open(BytesIO(main.db._website_admin_photo.query.one().content)).format, 'JPEG')
+        with patch('photo_library.download_drive_photo', return_value=b'not an image'):
+            response = self.admin.post('/admin/photo-library/upload', headers={'Accept':'application/json'}, data=payload)
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(main.db._website_admin_photo.query.count(), 1)
+
+    def test_drive_download_validation_and_limits(self):
+        from unittest.mock import patch, MagicMock
+        from photo_library import download_drive_photo
+        for link in ('http://drive.google.com/open?id=abcdefghijk', 'https://evil.example/photo',
+                     'https://drive.google.com/drive/folders/abcdefghijk', 'https://drive.google.com@localhost/open?id=abcdefghijk'):
+            with self.assertRaises(ValueError):
+                download_drive_photo(link)
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.headers = {'Content-Type': 'image/png'}
+        response.read.return_value = b'image bytes'
+        with patch('photo_library.build_opener') as opener:
+            opener.return_value.open.return_value = response
+            self.assertEqual(download_drive_photo('https://drive.google.com/file/d/abcdefghijk/view?resourcekey=abc-123'), b'image bytes')
+            self.assertIn('resourcekey=abc-123', opener.return_value.open.call_args.args[0].full_url)
+            response.read.assert_called_with(10_000_001)
+            handler = opener.call_args.args[0]
+            with self.assertRaises(ValueError):
+                handler.redirect_request(None, None, 302, '', {}, 'https://localhost/private')
+            response.headers = {'Content-Type': 'text/html'}
+            with self.assertRaisesRegex(ValueError, 'Anyone with the link'):
+                download_drive_photo('https://drive.google.com/open?id=abcdefghijk')
+            response.headers = {'Content-Type': 'image/png'}
+            response.read.return_value = b'x' * 10_000_001
+            with self.assertRaisesRegex(ValueError, '10 MB'):
+                download_drive_photo('https://drive.google.com/open?id=abcdefghijk')
+
     def test_upload_json_errors_and_expired_session(self):
         response=self.guest.post('/admin/photo-library/upload',headers={'Accept':'application/json'})
         self.assertEqual(response.status_code,401)
@@ -129,6 +193,14 @@ class PhotoLibraryTest(unittest.TestCase):
 
     def test_website_editor_mobile_layout_and_reduced_motion(self):
         browsers.NativeFormBrowserTest().browser(self.admin.get('/admin/website-builder').data, '''
+            const source=document.getElementById('builder-upload-source'),upload=document.getElementById('builder-upload');
+            source.value='drive';change(source);
+            assert(upload.elements.images.disabled&&!upload.elements.images.required,'device photo must be optional for Drive');
+            assert(!upload.elements.drive_url.disabled&&upload.elements.drive_url.required,'Drive link must be required');
+            assert(!document.getElementById('builder-drive-photo').hidden,'Drive controls missing');
+            source.value='device';change(source);
+            assert(!upload.elements.images.disabled&&upload.elements.images.required,'device photo controls not restored');
+            assert(upload.elements.drive_url.disabled,'Drive link must not be submitted for device uploads');
             assert(document.querySelectorAll('.admin aside').length===1,'editor tools must not become another navigation bar');
             assert(document.documentElement.scrollWidth<=innerWidth+2,'editor overflows mobile screen');
             assert(getComputedStyle(document.querySelector('.builder-tools')).display!=='none','mobile editor tools missing');

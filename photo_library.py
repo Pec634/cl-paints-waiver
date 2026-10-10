@@ -3,6 +3,10 @@ from datetime import datetime
 from io import BytesIO
 import json
 import secrets
+import re
+from urllib.parse import urlsplit, parse_qs, urlencode
+from urllib.request import Request, build_opener, HTTPRedirectHandler
+from urllib.error import URLError
 from flask import abort, flash, redirect, render_template, request, session, url_for, send_file
 from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import or_, inspect, text
@@ -15,6 +19,45 @@ Names and identifying descriptions are collected privately to record permission 
 Images published online may be viewed, downloaded or shared by other people. CL Paints cannot fully control third-party copies, reposts or the practices of social platforms. This does not remove your rights or CL Paints' responsibilities for its own use of your images.
 You can withdraw permission from Upload photos in your client portal, or contact CL Paints. We will stop new use and remove the selected photographs from this website. Contact us so we can also remove copies from social accounts and other materials we control. We cannot guarantee removal of copies already made by others.
 We review each submission before publication. We store uploads and release records privately while reviewing them and while needed to record the authorised use. Contact us about deletion or other privacy requests. See our privacy policy for contact details.'''
+
+
+def download_drive_photo(link):
+    """Download a shared file, allowing redirects only to Google's download hosts."""
+    if len(link) > 1000:
+        raise ValueError('The Google Drive sharing link is too long.')
+    parts = urlsplit(link)
+    if parts.scheme != 'https' or parts.netloc != 'drive.google.com':
+        raise ValueError('Paste an HTTPS Google Drive file sharing link.')
+    match = re.fullmatch(r'/file/d/([\w-]+)(?:/view|/preview)?/?', parts.path)
+    query = parse_qs(parts.query)
+    file_id = match.group(1) if match else query.get('id', [''])[0] if parts.path in ('/open', '/uc') else ''
+    if not re.fullmatch(r'[A-Za-z0-9_-]{10,200}', file_id):
+        raise ValueError('Choose a photograph file link, rather than a Drive folder link.')
+    params = {'export': 'download', 'id': file_id}
+    resource_key = query.get('resourcekey', [''])[0]
+    if resource_key:
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,200}', resource_key):
+            raise ValueError('The Google Drive sharing link is invalid.')
+        params['resourcekey'] = resource_key
+
+    class GoogleRedirects(HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            target = urlsplit(newurl)
+            if target.scheme != 'https' or target.netloc not in ('drive.google.com', 'drive.usercontent.google.com'):
+                raise ValueError('Google Drive could not download this photo. Enable link access and downloads, then retry.')
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    try:
+        with build_opener(GoogleRedirects()).open(Request('https://drive.usercontent.google.com/download?' + urlencode(params)), timeout=20) as response:
+            content_type = response.headers.get('Content-Type', '').lower().split(';')[0].strip()
+            if not (content_type.startswith('image/') or content_type == 'application/octet-stream'):
+                raise ValueError('Google Drive did not return a photograph. Set access to Anyone with the link, allow downloads, and use a JPG, PNG or WebP file.')
+            raw = response.read(10_000_001)
+    except (URLError, TimeoutError, OSError):
+        raise ValueError('Could not download from Google Drive. Check link access and downloads, or retry shortly.')
+    if not raw or len(raw) > 10_000_000:
+        raise ValueError('Each photograph must be under 10 MB.')
+    return raw
 
 
 def ensure_schema(db):
@@ -193,9 +236,17 @@ def register(app, db, models, native_models, current_client, admin_required):
             if request.content_length and request.content_length > 32_000_000:
                 abort(413)
             permissions = request.form.get('permissions','').strip()
+            if request.form.get('permissions_confirmed') == 'yes':
+                permissions = 'Admin confirmed: I took this photo of my own items, or the user has completed photo consent giving CL Paints permission to use this image.'
             if request.form.get('authority') != 'yes' or not permissions or len(permissions)>3000:
-                raise ValueError('Record ownership or permission details and confirm you have permission to use the photos.')
+                raise ValueError('Confirm photo ownership or completed user photo consent, and permission to use the photos.')
             uploads = [f for f in request.files.getlist('images') if f.filename]
+            drive_link = request.form.get('drive_url', '').strip()
+            if drive_link:
+                if uploads:
+                    raise ValueError('Choose either a device upload or a Google Drive link.')
+                from werkzeug.datastructures import FileStorage
+                uploads = [FileStorage(stream=BytesIO(download_drive_photo(drive_link)), filename='drive-photo')]
             created=[]
             if not 1 <= len(uploads) <= 3:
                 raise ValueError('Choose one to three photographs.')
