@@ -139,6 +139,8 @@ class PhotoLibraryTest(unittest.TestCase):
             window.websiteEditor.apply({[key]:{style:{borderRadius:0}},_blocks:[{cells:[{kind:'image',style:{borderRadius:0}}]}]});
             assert(getComputedStyle(window.websiteEditor.nodes[imageIndex]).borderTopLeftRadius==='0px','zero must remove original image rounding');
             assert(getComputedStyle(document.querySelector('.wb-cell img')).borderTopLeftRadius==='0px','zero must make added image square');
+            window.websiteEditor.apply({[key]:{desktop:{width:65},tablet:{width:30},mobile:{width:20}}},'desktop');
+            assert(window.websiteEditor.nodes[imageIndex].style.width==='65%','desktop editing must use desktop dimensions even in a narrow preview');
             window.websiteEditor.apply({});
             assert(!document.querySelector('.wb-row'),'reset rows failed');
         ''',width=390)
@@ -194,10 +196,17 @@ class PhotoLibraryTest(unittest.TestCase):
             document.getElementById('builder-redo').click();
             assert(iframe.contentWindow.websiteEditor.nodes[imageIndex].style.height===resizedHeight,'redo must preserve image size');
             const dragImage=iframe.contentWindow.websiteEditor.nodes[imageIndex],doc=iframe.contentDocument;
+            const neighbour=doc.createElement('img'),beforeDrag=dragImage.getBoundingClientRect();
+            neighbour.style.cssText=`position:fixed;left:${beforeDrag.right+200}px;top:${beforeDrag.top}px;width:30px;height:100px;`;
+            doc.getElementById('content').append(neighbour);
             document.getElementById('builder-snap').checked=false;
             dragImage.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:7,clientX:100,clientY:100}));
             doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointermove',{pointerId:7,clientX:140,clientY:120}));
+            const expectedGap=Math.round(neighbour.getBoundingClientRect().left-dragImage.getBoundingClientRect().right)+' px';
+            assert([...doc.querySelectorAll('.builder-spacing-guide')].some(guide=>guide.textContent===expectedGap),'moving image must show distance to neighbouring image in pixels');
             doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerup',{pointerId:7}));
+            assert(!doc.querySelector('.builder-spacing-guide'),'spacing guides must clear after release');
+            neighbour.remove();
             assert(dragImage.style.left==='40px'&&dragImage.style.top==='20px','image drag must update position live');
             document.getElementById('builder-undo').click();
             assert(dragImage.style.left==='0px','undo must restore image position');
