@@ -13,6 +13,19 @@ Form, Submission, Media = main.native_form_models
 
 
 class PhotoLibraryTest(unittest.TestCase):
+    def test_upload_json_errors_and_expired_session(self):
+        response=self.guest.post('/admin/photo-library/upload',headers={'Accept':'application/json'})
+        self.assertEqual(response.status_code,401)
+        self.assertIn('Sign in',response.json['error'])
+        response=self.admin.post('/admin/photo-library/upload',headers={'Accept':'application/json'})
+        self.assertEqual(response.status_code,400)
+        self.assertIn('fresh form',response.json['error'])
+        with self.admin.session_transaction() as state:
+            state['admin_last_activity']=0
+        response=self.admin.post('/admin/photo-library/upload',headers={'Accept':'application/json'})
+        self.assertEqual(response.status_code,401)
+        self.assertIn('expired',response.json['error'])
+
     def test_camera_multi_picture_jpeg_upload(self):
         image=BytesIO()
         Image.new('RGB',(60,60),'pink').save(image,format='MPO',save_all=True,append_images=[Image.new('RGB',(60,60),'blue')])

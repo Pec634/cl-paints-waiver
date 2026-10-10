@@ -190,7 +190,7 @@ def register(app, db, Read, Booking, Account, Waiver, Message, Request, Change, 
 
     @app.errorhandler(HTTPException)
     def recoverable_error(error):
-        if request.path.startswith('/api/') or request.is_json or request.accept_mimetypes.best == 'application/json':
+        if request.path.startswith('/api/') or request.is_json:
             return error.get_response()
         if error.code not in (400, 403, 404, 409, 413, 429, 500):
             return error.get_response()
@@ -207,6 +207,10 @@ def register(app, db, Read, Booking, Account, Waiver, Message, Request, Change, 
             429: ('Please wait before trying again', 'Too many requests arrived in a short time. Wait a little, then retry.'),
             500: ('We could not finish that request', 'Return to your portal and check whether your changes were saved before trying again.')}
         title, detail = messages[error.code]
+        if request.headers.get('Accept') == 'application/json':
+            response=app.make_response(({'error':title+'. '+detail},error.code))
+            response.headers['Cache-Control']='private, no-store'
+            return response
         if error.code == 500:
             # A database failure must not trigger database-backed page context again.
             markup = app.jinja_env.get_template('portal_error.html').render(error_title=title,

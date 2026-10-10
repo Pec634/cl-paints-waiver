@@ -66,12 +66,16 @@ def admin_required(view_function):
     @wraps(view_function)
     def wrapped_view(*args, **kwargs):
         if not session.get("admin_authenticated"):
+            if request.headers.get('Accept') == 'application/json':
+                return {'error':'Your admin session has ended. Sign in again, then retry.'}, 401
             return redirect(url_for("admin_login"))
         now = datetime.utcnow().timestamp()
         previous = session.get('admin_last_activity', now)
         if now - previous > 1800:
             session.pop('admin_authenticated', None)
             session.pop('admin_last_activity', None)
+            if request.headers.get('Accept') == 'application/json':
+                return {'error':'Your admin session has expired. Sign in again, then retry.'}, 401
             return redirect(url_for('admin_login', expired=1))
         session['admin_last_activity'] = now
         return view_function(*args, **kwargs)
