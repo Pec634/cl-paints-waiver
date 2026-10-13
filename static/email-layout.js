@@ -3,7 +3,7 @@
   const layouts=JSON.parse(document.querySelector('#email-layout-data').textContent);
   const media=JSON.parse(document.querySelector('#email-layout-media').textContent);
   const stagedAssets={};
-  Object.values(layouts).forEach(layout=>{layout.text_blocks??={};});
+  Object.values(layouts).forEach(layout=>{layout.text_blocks??={};layout.deleted??=[];});
   const status=root.querySelector('[data-layout-status]');
   let kind='booking',timer,sequence=0,nextTextId=0;
   const node=(tag,text)=>{const element=document.createElement(tag);if(text)element.textContent=text;return element;};
@@ -21,12 +21,12 @@
       [-1,1].forEach(direction=>{const button=node('button',direction===-1?'Move up':'Move down');button.type='button';button.className='btn';button.disabled=index+direction<0||index+direction>=layouts[kind].order.length;
         button.setAttribute('aria-label',(direction===-1?'Move up ':'Move down ')+(item?item.label:key));
         button.addEventListener('click',()=>{const order=layouts[kind].order;[order[index],order[index+direction]]=[order[index+direction],order[index]];controls();update();list.querySelector('[data-layout-block="'+key+'"] button:not(:disabled)')?.focus();});tools.append(button);});row.append(tools);
+      const remove=node('button','Delete');remove.type='button';remove.className='btn';remove.setAttribute('aria-label','Delete '+(item?item.label:key));remove.onclick=()=>{const layout=layouts[kind];if(textBlock)delete layout.text_blocks[key];else if(!layout.deleted.includes(key))layout.deleted.push(key);layout.order=layout.order.filter(value=>value!==key);controls();update();root.querySelector('[data-layout-add-text]').focus();};tools.append(remove);
       if(textBlock){
         const label=node('label','Text');const textarea=node('textarea');textarea.rows=5;textarea.maxLength=5000;textarea.value=textBlock.text;textarea.dataset.emailTextBlock=key;
         textarea.addEventListener('input',()=>{textBlock.text=textarea.value;update();});label.append(textarea);row.append(label);
         const tokens=node('div');tokens.className='client-action-row';
         for(const [token,title] of [['{name}','Client name'],['{reference}','Reference'],['{details}','Update details']]){const insert=node('button',title);insert.type='button';insert.className='btn';insert.onclick=()=>{textarea.setRangeText(token,textarea.selectionStart,textarea.selectionEnd,'end');textarea.focus();textarea.dispatchEvent(new Event('input',{bubbles:true}));};tokens.append(insert);}row.append(tokens);
-        const remove=node('button','Remove text block');remove.type='button';remove.className='btn';remove.onclick=()=>{delete layouts[kind].text_blocks[key];layouts[kind].order=layouts[kind].order.filter(value=>value!==key);controls();update();root.querySelector('[data-layout-add-text]').focus();};tools.append(remove);
       }
       if(item){
         const options=layouts[kind].media[String(item.id)];
@@ -75,10 +75,11 @@
   }
   root.querySelector('[data-layout-add-text]').addEventListener('click',addTextBlock);
   root.querySelectorAll('[data-email-add-text]').forEach(button=>button.addEventListener('click',addTextBlock));
+  root.querySelector('[data-layout-restore]')?.addEventListener('click',()=>{const layout=layouts[kind];layout.order.push(...layout.deleted);layout.deleted=[];controls();update();});
   root.emailPresetEditor={
     snapshot(){const fields={};for(const form of [root.querySelector('[data-email-composer="'+kind+'"]'),design])new FormData(form).forEach((value,key)=>{if(key.startsWith('notification_'))fields[key]=value;});return {kind,layout:structuredClone(layouts[kind]),fields,...(stagedAssets[kind]?{assets:structuredClone(stagedAssets[kind])}:{})};},
     load(preset){
-      clearTimeout(timer);sequence++;layouts[kind]=structuredClone(preset.layout);stagedAssets[kind]=structuredClone(preset.assets);
+      clearTimeout(timer);sequence++;layouts[kind]=structuredClone(preset.layout);layouts[kind].deleted??=[];stagedAssets[kind]=structuredClone(preset.assets);
       const form=root.querySelector('[data-email-composer="'+kind+'"]');
       form.querySelector('[name="notification_'+kind+'_subject"]').value=preset.fields.subject;
       let body=preset.fields.body;if(kind.includes('enquiry')&&!body.includes('{details}'))body+='\n\n{details}';

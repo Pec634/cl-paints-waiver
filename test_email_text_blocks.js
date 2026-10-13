@@ -39,8 +39,10 @@ async function runEmailTextBlockTests(source){
   save.click();await Promise.resolve();await Promise.resolve();check(calls.at(-1).url.endsWith('/save'),'Save includes extra text blocks');
   for(let index=0;index<7;index++)add.click();check(list.children.filter(row=>row.dataset.layoutBlock?.startsWith('text-')).length===8,'Eight extra fields can be created');
   add.click();check(status.textContent.includes('eight'),'Limit is shown instead of silently failing');
-  const first=list.children.find(row=>row.dataset.layoutBlock===key);first.children[1].children.find(button=>button.textContent==='Remove text block').click();
+  const first=list.children.find(row=>row.dataset.layoutBlock===key);first.children[1].children.find(button=>button.textContent==='Delete').click();
   check(!list.children.some(row=>row.dataset.layoutBlock===key),'Remove deletes the extra field');
+  const bodyBlock=list.children.find(row=>row.dataset.layoutBlock==='body');bodyBlock.children[1].children.find(button=>button.textContent==='Delete').click();await timers.at(-1)();
+  check(!calls.at(-1).data.layout.order.includes('body')&&calls.at(-1).data.layout.deleted.includes('body'),'Deleting a built-in block persists its exclusion');
   selected='reward';root.listeners['email-template-selected'][0]();check(!root.querySelector('[data-email-text-block]'),'Booking fields stay separate from rewards');
   quick.click();check(!!root.querySelector('[data-email-text-block]'),'Rewards can add their own text field');
   return `${checks} email text-block interaction checks passed`;

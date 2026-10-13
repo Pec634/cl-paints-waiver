@@ -8,7 +8,7 @@ from client_notifications import EMAIL_KINDS
 
 DEFAULT=dict(width=600,padding=24,font_size=16,line_height=1.6,radius=16,
              background='#f1f4f9',paper='#ffffff',text='#243047',align='left',font='Arial',
-             portal_label='Open your portal',order=[],media={},text_blocks={})
+             portal_label='Open your portal',order=[],media={},text_blocks={},deleted=[])
 
 def validate(value,items):
     import re
@@ -42,8 +42,11 @@ def validate(value,items):
     if sum(len(block['text']) for block in result['text_blocks'].values())>20000: raise ValueError('Keep additional text blocks under 20,001 characters in total.')
     allowed=['heading','body','portal','footer']+[f'media-{item.id}' for item in items]+list(result['text_blocks'])
     order=value.get('order',[])
+    deleted=value.get('deleted',[])
+    if not isinstance(deleted,list) or len(deleted)>32 or any(not isinstance(key,str) or key not in allowed for key in deleted) or len(set(deleted))!=len(deleted):raise ValueError('Choose valid deleted blocks.')
+    result['deleted']=deleted
     if not isinstance(order,list) or len(order)>32 or any(not isinstance(key,str) or key not in allowed for key in order) or len(set(order))!=len(order): raise ValueError('Choose valid, unique layout blocks.')
-    result['order']=order+[key for key in allowed if key not in order]
+    result['order']=[key for key in order if key not in deleted]+[key for key in allowed if key not in order and key not in deleted]
     media=value.get('media',{})
     if not isinstance(media,dict): raise ValueError('Choose valid image and link settings.')
     result['media']={}
@@ -66,6 +69,7 @@ def register(app,db,Setting,Media,settings,admin_required):
         # Removed files no longer belong in the layout.
         allowed={'heading','body','portal','footer'}|{f'media-{i.id}' for i in items(kind)}|set(data.get('text_blocks',{}))
         data['order']=[key for key in data.get('order',[]) if key in allowed]
+        data['deleted']=[key for key in data.get('deleted',[]) if key in allowed]
         if not row:
             if 'enquiry' in kind:data['portal_label']='View your enquiry'
             data['order']=['heading']+[f'media-{i.id}' for i in items(kind) if i.kind=='image']+['body','portal','footer']+[f'media-{i.id}' for i in items(kind) if i.kind!='image']
@@ -125,6 +129,7 @@ def register(app,db,Setting,Media,settings,admin_required):
             if any(not isinstance(value,str) for value in values.values()): raise ValueError('Email content must be text.')
             from client_notifications import validate_email_settings,render_notification
             validate_email_settings(values);config.update(values)
+            if 'enquiry' in kind and 'body' not in layout['order'] and not any('{details}' in layout['text_blocks'].get(key,{}).get('text','') for key in layout['order']):raise ValueError('Keep a visible message or text block containing {details} so your enquiry reply is included.')
             if action=='save':
                 values['email_layout_'+kind]=json.dumps(layout)
                 for key,value in values.items():
@@ -143,3 +148,4 @@ def register(app,db,Setting,Media,settings,admin_required):
             db.session.rollback()
             return jsonify(error='The layout could not be saved. Please try again.'),503
     app.extensions['email_layout_render']=render
+    app.extensions['email_layout_active_media']=lambda kind:{int(key[6:]) for key in saved(kind)['order'] if key.startswith('media-')}

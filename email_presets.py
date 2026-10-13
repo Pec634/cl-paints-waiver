@@ -64,6 +64,7 @@ def register(app,db,Setting,Media,settings,admin_required):
         if Media.query.count()>12 or sum(len(row.content or b'') for row in Media.query.all())>5*1024*1024:raise ValueError('The media library would exceed 12 items or 5 MB. Remove unused media before applying this preset.')
         db.session.flush()
         layout['order']=[f'media-{mapped[int(key[6:])].id}' if key.startswith('media-') else key for key in layout['order']]
+        layout['deleted']=[f'media-{mapped[int(key[6:])].id}' if key.startswith('media-') else key for key in layout['deleted']]
         layout['media']={str(mapped[int(key)].id):value for key,value in layout['media'].items()}
         return validate(layout,eligible(kind)),eligible(kind)
     app.extensions['email_preset_prepare']=prepare
@@ -96,6 +97,7 @@ def register(app,db,Setting,Media,settings,admin_required):
                     mapping={item.id:-(index+1) for index,item in enumerate(media)}
                     for item in media:portable.append({key:getattr(item,key) for key in ('kind','label','filename','url')}|{'content':base64.b64encode(item.content).decode() if item.content else ''})
                     layout['order']=[f'media-{mapping[int(key[6:])]}' if key.startswith('media-') else key for key in layout['order']]
+                    layout['deleted']=[f'media-{mapping[int(key[6:])]}' if key.startswith('media-') else key for key in layout['deleted']]
                     layout['media']={str(mapping[int(key)]):value for key,value in layout['media'].items()}
                 preset=validate_preset(dict(format='cl-paints-email-preset',version=1,name=data.get('name',''),layout=layout,assets=portable,
                     fields={'subject':fields.get(f'notification_{kind}_subject',config[f'notification_{kind}_subject']),

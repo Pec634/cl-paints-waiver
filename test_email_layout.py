@@ -92,6 +92,21 @@ class EmailLayoutTest(unittest.TestCase):
             else:self.assertNotIn('Visitor guide',message)
         response=self.fixture.admin.post('/admin/email-layout/website_enquiry/save',json={'fields':{'notification_website_enquiry_body':'No reply placeholder'}},headers={'X-CSRF-Token':self.fixture.csrf})
         self.assertEqual(response.status_code,400)
+
+    def test_deleted_blocks_stay_deleted_and_attachments_are_excluded(self):
+        self.fixture.add('document',area='booking',label='Deleted guide',content=b'Guide content',filename='guide.txt')
+        document=main.EmailMedia.query.one()
+        layout={'deleted':['heading','footer',f'media-{document.id}']}
+        saved=self.post('save',layout)
+        self.assertEqual(saved.status_code,200)
+        self.assertNotIn('Deleted guide',saved.json['html'])
+        self.assertNotIn('heading',saved.json['layout']['order'])
+        self.assertEqual(main.app.extensions['email_media_attachments']('booking'),[])
+        self.assertEqual(main.EmailMedia.query.count(),1)
+        page=self.fixture.admin.get('/admin/email-preview/booking')
+        self.assertNotIn(b'Deleted guide',page.data)
+        self.assertEqual(self.post('save',{'deleted':[]}).status_code,200)
+        self.assertEqual(len(main.app.extensions['email_media_attachments']('booking')),1)
     @unittest.skipUnless(browsers.EDGE.is_file(),'Microsoft Edge is not installed')
     def test_live_typing_reorder_and_save_in_browser(self):
         page=self.fixture.admin.get('/admin/settings?tab=email')

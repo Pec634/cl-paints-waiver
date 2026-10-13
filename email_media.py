@@ -124,7 +124,9 @@ def register(app,db,Media,admin_required):
         return message,body
     def attachments(kind):
         result=[]
+        active=app.extensions['email_layout_active_media'](kind) if app.extensions.get('email_layout_active_media') else None
         for item in rows(kind):
+            if active is not None and item.id not in active:continue
             if not item.content: continue
             row=dict(filename=item.filename,content=base64.b64encode(item.content).decode(),content_type=item.content_type)
             if item.kind=='image': row['content_id']=f'cl-paints-media-{item.id}'
