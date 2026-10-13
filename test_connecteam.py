@@ -6,6 +6,7 @@ import test_business_tools as fixtures
 from connecteam_rota import shift_payload
 from connecteam_rota import enrich_shifts, note_text
 from connecteam_rota import api as connecteam_api, RateLimited, retry_time
+from connecteam_rota import group_event_shifts
 from urllib.error import HTTPError
 from io import BytesIO
 import json
@@ -87,6 +88,7 @@ class ConnecteamTest(unittest.TestCase):
                 second=connecteam_api(path)
                 self.assertEqual(second['schedulers'][0]['name'],'Staff rota')
                 self.assertEqual(network.call_count,1)
+
             with patch('connecteam_rota.time.time',return_value=5000),patch('connecteam_rota.urlopen',side_effect=HTTPError('https://api.connecteam.com',429,'Limited',{'Retry-After':'120'},None)) as network:
                 stale=connecteam_api(path)
                 self.assertEqual(stale,self.schedules)
@@ -96,6 +98,21 @@ class ConnecteamTest(unittest.TestCase):
             with patch('connecteam_rota.time.time',return_value=5121),patch('connecteam_rota.urlopen',return_value=BytesIO(json.dumps(data).encode())) as network:
                 self.assertEqual(connecteam_api(path),self.schedules)
                 self.assertEqual(network.call_count,1)
+
+    def test_same_time_and_venue_are_one_event_with_all_staff(self):
+        shifts=[dict(id='one',title='Festival',startTime=100,endTime=200,venue='Town Hall',assignedUserIds=[1],staff_names=['Alex'],plain_notes=['Bring paints'],isPublished=True),
+                dict(id='two',title='Festival',startTime=100,endTime=200,venue=' town  hall ',assignedUserIds=[2],staff_names=['Chloe'],plain_notes=['Bring paints'],isPublished=False),
+                dict(id='three',title='Other event',startTime=100,endTime=200,venue='Park',assignedUserIds=[1],staff_names=['Alex']),
+                dict(id='four',title='Later',startTime=200,endTime=300,venue='Town Hall')]
+        events=group_event_shifts(shifts)
+        self.assertEqual(len(events),3)
+        self.assertEqual(events[0]['staff_names'],['Alex','Chloe'])
+        self.assertEqual(events[0]['assignedUserIds'],[1,2])
+        self.assertEqual(events[0]['plain_notes'],['Bring paints'])
+        self.assertTrue(events[0]['mixed_publication'])
+        self.assertEqual(len(events[0]['source_shifts']),2)
+        self.assertEqual(shifts[0]['staff_names'],['Alex'])
+        self.assertEqual(len(group_event_shifts([dict(startTime=100,endTime=200),dict(startTime=100,endTime=200)])),2)
 
     def test_rate_limit_daily_reset_and_export_can_retry(self):
         with patch('connecteam_rota.time.time',return_value=1000):

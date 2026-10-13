@@ -98,6 +98,30 @@ def enrich_shifts(shifts):
         shift['duration'] = round((shift['endTime'] - shift['startTime']) / 3600, 2)
 
 
+def group_event_shifts(shifts):
+    groups={}
+    for index,shift in enumerate(shifts):
+        venue=' '.join((shift.get('venue') or '').split()).casefold()
+        # Without a known venue, preserve distinct shifts instead of guessing.
+        key=(shift.get('startTime'),shift.get('endTime'),venue) if venue else ('unknown',index)
+        if key not in groups:
+            groups[key]=dict(shift,source_shifts=[],staff_names=[],assignedUserIds=[],plain_notes=[],titles=[],mixed_publication=False)
+        event=groups[key];event['source_shifts'].append(shift)
+        for field in ('staff_names','assignedUserIds','plain_notes'):
+            for value in shift.get(field) or []:
+                if value not in event[field]:event[field].append(value)
+        title=shift.get('title') or 'Untitled event'
+        if title not in event['titles']:event['titles'].append(title)
+    for event in groups.values():
+        event['title']=' / '.join(event['titles'])
+        publication={bool(shift.get('isPublished')) for shift in event['source_shifts']}
+        event['isPublished']=all(publication);event['mixed_publication']=len(publication)>1
+        event['isOpenShift']=any(shift.get('isOpenShift') for shift in event['source_shifts'])
+        event['openSpots']=sum((shift.get('openSpots') or 1) for shift in event['source_shifts'] if shift.get('isOpenShift'))
+        event['isRequireAdminApproval']=any(shift.get('isRequireAdminApproval') for shift in event['source_shifts'])
+    return list(groups.values())
+
+
 def api(path, payload=None):
     key = os.getenv('CONNECTEAM_API_KEY', '').strip()
     if not key:
@@ -251,6 +275,8 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
         if staff_filter and staff_filter != 'unassigned' and not staff_filter.isdigit():
             abort(400)
         total_shifts = len(shifts)
+        shifts=group_event_shifts(shifts)
+        total_events=len(shifts)
         if staff_filter == 'unassigned':
             shifts = [shift for shift in shifts if not shift.get('assignedUserIds')]
         elif staff_filter:
@@ -267,5 +293,5 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
                 rows.append(dict(booking=booking, index=index, event=event, link=link, changed=changed))
         return render_template('admin_connecteam.html', schedules=schedules, selected_id=selected_id,
                                shifts=shifts, rows=rows, error=error, csrf=token, staff_filter=staff_filter, date_order=date_order,
-                               staff_options=sorted(staff_options.items(), key=lambda item: item[1].casefold()), total_shifts=total_shifts,
+                               staff_options=sorted(staff_options.items(), key=lambda item: item[1].casefold()), total_shifts=total_shifts,total_events=total_events,
                                cache_notices=list(dict.fromkeys(getattr(g,'connecteam_notices',[]))))
