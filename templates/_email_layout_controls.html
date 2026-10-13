@@ -6,4 +6,4 @@
 <h3>Block order &amp; placement</h3><p>Add text sections, then move images and links between them. The main Message field is your first text section.</p><button type="button" class="btn" data-layout-add-text>Add text block</button><div data-layout-blocks></div><button type="button" class="btn primary" data-layout-save>Save content &amp; layout</button><p role="status" aria-live="polite" data-layout-status>Loading preview…</p></section>
 <script type="application/json" id="email-layout-data">{{ email_layouts|tojson }}</script>
 <script type="application/json" id="email-layout-media">[{% for item in email_media %}{"id":{{ item.id }},"kind":{{ item.kind|tojson }},"label":{{ item.label|tojson }},"area":{{ item.area|tojson }}}{% if not loop.last %},{% endif %}{% endfor %}]</script>
-<script src="{{ url_for('static',filename='email-layout.js',v='enquiry-templates-1') }}" defer></script>
+<script src="{{ url_for('static',filename='email-layout.js',v='presets-1') }}" defer></script>

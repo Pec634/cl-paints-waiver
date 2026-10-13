@@ -2790,6 +2790,8 @@ from public_website import register as register_public_website
 from photo_library import register as register_photo_library
 register_photo_library(app, db, photo_library_models, native_form_models, get_current_client, admin_required)
 register_public_website(app)
+from email_presets import register as register_email_presets
+register_email_presets(app, db, BusinessSetting, EmailMedia, get_business_settings, admin_required)
 from website_enquiries import register as register_website_enquiries
 register_website_enquiries(app, db, website_enquiry_models, get_business_settings,
                           lambda *args: send_client_email(*args), admin_required)

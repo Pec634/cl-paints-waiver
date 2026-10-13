@@ -2,6 +2,7 @@
   const root=document.querySelector('.email-workspace');if(!root)return;
   const layouts=JSON.parse(document.querySelector('#email-layout-data').textContent);
   const media=JSON.parse(document.querySelector('#email-layout-media').textContent);
+  const stagedAssets={};
   Object.values(layouts).forEach(layout=>{layout.text_blocks??={};});
   const status=root.querySelector('[data-layout-status]');
   let kind='booking',timer,sequence=0,nextTextId=0;
@@ -11,7 +12,8 @@
     root.querySelectorAll('[data-layout-key]').forEach(input=>{input.value=layouts[kind][input.dataset.layoutKey];});
     const list=root.querySelector('[data-layout-blocks]');list.replaceChildren();
     layouts[kind].order.forEach((key,index)=>{
-      const item=media.find(value=>'media-'+value.id===key);
+      const available=stagedAssets[kind]?stagedAssets[kind].map((item,index)=>({...item,id:-(index+1)})):media;
+      const item=available.find(value=>'media-'+value.id===key);
       const row=node('article');row.className='client-record email-layout-block';row.dataset.layoutBlock=key;
       const textBlock=layouts[kind].text_blocks[key];
       row.append(node('strong',textBlock?'Text section':item?item.kind+': '+item.label:({heading:'Heading',body:'Message',portal:'Portal link',footer:'Footer'})[key]));
@@ -45,12 +47,15 @@
     const form=root.querySelector('[data-email-composer="'+current+'"]');
     const fields={};[form,root.querySelector('#email-design form')].forEach(element=>{new FormData(element).forEach((value,key)=>{if(key.startsWith('notification_'))fields[key]=value;});});
     try {
-      const response=await fetch('/admin/email-layout/'+current+'/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':form.querySelector('[name="csrf_token"]').value},body:JSON.stringify({layout:layouts[current],fields})});
+      const response=await fetch('/admin/email-layout/'+current+'/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':form.querySelector('[name="csrf_token"]').value},body:JSON.stringify({layout:layouts[current],fields,...(stagedAssets[current]?{assets:stagedAssets[current]}:{})})});
       const result=await response.json();if(!response.ok)throw Error(result.error||'Please reload settings and sign in again.');
       if(current!==kind||version!==sequence)return;
       root.querySelector('[data-email-preview]').srcdoc=result.html;
       status.textContent=action==='save'?'Content and layout saved.':'Live preview · unsaved changes';
-      if(action==='save')form.querySelector('[data-email-draft-status]').textContent='Saved template';
+      if(action==='save'){
+        form.querySelector('[data-email-draft-status]').textContent='Saved template';
+        if(stagedAssets[current]){delete stagedAssets[current];layouts[current]=result.layout;for(const item of result.media||[]){const index=media.findIndex(old=>old.id===item.id);if(index<0)media.push(item);else media[index]=item;}controls();}
+      }
     }catch(error){if(current===kind&&version===sequence)status.textContent='Preview: '+error.message;}
   }
   root.querySelectorAll('[data-layout-key]').forEach(input=>input.addEventListener('input',()=>{layouts[kind][input.dataset.layoutKey]=input.value;update();}));
@@ -70,6 +75,18 @@
   }
   root.querySelector('[data-layout-add-text]').addEventListener('click',addTextBlock);
   root.querySelectorAll('[data-email-add-text]').forEach(button=>button.addEventListener('click',addTextBlock));
+  root.emailPresetEditor={
+    snapshot(){const fields={};for(const form of [root.querySelector('[data-email-composer="'+kind+'"]'),design])new FormData(form).forEach((value,key)=>{if(key.startsWith('notification_'))fields[key]=value;});return {kind,layout:structuredClone(layouts[kind]),fields,...(stagedAssets[kind]?{assets:structuredClone(stagedAssets[kind])}:{})};},
+    load(preset){
+      clearTimeout(timer);sequence++;layouts[kind]=structuredClone(preset.layout);stagedAssets[kind]=structuredClone(preset.assets);
+      const form=root.querySelector('[data-email-composer="'+kind+'"]');
+      form.querySelector('[name="notification_'+kind+'_subject"]').value=preset.fields.subject;
+      let body=preset.fields.body;if(kind.includes('enquiry')&&!body.includes('{details}'))body+='\n\n{details}';
+      form.querySelector('[name="notification_'+kind+'_body"]').value=body;
+      for(const key of ['notification_heading','notification_footer','notification_colour','notification_layout'])design.querySelector('[name="'+key+'"]').value=preset.fields[key];
+      form.querySelector('[data-email-draft-status]').textContent='Loaded preset · unsaved';controls();update();
+    }
+  };
   function switchTemplate(){kind=root.querySelector('[data-email-select][aria-pressed="true"]').dataset.emailSelect;root.querySelector('[data-email-preview]').removeAttribute('srcdoc');controls();update();}
   root.addEventListener('email-template-selected',switchTemplate);switchTemplate();
 })();

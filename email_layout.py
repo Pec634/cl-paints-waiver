@@ -58,7 +58,7 @@ def validate(value,items):
     return result
 
 def register(app,db,Setting,Media,settings,admin_required):
-    def items(kind): return Media.query.filter(Media.area.in_([kind,'all']+(['both'] if kind in ('booking','reward') else []))).order_by(Media.id).all()
+    def items(kind): return Media.query.filter(Media.area.in_([kind,{'portal_enquiry':'portal','website_enquiry':'website'}.get(kind,kind),'all']+(['both'] if kind in ('booking','reward') else []))).order_by(Media.id).all()
     def saved(kind):
         row=db.session.get(Setting,'email_layout_'+kind)
         try: data=json.loads(row.value) if row else {}
@@ -73,8 +73,9 @@ def register(app,db,Setting,Media,settings,admin_required):
     @app.context_processor
     def context():
         return {'email_layouts':{kind:saved(kind) for kind in EMAIL_KINDS}} if request.endpoint in ('admin_settings','communications_templates') else {}
-    def render(config,kind,heading,body,footer,link,preview=False,draft=None,variables=None):
-        layout=validate(draft,items(kind)) if draft is not None else saved(kind)
+    def render(config,kind,heading,body,footer,link,preview=False,draft=None,variables=None,media_items=None):
+        selected_media=items(kind) if media_items is None else media_items
+        layout=validate(draft,selected_media) if draft is not None else saved(kind)
         esc=html.escape
         variables=variables or dict(name='',reference='',details='')
         plain={'body':body}
@@ -86,10 +87,10 @@ def register(app,db,Setting,Media,settings,admin_required):
             content=block['text'].format(**variables)
             blocks[key]=f'<p style="white-space:pre-line">{esc(content)}</p>' if content else ''
             plain[key]=content
-        for item in items(kind):
+        for item in selected_media:
             option=layout['media'][str(item.id)]
             if item.kind=='image':
-                source=url_for('email_media_file',media_id=item.id) if preview else f'cid:cl-paints-media-{item.id}'
+                source=(item.preview_source if getattr(item,'preview_source','') else url_for('email_media_file',media_id=item.id)) if preview else f'cid:cl-paints-media-{item.id}'
                 margins={'left':'0 auto 0 0','center':'0 auto','right':'0 0 0 auto'}[option['align']]
                 content=f'<img src="{source}" alt="{esc(item.label,quote=True)}" style="display:block;width:{option["width"]}%;max-width:100%;height:auto;margin:{margins}">'
                 if option['caption']: content+=f'<p>{esc(option["caption"])}</p>'
@@ -99,7 +100,7 @@ def register(app,db,Setting,Media,settings,admin_required):
                 plain[f'media-{item.id}']=item.label+': '+item.url
             else:
                 content=f'Attachment: {esc(item.label)} ({esc(item.filename)})'
-                if preview: content=f'<a href="{url_for("email_media_file",media_id=item.id)}">Download attachment: {esc(item.label)}</a>'
+                if preview and item.id>0: content=f'<a href="{url_for("email_media_file",media_id=item.id)}">Download attachment: {esc(item.label)}</a>'
                 plain[f'media-{item.id}']='Attached: '+item.label+' ('+item.filename+')'
             blocks[f'media-{item.id}']=f'<div style="text-align:{option["align"]};margin:16px 0">{content}</div>'
         border=f'border-top:5px solid {config["notification_colour"]};' if config['notification_layout']=='card' else ''
@@ -113,7 +114,10 @@ def register(app,db,Setting,Media,settings,admin_required):
         data=request.get_json(silent=True)
         try:
             if not isinstance(data,dict): raise ValueError('Choose valid email settings.')
-            layout=validate(data.get('layout',{}),items(kind))
+            media_items=None
+            if 'assets' in data:
+                layout,media_items=app.extensions['email_preset_prepare'](kind,data.get('layout',{}),data['assets'],action=='save')
+            else:layout=validate(data.get('layout',{}),items(kind))
             fields=data.get('fields',{})
             keys=[f'notification_{kind}_subject',f'notification_{kind}_body','notification_heading','notification_footer','notification_colour','notification_layout']
             if not isinstance(fields,dict): raise ValueError('Choose valid email content.')
@@ -129,9 +133,11 @@ def register(app,db,Setting,Media,settings,admin_required):
                     else: db.session.add(Setting(key=key,value=value))
                 db.session.commit()
             subject,_,_,message=render_notification(config,'Sample client',kind,'SAMPLE-001','Sample enquiry reply.' if 'enquiry' in kind else 'Sample booking or reward update.',
-                '' if kind=='website_enquiry' else url_for('client.contact' if kind=='portal_enquiry' else 'client.login',_external=True),preview=True,layout=layout)
-            return jsonify(html=render_template('email_preview_embed.html',subject=subject,message=message),saved=action=='save')
-        except ValueError as exc:
+                '' if kind=='website_enquiry' else url_for('client.contact' if kind=='portal_enquiry' else 'client.login',_external=True),preview=True,layout=layout,media_items=media_items)
+            return jsonify(html=render_template('email_preview_embed.html',subject=subject,message=message),saved=action=='save',layout=layout,
+                media=[dict(id=item.id,kind=item.kind,label=item.label,area=kind) for item in media_items] if media_items is not None and action=='save' else None)
+        except (ValueError,TypeError,KeyError,AttributeError) as exc:
+            db.session.rollback()
             return jsonify(error=str(exc)),400
         except SQLAlchemyError:
             db.session.rollback()

@@ -85,7 +85,7 @@ def booking_snapshot(booking, schedule):
             result[f'Event {index}: {label}'] = str(event.get(field, ''))
     return result
 
-def render_notification(config, name, kind, reference, details, link, preview=False, layout=None):
+def render_notification(config, name, kind, reference, details, link, preview=False, layout=None,media_items=None):
     variables = dict(name=name, reference=reference, details=details)
     subject = config[f'notification_{kind}_subject'].format(**variables)
     body = config[f'notification_{kind}_body'].format(**variables)
@@ -99,7 +99,7 @@ def render_notification(config, name, kind, reference, details, link, preview=Fa
                f'<p><a style="color:{colour}" href="{html.escape(link, quote=True)}">View your {"booking" if kind == "booking" else "rewards"}</a></p>'
                f'<p style="color:#667189">{html.escape(footer)}</p></div>')
     if has_app_context() and current_app.extensions.get('email_layout_render'):
-        message, body = current_app.extensions['email_layout_render'](config,kind,heading,body,footer,link,preview,layout,variables)
+        message, body = current_app.extensions['email_layout_render'](config,kind,heading,body,footer,link,preview,layout,variables,media_items)
     elif has_app_context() and current_app.extensions.get('email_media_decorate'):
         message, body = current_app.extensions['email_media_decorate'](kind,message,body,preview)
     return subject, body, footer, message

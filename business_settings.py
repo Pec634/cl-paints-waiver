@@ -22,7 +22,7 @@ DEFAULTS.update(facebook_url='https://www.facebook.com/profile.php?id=6157878413
 
 def read_settings(db, Setting, recovery_default=''):
     values = dict(DEFAULTS, recovery_email=recovery_default)
-    values.update({row.key: row.value for row in Setting.query.all() if row.key in DEFAULTS})
+    values.update({row.key: row.value for row in Setting.query.filter(Setting.key.in_(DEFAULTS)).all()})
     # Existing deployments may still hold the previous public website address.
     if values['website'].rstrip('/') in ('https://www.clpaints.com', 'https://clpaints.com'):
         values['website'] = DEFAULTS['website']
