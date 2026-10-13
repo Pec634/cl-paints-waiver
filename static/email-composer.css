@@ -22,6 +22,8 @@
 .email-preview-pane { background:#f1f4f9;border-radius:12px;padding:18px;position:sticky;top:16px; }
 .email-preview-pane iframe { width:100%;height:560px;border:1px solid #e2e8f0;border-radius:8px;background:white;margin:8px 0 16px; }
 .email-media-drawer { margin-top:16px; }
+.email-layout-block label { display:grid;gap:8px;margin:12px 0; }
+.email-layout-block textarea { width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:8px;font:inherit;line-height:1.6;resize:vertical; }
 .email-media-drawer summary,#email-design summary { cursor:pointer;padding:12px 0;font-weight:700; }
 .email-media-drawer #email-media-items { margin-top:10px; }
 .email-workspace :is(button,a,input,textarea,summary):focus-visible { outline:3px solid #a855f7;outline-offset:3px; }

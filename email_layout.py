@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 DEFAULT=dict(width=600,padding=24,font_size=16,line_height=1.6,radius=16,
              background='#f1f4f9',paper='#ffffff',text='#243047',align='left',font='Arial',
-             portal_label='Open your portal',order=[],media={})
+             portal_label='Open your portal',order=[],media={},text_blocks={})
 
 def validate(value,items):
     import re
@@ -28,9 +28,20 @@ def validate(value,items):
         if result[key] not in choices: raise ValueError('Choose a supported font or alignment.')
     result['portal_label']=value.get('portal_label',result['portal_label'])
     if not isinstance(result['portal_label'],str) or not 1<=len(result['portal_label'])<=100: raise ValueError('Portal link text needs 1–100 characters.')
-    allowed=['heading','body','portal','footer']+[f'media-{item.id}' for item in items]
+    text_blocks=value.get('text_blocks',{})
+    if not isinstance(text_blocks,dict) or len(text_blocks)>8: raise ValueError('Use up to eight additional text blocks.')
+    result['text_blocks']={}
+    from client_notifications import validate_email_settings
+    for key,block in text_blocks.items():
+        if not isinstance(key,str) or not re.fullmatch(r'text-[a-z0-9]{1,32}',key) or not isinstance(block,dict): raise ValueError('Choose valid text blocks.')
+        content=block.get('text','')
+        if not isinstance(content,str) or len(content)>5000: raise ValueError('Keep each text block under 5,001 characters.')
+        if content: validate_email_settings({'notification_booking_body':content})
+        result['text_blocks'][key]={'text':content}
+    if sum(len(block['text']) for block in result['text_blocks'].values())>20000: raise ValueError('Keep additional text blocks under 20,001 characters in total.')
+    allowed=['heading','body','portal','footer']+[f'media-{item.id}' for item in items]+list(result['text_blocks'])
     order=value.get('order',[])
-    if not isinstance(order,list) or len(order)>16 or any(key not in allowed for key in order) or len(set(order))!=len(order): raise ValueError('Choose valid, unique layout blocks.')
+    if not isinstance(order,list) or len(order)>32 or any(not isinstance(key,str) or key not in allowed for key in order) or len(set(order))!=len(order): raise ValueError('Choose valid, unique layout blocks.')
     result['order']=order+[key for key in allowed if key not in order]
     media=value.get('media',{})
     if not isinstance(media,dict): raise ValueError('Choose valid image and link settings.')
@@ -52,7 +63,7 @@ def register(app,db,Setting,Media,settings,admin_required):
         try: data=json.loads(row.value) if row else {}
         except ValueError: data={}
         # Removed files no longer belong in the layout.
-        allowed={'heading','body','portal','footer'}|{f'media-{i.id}' for i in items(kind)}
+        allowed={'heading','body','portal','footer'}|{f'media-{i.id}' for i in items(kind)}|set(data.get('text_blocks',{}))
         data['order']=[key for key in data.get('order',[]) if key in allowed]
         if not row:
             data['order']=['heading']+[f'media-{i.id}' for i in items(kind) if i.kind=='image']+['body','portal','footer']+[f'media-{i.id}' for i in items(kind) if i.kind!='image']
@@ -60,13 +71,19 @@ def register(app,db,Setting,Media,settings,admin_required):
     @app.context_processor
     def context():
         return {'email_layouts':{kind:saved(kind) for kind in ('booking','reward')}} if request.endpoint in ('admin_settings','communications_templates') else {}
-    def render(config,kind,heading,body,footer,link,preview=False,draft=None):
+    def render(config,kind,heading,body,footer,link,preview=False,draft=None,variables=None):
         layout=validate(draft,items(kind)) if draft is not None else saved(kind)
         esc=html.escape
+        variables=variables or dict(name='',reference='',details='')
+        plain={'body':body}
         blocks=dict(heading=f'<h1 style="font-size:{layout["font_size"]+8}px;color:{config["notification_colour"]}">{esc(heading)}</h1>',
             body=f'<p style="white-space:pre-line">{esc(body)}</p>',
             portal=f'<p><a href="{esc(link,quote=True)}" style="color:{config["notification_colour"]}">{esc(layout["portal_label"])}</a></p>',
             footer=f'<p style="white-space:pre-line">{esc(footer)}</p>')
+        for key,block in layout['text_blocks'].items():
+            content=block['text'].format(**variables)
+            blocks[key]=f'<p style="white-space:pre-line">{esc(content)}</p>' if content else ''
+            plain[key]=content
         for item in items(kind):
             option=layout['media'][str(item.id)]
             if item.kind=='image':
@@ -77,15 +94,15 @@ def register(app,db,Setting,Media,settings,admin_required):
             elif item.kind=='link':
                 style=f'color:{config["notification_colour"]}' if option['style']=='text' else f'display:inline-block;padding:12px 18px;border-radius:6px;background:{config["notification_colour"]};color:#ffffff;text-decoration:none'
                 content=f'<a href="{esc(item.url,quote=True)}" style="{style}">{esc(item.label)}</a>'
-                body+='\n\n'+item.label+': '+item.url
+                plain[f'media-{item.id}']=item.label+': '+item.url
             else:
                 content=f'Attachment: {esc(item.label)} ({esc(item.filename)})'
                 if preview: content=f'<a href="{url_for("email_media_file",media_id=item.id)}">Download attachment: {esc(item.label)}</a>'
-                body+='\n\nAttached: '+item.label+' ('+item.filename+')'
+                plain[f'media-{item.id}']='Attached: '+item.label+' ('+item.filename+')'
             blocks[f'media-{item.id}']=f'<div style="text-align:{option["align"]};margin:16px 0">{content}</div>'
         border=f'border-top:5px solid {config["notification_colour"]};' if config['notification_layout']=='card' else ''
         message=f'<div style="background:{layout["background"]};padding:16px"><div style="font-family:{layout["font"]},sans-serif;max-width:{layout["width"]}px;margin:auto;background:{layout["paper"]};color:{layout["text"]};padding:{layout["padding"]}px;border-radius:{layout["radius"]}px;font-size:{layout["font_size"]}px;line-height:{layout["line_height"]};text-align:{layout["align"]};{border}">'+''.join(blocks[key] for key in layout['order'])+'</div></div>'
-        return message,body
+        return message,'\n\n'.join(plain[key] for key in layout['order'] if plain.get(key))
     @app.post('/admin/email-layout/<kind>/<action>')
     @admin_required
     def email_layout_action(kind,action):

@@ -37,6 +37,38 @@ class EmailLayoutTest(unittest.TestCase):
         self.assertEqual(self.fixture.admin.post('/admin/email-layout/booking/preview',json={}).status_code,400)
         for layout in [dict(order=['body','body']),dict(order=['media-9999']),dict(font='Arial;evil'),dict(background='url(evil)'),dict(width=99999),dict(line_height='NaN')]:
             self.assertEqual(self.post('preview',layout).status_code,400)
+
+    def test_text_sections_between_media_preserve_order_and_placeholders(self):
+        self.fixture.add('link',label='Read more',url='https://clpaints.com/guide')
+        link=main.EmailMedia.query.one()
+        layout=dict(text_blocks={'text-first':{'text':'Hello {name}, first paragraph.'},
+                                 'text-second':{'text':'Final paragraph about {reference}: {details} <safe>'}},
+                    order=['heading','body','text-first',f'media-{link.id}','text-second','portal','footer'])
+        preview=self.post('preview',layout)
+        self.assertEqual(preview.status_code,200)
+        message=preview.json['html']
+        self.assertLess(message.index('first paragraph'),message.index('Read more'))
+        self.assertLess(message.index('Read more'),message.index('Final paragraph'))
+        self.assertIn('Hello Sample client',message)
+        self.assertIn('&lt;safe&gt;',message)
+        self.assertEqual(self.post('save',layout).status_code,200)
+        config=main.get_business_settings()
+        _,plain,_,sent=render_notification(config,'Real client','booking','REF-123','Real update','https://clpaints.com')
+        self.assertIn('Hello Real client',sent)
+        self.assertIn('REF-123: Real update',sent)
+        self.assertLess(plain.index('first paragraph'),plain.index('Read more'))
+        self.assertLess(plain.index('Read more'),plain.index('Final paragraph'))
+        self.assertIn('text-second',main.db.session.get(main.BusinessSetting,'email_layout_booking').value)
+        self.assertEqual(self.fixture.admin.get('/admin/email-preview/booking').status_code,200)
+        layout['text_blocks'].pop('text-first');layout['order'].remove('text-first')
+        self.assertEqual(self.post('save',layout).status_code,200)
+        self.assertNotIn('first paragraph',render_notification(config,'Client','booking','REF','Update','https://clpaints.com')[3])
+
+    def test_extra_text_block_validation(self):
+        for blocks in [{'invalid':{'text':'Text'}},{'text-one':{'text':'{unknown}'}},
+                       {'text-one':{'text':'x'*5001}}, {'text-one':{'text':123}},
+                       {f'text-{index}':{'text':'Block'} for index in range(9)}]:
+            self.assertEqual(self.post('preview',dict(text_blocks=blocks)).status_code,400)
     @unittest.skipUnless(browsers.EDGE.is_file(),'Microsoft Edge is not installed')
     def test_live_typing_reorder_and_save_in_browser(self):
         page=self.fixture.admin.get('/admin/settings?tab=email')

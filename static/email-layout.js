@@ -2,6 +2,7 @@
   const root=document.querySelector('.email-workspace');if(!root)return;
   const layouts=JSON.parse(document.querySelector('#email-layout-data').textContent);
   const media=JSON.parse(document.querySelector('#email-layout-media').textContent);
+  Object.values(layouts).forEach(layout=>{layout.text_blocks??={};});
   const status=root.querySelector('[data-layout-status]');
   let kind='booking',timer,sequence=0;
   const node=(tag,text)=>{const element=document.createElement(tag);if(text)element.textContent=text;return element;};
@@ -12,11 +13,19 @@
     layouts[kind].order.forEach((key,index)=>{
       const item=media.find(value=>'media-'+value.id===key);
       const row=node('article');row.className='client-record email-layout-block';row.dataset.layoutBlock=key;
-      row.append(node('strong',item?item.kind+': '+item.label:({heading:'Heading',body:'Message',portal:'Portal link',footer:'Footer'})[key]));
+      const textBlock=layouts[kind].text_blocks[key];
+      row.append(node('strong',textBlock?'Text section':item?item.kind+': '+item.label:({heading:'Heading',body:'Message',portal:'Portal link',footer:'Footer'})[key]));
       const tools=node('div');tools.className='client-action-row';
       [-1,1].forEach(direction=>{const button=node('button',direction===-1?'Move up':'Move down');button.type='button';button.className='btn';button.disabled=index+direction<0||index+direction>=layouts[kind].order.length;
         button.setAttribute('aria-label',(direction===-1?'Move up ':'Move down ')+(item?item.label:key));
         button.addEventListener('click',()=>{const order=layouts[kind].order;[order[index],order[index+direction]]=[order[index+direction],order[index]];controls();update();list.querySelector('[data-layout-block="'+key+'"] button:not(:disabled)')?.focus();});tools.append(button);});row.append(tools);
+      if(textBlock){
+        const label=node('label','Text');const textarea=node('textarea');textarea.rows=5;textarea.maxLength=5000;textarea.value=textBlock.text;textarea.dataset.emailTextBlock=key;
+        textarea.addEventListener('input',()=>{textBlock.text=textarea.value;update();});label.append(textarea);row.append(label);
+        const tokens=node('div');tokens.className='client-action-row';
+        for(const [token,title] of [['{name}','Client name'],['{reference}','Reference'],['{details}','Update details']]){const insert=node('button',title);insert.type='button';insert.className='btn';insert.onclick=()=>{textarea.setRangeText(token,textarea.selectionStart,textarea.selectionEnd,'end');textarea.focus();textarea.dispatchEvent(new Event('input',{bubbles:true}));};tokens.append(insert);}row.append(tokens);
+        const remove=node('button','Remove text block');remove.type='button';remove.className='btn';remove.onclick=()=>{delete layouts[kind].text_blocks[key];layouts[kind].order=layouts[kind].order.filter(value=>value!==key);controls();update();root.querySelector('[data-layout-add-text]').focus();};tools.append(remove);
+      }
       if(item){
         const options=layouts[kind].media[String(item.id)];
         const label=node('label','Alignment');const select=node('select');['left','center','right'].forEach(value=>{const option=node('option',value==='center'?'Centre':value);option.value=value;select.append(option);});select.value=options.align;
@@ -48,6 +57,13 @@
   root.querySelectorAll('[data-email-composer]').forEach(form=>{form.addEventListener('input',update);form.addEventListener('submit',event=>{event.preventDefault();clearTimeout(timer);request('save');});});
   const design=root.querySelector('#email-design form');design.addEventListener('input',update);design.addEventListener('submit',event=>{event.preventDefault();clearTimeout(timer);request('save');});
   root.querySelector('[data-layout-save]').addEventListener('click',()=>{clearTimeout(timer);request('save');});
+  root.querySelector('[data-layout-add-text]').addEventListener('click',()=>{
+    const layout=layouts[kind];if(Object.keys(layout.text_blocks).length>=8){status.textContent='You can add up to eight extra text blocks.';return;}
+    const key='text-'+[...crypto.getRandomValues(new Uint8Array(12))].map(value=>value.toString(16).padStart(2,'0')).join('');layout.text_blocks[key]={text:''};
+    const before=layout.order.indexOf('portal');layout.order.splice(before<0?layout.order.length:before,0,key);controls();update();
+    const textarea=root.querySelector('[data-email-text-block="'+key+'"]');textarea.focus();textarea.scrollIntoView({block:'nearest'});
+  });
+  root.querySelectorAll('[data-email-add-text]').forEach(button=>button.addEventListener('click',()=>root.querySelector('[data-layout-add-text]').click()));
   function switchTemplate(){kind=root.querySelector('[data-email-select][aria-pressed="true"]').dataset.emailSelect;root.querySelector('[data-email-preview]').removeAttribute('srcdoc');controls();update();}
   root.addEventListener('email-template-selected',switchTemplate);switchTemplate();
 })();

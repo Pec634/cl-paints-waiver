@@ -92,7 +92,7 @@ def render_notification(config, name, kind, reference, details, link, preview=Fa
                f'<p><a style="color:{colour}" href="{html.escape(link, quote=True)}">View your {"booking" if kind == "booking" else "rewards"}</a></p>'
                f'<p style="color:#667189">{html.escape(footer)}</p></div>')
     if has_app_context() and current_app.extensions.get('email_layout_render'):
-        message, body = current_app.extensions['email_layout_render'](config,kind,heading,body,footer,link,preview,layout)
+        message, body = current_app.extensions['email_layout_render'](config,kind,heading,body,footer,link,preview,layout,variables)
     elif has_app_context() and current_app.extensions.get('email_media_decorate'):
         message, body = current_app.extensions['email_media_decorate'](kind,message,body,preview)
     return subject, body, footer, message
