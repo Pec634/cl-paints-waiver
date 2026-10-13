@@ -4,7 +4,7 @@
   const media=JSON.parse(document.querySelector('#email-layout-media').textContent);
   Object.values(layouts).forEach(layout=>{layout.text_blocks??={};});
   const status=root.querySelector('[data-layout-status]');
-  let kind='booking',timer,sequence=0;
+  let kind='booking',timer,sequence=0,nextTextId=0;
   const node=(tag,text)=>{const element=document.createElement(tag);if(text)element.textContent=text;return element;};
   function update(){clearTimeout(timer);sequence++;status.textContent='Unsaved changes · updating preview…';timer=setTimeout(()=>request('preview'),300);}
   function controls(){
@@ -57,13 +57,19 @@
   root.querySelectorAll('[data-email-composer]').forEach(form=>{form.addEventListener('input',update);form.addEventListener('submit',event=>{event.preventDefault();clearTimeout(timer);request('save');});});
   const design=root.querySelector('#email-design form');design.addEventListener('input',update);design.addEventListener('submit',event=>{event.preventDefault();clearTimeout(timer);request('save');});
   root.querySelector('[data-layout-save]').addEventListener('click',()=>{clearTimeout(timer);request('save');});
-  root.querySelector('[data-layout-add-text]').addEventListener('click',()=>{
-    const layout=layouts[kind];if(Object.keys(layout.text_blocks).length>=8){status.textContent='You can add up to eight extra text blocks.';return;}
-    const key='text-'+[...crypto.getRandomValues(new Uint8Array(12))].map(value=>value.toString(16).padStart(2,'0')).join('');layout.text_blocks[key]={text:''};
-    const before=layout.order.indexOf('portal');layout.order.splice(before<0?layout.order.length:before,0,key);controls();update();
-    const textarea=root.querySelector('[data-email-text-block="'+key+'"]');textarea.focus();textarea.scrollIntoView({block:'nearest'});
-  });
-  root.querySelectorAll('[data-email-add-text]').forEach(button=>button.addEventListener('click',()=>root.querySelector('[data-layout-add-text]').click()));
+  function addTextBlock(){
+    try{
+      const layout=layouts[kind];if(Object.keys(layout.text_blocks).length>=8){status.textContent='You can add up to eight extra text blocks.';return;}
+      // Block identifiers are layout keys, not security tokens. Avoid browser crypto dependencies.
+      let key;do{key='text-'+Date.now().toString(36)+(++nextTextId).toString(36);}while(layout.text_blocks[key]);
+      layout.text_blocks[key]={text:''};
+      const before=layout.order.indexOf('portal');layout.order.splice(before<0?layout.order.length:before,0,key);controls();update();
+      root.querySelector('[data-email-composer="'+kind+'"] [data-email-draft-status]').textContent='Unsaved changes';
+      const textarea=root.querySelector('[data-email-text-block="'+key+'"]');textarea.focus();textarea.scrollIntoView?.({block:'center'});
+    }catch(error){status.textContent='Could not add a text block: '+error.message;}
+  }
+  root.querySelector('[data-layout-add-text]').addEventListener('click',addTextBlock);
+  root.querySelectorAll('[data-email-add-text]').forEach(button=>button.addEventListener('click',addTextBlock));
   function switchTemplate(){kind=root.querySelector('[data-email-select][aria-pressed="true"]').dataset.emailSelect;root.querySelector('[data-email-preview]').removeAttribute('srcdoc');controls();update();}
   root.addEventListener('email-template-selected',switchTemplate);switchTemplate();
 })();

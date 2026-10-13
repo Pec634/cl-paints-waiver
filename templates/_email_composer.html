@@ -18,4 +18,4 @@
 <details class="email-media-drawer" id="email-media"><summary>Images, attachments &amp; links</summary>{% include '_email_media_settings.html' %}</details>
 </div>
 <aside class="email-preview-pane"><h2>Email preview</h2><p>Sample client details. Nothing is sent.</p><iframe title="Live email preview" src="{{ url_for('email_preview',kind='booking',embed=1) }}" data-email-preview></iframe><a class="btn" data-email-preview-link href="{{ url_for('email_preview',kind='booking') }}" target="_blank" rel="noopener">Open full preview</a><p class="email-note">Preview updates while you edit. Save to apply the layout to outgoing emails.</p></aside>
-</section><script src="{{ url_for('static',filename='email-composer.js') }}" defer></script>
+</section><script src="{{ url_for('static',filename='email-composer.js',v='text-blocks-2') }}" defer></script>
