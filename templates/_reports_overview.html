@@ -1,0 +1,19 @@
+<nav class="report-view-nav" aria-label="Report views">
+{% for key, label in [('overview','Overview'),('targets','Targets & financial years'),('details','Detailed reports'),('locations','Locations')] %}<button class="btn{% if key == 'overview' %} primary{% endif %}" type="button" data-report-tab="{{ key }}" aria-pressed="{{ 'true' if key == 'overview' else 'false' }}">{{ label }}</button>{% endfor %}
+</nav>
+<section class="report-view" data-report-view="overview">
+<div class="report-summary">
+<article class="panel"><span>Booking requests</span><strong>{{ booking_count }}</strong></article>
+<article class="panel"><span>Accepted requests</span><strong>{{ outcomes|selectattr('label','equalto','Accepted')|sum(attribute='value') }}</strong></article>
+<article class="panel"><span>Estimated accepted value</span><strong>£{{ estimated_value }}</strong><small>Booking estimates including travel</small></article>
+<article class="panel"><span>Booking clients</span><strong>{{ unique_clients }}</strong></article>
+</div>
+<div class="report-grid">
+<section class="panel report-chart"><h2>Booking trends</h2><p>Requests received each month in the selected period.</p><div class="report-line-chart" data-line-chart="bookings"></div><details><summary>View chart values</summary><div class="report-bars">{% for row in booking_trend %}<div class="report-bar-row"><span>{{ row.label }}</span><div class="report-bar-track"><div style="width:{{ row.width }}%"></div></div><strong>{{ row.value }}</strong></div>{% endfor %}</div></details></section>
+<section class="panel report-chart"><h2>Booking outcomes</h2><p>Current status of requests received in this period.</p><div data-pie-chart="outcomes"></div></section>
+<section class="panel report-chart"><h2>Public and private events</h2><p>All requests in the date range, including those outside the selected event filter.</p><div data-pie-chart="settings"></div></section>
+<section class="panel report-chart"><h2>Popular event types</h2><p>First matching event on each request.</p><div data-pie-chart="types"></div></section>
+</div>
+<p class="report-note">Select Targets &amp; financial years for company-wide annual progress. Select Detailed reports for loyalty, waivers, participants, referrals and booked hours.</p>
+</section>
+<script type="application/json" id="reportChartData">{{ {'bookings':booking_trend,'outcomes':outcomes,'settings':setting_comparison,'types':event_types}|tojson }}</script>

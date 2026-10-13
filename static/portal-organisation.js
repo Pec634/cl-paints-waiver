@@ -62,7 +62,7 @@
     });
 
     const dirty = new Set();
-    document.querySelectorAll('form[data-warn-unsaved]').forEach(form => {
+    document.querySelectorAll('form[data-warn-unsaved], .settings-column form:not(#qr-form)').forEach(form => {
         const baseline = () => JSON.stringify([...new FormData(form)].filter(([key])=>key!=='csrf_token').map(([key,value])=>[key,typeof value==='string'?value:value.name]));
         let initial = baseline();
         const changed = () => { if (baseline()===initial) dirty.delete(form); else dirty.add(form); };

@@ -18,7 +18,7 @@ Event Management | CL Paints
         <div class="top">
             <div>
                 <small>CL PAINTS MANAGEMENT SYSTEM</small>
-                <h1>Event Management</h1>
+                <h1>Events</h1>
                 <p>Create and manage public events.</p>
             </div>
 
@@ -32,10 +32,10 @@ Event Management | CL Paints
         {% if request.args.get('restored') == 'yes' %}<p class="booking-admin-notice" role="status">Event restored as Closed. Open it when you are ready to accept visitors.</p>{% endif %}
         {% if archived_view %}
         <section class="panel"><h2>Archived events</h2><p>Past events are retained for loyalty history and reporting.</p>
-        {% for event in events %}<article class="client-record"><strong>{{ event.name }}</strong><span>{{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; Archived</span>
+        <div data-workspace-list>{% for event in events %}<article class="client-record" data-record-status="Archived"><strong>{{ event.name }}</strong><span>{{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; Archived</span>
         <div class="paint-actions"><a class="btn" href="{{ url_for('loyalty.event_admin', event_id=event.id) }}">View loyalty history</a>
         <form method="post" action="{{ url_for('admin_restore_event', event_id=event.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn">Restore as closed</button></form></div></article>
-        {% else %}<p>No archived events yet.</p>{% endfor %}</section>
+        {% else %}<p>No archived events yet.</p>{% endfor %}</div></section>
         {% else %}
         <section class="panel">
 
@@ -87,7 +87,7 @@ Event Management | CL Paints
 
             <div class="table-wrap events-table-wrap">
 
-                <table class="waiver-table events-table">
+                <table class="waiver-table events-table" data-workspace-list>
 
                     <thead>
                         <tr>
@@ -105,7 +105,7 @@ Event Management | CL Paints
 
                     {% for event in events %}
 
-                        <tr>
+                        <tr data-record-status="{{ event.status }}">
 
                             <td data-label="Event">
                                 <strong>{{ event.name }}</strong>
@@ -138,6 +138,7 @@ Event Management | CL Paints
                             </td>
 
                             <td data-label="Waiver status">
+                                {% set badge_status = event.status %}{% include '_status_badge.html' %}
 
                                 <form
                                     method="post"

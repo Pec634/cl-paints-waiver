@@ -1,0 +1,13 @@
+<section class="section website-contact-section" id="message-form"><div><span class="eyebrow">WE’D LOVE TO HEAR FROM YOU</span><h2>Send us a message</h2><p>Have a question about face painting or an event? Tell us what you have in mind and we’ll reply by email.</p><p>For an existing booking, you can also <a href="{{ url_for('client.login') }}">message us through your client portal</a>.</p></div><div class="website-contact-card">
+{% if contact_sent %}<p class="website-contact-notice" role="status">Thank you—your message has been received. We’ll reply to the email address you provided.</p>{% endif %}
+{% if contact_error %}<p class="website-contact-error" role="alert">{{ contact_error }}</p>{% endif %}
+{% set values = contact_values|default({}) %}
+<form action="{{ url_for('public_contact_submit') }}" method="post" class="website-contact-form">
+<input type="hidden" name="csrf_token" value="{{ contact_csrf }}">
+<div class="website-contact-fields"><label>Your name<input name="name" maxlength="120" autocomplete="name" value="{{ values.get('name','') }}" required></label><label>Email address<input type="email" name="email" maxlength="254" autocomplete="email" value="{{ values.get('email','') }}" required></label></div>
+<label>Subject <span>(optional)</span><input name="subject" maxlength="160" value="{{ values.get('subject','') }}" placeholder="What can we help with?"></label>
+<label>Your message<textarea name="message" rows="6" maxlength="5000" required placeholder="Tell us about your question or event…">{{ values.get('message','') }}</textarea></label>
+<div class="website-contact-trap" aria-hidden="true"><label>Leave this field blank<input name="company_website" tabindex="-1" autocomplete="off"></label></div>
+<p class="fine">We’ll use your details to respond to this enquiry. <a href="{{ url_for('privacy_policy') }}">Privacy policy</a></p>
+<button class="button pink" type="submit">Send message →</button>
+</form></div></section>

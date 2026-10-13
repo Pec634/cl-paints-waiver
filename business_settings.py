@@ -34,6 +34,103 @@ def read_settings(db, Setting, recovery_default=''):
 def register_settings(app, db, Setting, Credential, Reset, admin_required, fallback_password, recovery_default):
     def get_settings():
         return read_settings(db, Setting, recovery_default)
+
+    @app.route('/admin/settings/qr-code', methods=['GET', 'POST'])
+    @admin_required
+    def settings_qr_code():
+        from io import BytesIO
+        from urllib.parse import urlsplit
+        from flask import send_file
+        import qrcode
+        if request.method == 'POST' and (not session.get('settings_csrf') or not secrets.compare_digest(
+                request.form.get('csrf_token', ''), session['settings_csrf'])):
+            return 'Your session expired. Reload Settings and try again.', 400
+        value = (request.form if request.method == 'POST' else request.args).get('url', '').strip()
+        Code, _ = app.extensions['qr_models']
+        tracked = None
+        if request.method == 'GET' and request.args.get('code'):
+            tracked = Code.query.filter_by(token=request.args['code']).first_or_404()
+            value = tracked.destination
+        try:
+            parsed = urlsplit(value)
+            if (not value or len(value.encode('utf-8')) > 2000
+                    or parsed.scheme not in ('https', 'http') or not parsed.hostname
+                    or parsed.username or parsed.password):
+                raise ValueError()
+            parsed.port
+        except ValueError:
+            return 'Enter a valid HTTP or HTTPS link of up to 2,000 bytes, without login details.', 400
+        output = BytesIO()
+        upload = request.files.get('image')
+        logo = None
+        if upload and upload.filename:
+            from PIL import Image, ImageOps, UnidentifiedImageError
+            import warnings
+            raw = upload.stream.read(5 * 1024 * 1024 + 1)
+            if len(raw) > 5 * 1024 * 1024:
+                return 'Choose an image smaller than 5 MB.', 400
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('error', Image.DecompressionBombWarning)
+                    with Image.open(BytesIO(raw)) as source:
+                        if source.format not in ('PNG', 'JPEG', 'WEBP') or source.width * source.height > 16000000:
+                            return 'Choose a PNG, JPEG or WebP image up to 16 megapixels.', 400
+                        logo = ImageOps.exif_transpose(source).convert('RGBA')
+            except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
+                return 'This image could not be read. Choose a PNG, JPEG or WebP image.', 400
+        if request.method == 'POST' and request.form.get('track') == '1':
+            name = request.form.get('name', '').strip()
+            if not name or len(name) > 120:
+                return 'Enter a QR code name of up to 120 characters.', 400
+            tracked = Code.query.filter_by(name=name, destination=value).order_by(Code.id.asc()).first()
+            if tracked is None:
+                tracked = Code(name=name, destination=value, token=secrets.token_urlsafe(18))
+                db.session.add(tracked)
+            campaign = request.form.get('campaign', '').strip()
+            if len(campaign) > 120:
+                return 'Keep campaign labels under 121 characters.', 400
+        encoded_value = value
+        if tracked is not None:
+            public_base = get_settings()['public_app_url'].rstrip('/')
+            if not public_base:
+                return 'Set your public app URL before creating tracked QR codes.', 400
+            encoded_value = public_base + url_for('qr_redirect', token=tracked.token)
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H if logo else qrcode.constants.ERROR_CORRECT_M,
+                           box_size=10, border=4)
+        qr.add_data(encoded_value)
+        try:
+            qr.make(fit=True)
+        except qrcode.exceptions.DataOverflowError:
+            db.session.rollback()
+            return 'This link is too long for a QR code with these options. Use a shorter link or enable tracking.', 400
+        image = qr.make_image(fill_color='black', back_color='white').convert('RGB')
+        if logo is not None:
+            # Keep the overlay small and give transparent logos a white backing.
+            size = int((image.width - 80) * 0.18)
+            logo.thumbnail((size, size), Image.Resampling.LANCZOS)
+            backing = Image.new('RGB', (size + 12, size + 12), 'white')
+            backing.paste(logo, ((backing.width - logo.width) // 2, (backing.height - logo.height) // 2), logo)
+            image.paste(backing, ((image.width - backing.width) // 2, (image.height - backing.height) // 2))
+        image.save(output, format='PNG')
+        if tracked is not None and request.method == 'POST':
+            try:
+                if request.form.get('track') == '1':
+                    db.session.flush()
+                    Meta = app.extensions['qr_metadata_model']
+                    meta = db.session.get(Meta, tracked.id)
+                    if meta is None:
+                        meta = Meta(code_id=tracked.id)
+                        db.session.add(meta)
+                    meta.campaign = campaign
+                db.session.commit()
+            except SQLAlchemyError:
+                db.session.rollback()
+                return 'The tracked QR code could not be saved. Please try again.', 503
+        output.seek(0)
+        response = send_file(output, mimetype='image/png', download_name='cl-paints-qr-code.png',
+                             as_attachment=request.args.get('download') == '1')
+        response.headers['Cache-Control'] = 'no-store'
+        return response
     @app.context_processor
     def settings_context():
         settings = get_settings()

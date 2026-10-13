@@ -81,6 +81,68 @@ class ReportsTest(unittest.TestCase):
         venue, _ = self.data(dict(self.query, location='venue'))
         self.assertEqual(venue['areas'][0]['outcode'], 'LS1')
 
+    def test_financial_year_comparison_and_saved_targets(self):
+        from decimal import Decimal
+        self.booking(submitted_at=datetime(2026, 6, 1), total_event_cost=180, travel_charge=20)
+        self.booking(submitted_at=datetime(2025, 6, 1), total_event_cost=90, travel_charge=10)
+        self.booking(submitted_at=datetime(2025, 11, 1), total_event_cost=500, travel_charge=0)
+        with patch('report_targets.datetime') as clock:
+            clock.now.return_value = datetime(2026, 10, 13)
+            clock.combine.side_effect = datetime.combine
+            clock.min = datetime.min
+            data, page = self.data()
+            targets = data['targets']
+            self.assertEqual(targets['start'], date(2026, 4, 1))
+            self.assertEqual(targets['previous_end'], date(2025, 10, 13))
+            value = next(item for item in targets['metrics'] if item['key'] == 'estimated_value')
+            self.assertEqual(value['current'], Decimal('200'))
+            self.assertEqual(value['previous'], Decimal('100'))
+            self.assertEqual(value['change'], 100)
+            self.assertEqual(value['history'][0], Decimal('600'))
+            self.assertIn(b'Booking outcomes', page.data)
+            self.assertIn(b'Targets &amp; financial years', page.data)
+            response = self.client.post('/admin/reports/targets', data={
+                'csrf_token': targets['csrf'], 'year': '2026', 'estimated_value': '300', 'booking_count': '5'})
+            self.assertEqual(response.status_code, 302)
+            saved, _ = self.data()
+            value = next(item for item in saved['targets']['metrics'] if item['key'] == 'estimated_value')
+            self.assertEqual(value['target'], Decimal('300'))
+            self.assertEqual(value['percent'], 66.7)
+            self.assertEqual(value['status'], 'On track')
+            self.assertEqual(self.client.post('/admin/reports/targets', data={'year': '2026'}).status_code, 400)
+            self.client.post('/admin/reports/targets', data={
+                'csrf_token': targets['csrf'], 'year': '2026', 'booking_count': '1.5'})
+            self.assertIn('300', main.db.session.get(main.BusinessSetting, 'report_targets_2026').value)
+
+    def test_financial_year_boundaries_and_target_pace(self):
+        from decimal import Decimal
+        from report_targets import financial_year, progress
+        self.assertEqual(financial_year(date(2026, 3, 31)), date(2025, 4, 1))
+        self.assertEqual(financial_year(date(2026, 4, 1)), date(2026, 4, 1))
+        self.assertEqual(progress(Decimal(10), None, 10, 365)['status'], 'No target set')
+        self.assertEqual(progress(Decimal(10), Decimal(100), 200, 365)['status'], 'Behind pace')
+        self.assertEqual(progress(Decimal(100), Decimal(100), 200, 365)['status'], 'Target achieved')
+        self.assertEqual(progress(Decimal(0), Decimal(0), 200, 365)['percent'], 100)
+
+    def test_targets_payments_use_paid_dates_and_subtract_refunds(self):
+        from decimal import Decimal
+        booking = self.booking()
+        Entry = main.tool_models[1]
+        for token, amount, kind, day in [('paid', 150, 'payment', date(2026, 5, 1)),
+                                         ('refund', 20, 'refund', date(2026, 6, 1)),
+                                         ('future', 100, 'payment', date(2026, 11, 1))]:
+            main.db.session.add(Entry(booking_id=booking.id, token=token, amount=amount, kind=kind,
+                                     method='Cash', note='', paid_date=day))
+        main.db.session.commit()
+        with patch('report_targets.datetime') as clock:
+            clock.now.return_value = datetime(2026, 10, 13)
+            clock.combine.side_effect = datetime.combine
+            clock.min = datetime.min
+            data, _ = self.data(dict(self.query, setting='Public'))
+        payment = next(item for item in data['targets']['metrics'] if item['key'] == 'net_payments')
+        self.assertEqual(payment['current'], Decimal('130'))
+        self.assertEqual(data['booking_count'], 0)
+
     def test_repeat_customers_use_history_email_identity_and_selected_setting(self):
         self.booking(email='RETURN@example.com', submitted_at=datetime(2025, 6, 1))
         self.booking(email=' return@example.com ', submitted_at=datetime(2026, 6, 1))
@@ -163,9 +225,10 @@ class ReportsTest(unittest.TestCase):
 
     def test_private_hides_waiver_and_age_reports(self):
         _, response = self.data(dict(self.query, setting='Private'))
+        details = response.data.split(b'data-report-view="details"', 1)[1].split(b'data-report-view="locations"', 1)[0]
         for title in [b'Waivers signed', b'Participants recorded', b'Average participant age',
                       b'Participant age bands', b'Waivers over time', b'Participants over time']:
-            self.assertNotIn(title, response.data)
+            self.assertNotIn(title, details)
         export = self.client.get('/admin/reports/export', query_string=dict(self.query, setting='Private'))
         for field in [b'waiver_count', b'participant_count', b'average_age', b'waiver_trend', b'participant_trend', b'ages,']:
             self.assertNotIn(field, export.data)

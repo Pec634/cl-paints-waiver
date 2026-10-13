@@ -37,9 +37,9 @@ class CommunicationsTest(unittest.TestCase):
         page=self.fixture.admin.get('/admin/communications/messages')
         browsers.NativeFormBrowserTest().browser(page.data, '''
           const nav=document.querySelector('nav[aria-label="Communications sections"]');
-          assert(nav.querySelectorAll('a').length===6,'All hub sections accessible');
+          assert(nav.querySelectorAll('a').length===7,'All hub sections accessible');
           assert(nav.getBoundingClientRect().right<=innerWidth+1,'Hub navigation fits phone');
-          assert(nav.querySelector('[aria-current="page"]').textContent==='Messages','Active section announced');
+          assert(nav.querySelector('[aria-current="page"]').textContent==='Client correspondence','Active section announced');
         ''',width=390)
     def test_enquiry_reply_and_accepted_campaign_history(self):
         enquiry=main.ClientEnquiry(client_id=self.fixture.fixture.account.id,subject='Central enquiry',message='Question for admin')

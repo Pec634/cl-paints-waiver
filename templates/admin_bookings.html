@@ -71,7 +71,7 @@ Bookings | CL Paints
             </div>
 
             <div class="table-wrap">
-                <table class="waiver-table booking-table">
+                <table class="waiver-table booking-table" data-workspace-list>
                     <thead>
                         <tr>
                             <th>Date submitted</th>
@@ -80,21 +80,21 @@ Bookings | CL Paints
                             <th>Email</th>
                             <th>Event address</th>
                             <th>Event date</th>
-                            <th>Request</th>
+                            <th>Status</th>
                             <th>Details</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for row in booking_rows %}
                         {% set booking = row.booking %}
-                        <tr class="booking-row" id="booking-{{ booking.id }}">
+                        <tr class="booking-row" id="booking-{{ booking.id }}" data-record-status="{{ booking.status }}">
                             <td>{{ booking.submitted_at.strftime("%d/%m/%Y %H:%M") }}</td>
                             <td data-search-client>{{ booking.first_name }} {{ booking.last_name }}</td>
                             <td data-search-phone>{{ booking.phone }}</td>
                             <td data-search-email>{{ booking.email }}</td>
                             <td data-search-event="{{ booking.event_type }} {{ booking.event_address }}">{{ booking.event_address }}</td>
                             <td>{{ booking.event_date.strftime("%d/%m/%Y") }}</td>
-                            <td>{{ booking.status }}</td>
+                            <td>{% set badge_status = booking.status %}{% include '_status_badge.html' %}</td>
                             <td>
                                 <a class="btn small" href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Activity &amp; date changes</a>
                                 <a class="btn small" href="{{ url_for('admin_booking_messages', booking_id=booking.id) }}">Messages{% if booking_message_counts.get(booking.id) %} &middot; {{ booking_message_counts[booking.id] }} unread{% endif %}</a>
@@ -193,30 +193,5 @@ Bookings | CL Paints
     </main>
 </div>
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-    const searchInput = document.getElementById("bookingSearch");
-    const searchType = document.getElementById("bookingSearchType");
-    const rows = document.querySelectorAll(".booking-row");
-    const selectors = {
-        client: "[data-search-client]",
-        email: "[data-search-email]",
-        phone: "[data-search-phone]",
-        event: "[data-search-event]"
-    };
 
-    function filterBookings() {
-        const query = searchInput.value.trim().toLowerCase();
-        const selector = selectors[searchType.value];
-
-        rows.forEach((row) => {
-            const text = row.querySelector(selector).textContent.toLowerCase();
-            row.hidden = !text.includes(query);
-        });
-    }
-
-    searchInput.addEventListener("input", filterBookings);
-    searchType.addEventListener("change", filterBookings);
-});
-</script>
 {% endblock %}

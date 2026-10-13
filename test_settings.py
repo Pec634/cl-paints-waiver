@@ -36,6 +36,36 @@ class SettingsTest(unittest.TestCase):
         self.assertIn(b'Test Paints', response.data)
         self.assertIn(b'hello@example.com', response.data)
 
+    def test_qr_generator_access_validation_and_download(self):
+        self.assertEqual(main.app.test_client().get('/admin/settings/qr-code?url=https://example.com').status_code, 302)
+        for value in ['', 'javascript:alert(1)', 'https://', 'https://user:password@example.com', 'https://example.com:invalid', 'https://example.com/' + 'x' * 2000]:
+            self.assertEqual(self.client.get('/admin/settings/qr-code', query_string={'url': value}).status_code, 400)
+        response = self.client.get('/admin/settings/qr-code', query_string={'url': 'https://example.com/?a=1&b=2', 'download': '1'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'image/png')
+        self.assertTrue(response.data.startswith(b'\x89PNG\r\n\x1a\n'))
+        self.assertIn('attachment', response.headers['Content-Disposition'])
+        self.assertEqual(response.headers['Cache-Control'], 'no-store')
+
+    def test_qr_centre_image(self):
+        from io import BytesIO
+        from PIL import Image
+        values = {'url': 'https://example.com', 'csrf_token': self.token}
+        plain = self.client.post('/admin/settings/qr-code', data=values)
+        logo = BytesIO()
+        Image.new('RGBA', (80, 40), (255, 0, 0, 255)).save(logo, format='PNG')
+        logo.seek(0)
+        response = self.client.post('/admin/settings/qr-code', data=dict(values, image=(logo, 'logo.png')))
+        self.assertEqual(response.status_code, 200)
+        with Image.open(BytesIO(response.data)) as generated:
+            self.assertEqual(generated.getpixel((generated.width // 2, generated.height // 2)), (255, 0, 0))
+        self.assertNotEqual(response.data, plain.data)
+        self.assertEqual(self.client.post('/admin/settings/qr-code', data={'url': 'https://example.com'}).status_code, 400)
+        response = self.client.post('/admin/settings/qr-code', data=dict(values, image=(BytesIO(b'not an image'), 'logo.png')))
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post('/admin/settings/qr-code', data=dict(values, image=(BytesIO(b'x' * (5 * 1024 * 1024 + 1)), 'large.png')))
+        self.assertEqual(response.status_code, 400)
+
     def test_booking_and_saved_travel_rules(self):
         self.save('booking', hourly_rate='60.00', minimum_hours='3', max_event_dates='4')
         self.save('travel', free_miles='5', mile_rate='2', travel_cap='30')

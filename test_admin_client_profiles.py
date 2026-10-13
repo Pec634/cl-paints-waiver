@@ -60,6 +60,15 @@ class AdminClientProfilesTest(unittest.TestCase):
         self.assertIn(b'Profile message',page.data)
         self.assertIn(b'1 unread client message',page.data)
         self.assertIsNone(main.BookingMessage.query.one().read_at)
+
+    def test_client_booking_history_filters(self):
+        self.fixture.booking.email = self.account.email.upper()
+        self.fixture.booking.status = 'Accepted'
+        main.db.session.commit()
+        for state in ('booked', 'confirmed'):
+            self.assertIn(self.path.encode(), self.admin.get('/admin/clients', query_string={'status': state}).data)
+        self.assertNotIn(self.path.encode(), self.admin.get('/admin/clients?status=unbooked').data)
+        self.assertEqual(self.admin.get('/admin/clients?status=unknown').status_code, 400)
         main.db.session.add_all([main.AdminClientNote(client_id=self.account.id,body=f'Note {i}') for i in range(26)])
         main.db.session.commit()
         page=self.admin.get(self.path+'?tab=notes')

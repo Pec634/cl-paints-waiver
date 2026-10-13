@@ -545,6 +545,13 @@ from photo_library import define_models as define_photo_library_models, ensure_s
 photo_library_models = define_photo_library_models(db)
 from website_reports import define_models as define_website_report_models
 website_report_model = define_website_report_models(db)
+from qr_analytics import define_models as define_qr_models
+qr_models = define_qr_models(db)
+app.extensions['qr_models'] = qr_models
+from qr_analytics import define_metadata as define_qr_metadata
+app.extensions['qr_metadata_model'] = define_qr_metadata(db)
+from website_enquiries import define_models as define_website_enquiry_models
+website_enquiry_models = define_website_enquiry_models(db)
 from sumup_checkout import define_model as define_sumup_checkout
 SumupCheckout = define_sumup_checkout(db)
 from staff_reports import define_models as define_staff_report_models
@@ -663,7 +670,9 @@ def admin_dashboard():
     expiring_query = valid_waivers.filter(Waiver.expiry_date < expiry_limit)
     pending_query = Booking.query.filter_by(status="Under Review")
     upcoming = []
+    confirmed_outstanding = Decimal(0)
     for booking in Booking.query.filter_by(status="Accepted").all():
+        confirmed_outstanding += app.extensions['payment_summary'](booking)['outstanding']
         for event in booking_schedule_events(booking):
             try:
                 event_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
@@ -677,7 +686,8 @@ def admin_dashboard():
         ClientAccount, ClientAccount.id == ClientEnquiry.client_id).order_by(
         ClientEnquiry.created_at.desc(), ClientEnquiry.id.desc()).limit(5).all()
     return render_template(
-        "admin_dashboard.html", today=today,
+        "admin_dashboard.html", today=today, confirmed_outstanding=confirmed_outstanding,
+        website_enquiry_new_count=website_enquiry_models[0].query.filter_by(status='new').count(),
         recent_correspondence=correspondence,
         correspondence_week_count=ClientEnquiry.query.filter(
             ClientEnquiry.created_at >= datetime.now() - timedelta(days=7)).count(),
@@ -2780,8 +2790,15 @@ from public_website import register as register_public_website
 from photo_library import register as register_photo_library
 register_photo_library(app, db, photo_library_models, native_form_models, get_current_client, admin_required)
 register_public_website(app)
+from website_enquiries import register as register_website_enquiries
+register_website_enquiries(app, db, website_enquiry_models, get_business_settings,
+                          lambda *args: send_client_email(*args), admin_required)
 from website_reports import register as register_website_reports
 register_website_reports(app, db, website_report_model, admin_required)
+from qr_analytics import register as register_qr_analytics
+register_qr_analytics(app, db, qr_models, admin_required)
+from report_targets import register as register_report_targets
+register_report_targets(app, db, BusinessSetting, Booking, Waiver, tool_models[1], qr_models[1], admin_required)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

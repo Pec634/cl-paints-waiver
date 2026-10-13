@@ -10,6 +10,14 @@
         return;
     }
     const map = L.map('reportMap', { scrollWheelZoom: false }).setView([54.2, -2.5], 5);
+    window.addEventListener('report-view-change', () => {
+        if (!document.querySelector('[data-report-view="locations"]').hidden) {
+            requestAnimationFrame(() => {
+                map.invalidateSize();
+                if (bounds.length) map.fitBounds(bounds, { padding: [35, 35], maxZoom: 10 });
+            });
+        }
+    });
     const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 12,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

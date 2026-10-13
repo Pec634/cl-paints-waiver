@@ -1,0 +1,100 @@
+<section id="qr-generator" class="panel client-form" aria-labelledby="qr-heading">
+  <h2 id="qr-heading">QR code generator</h2>
+  <p>Create a QR code for a website, booking page or social link. Download the PNG for signs, flyers or business cards.</p>
+  <label>Quick links<select id="qr-preset"><option value="">Custom link</option>{% for key, label in [('website', 'Business website'), ('public_app_url', 'Client portal'), ('facebook_url', 'Facebook'), ('instagram_url', 'Instagram'), ('trustpilot_url', 'Trustpilot')] %}{% if settings[key] %}<option value="{{ settings[key] }}">{{ label }}</option>{% endif %}{% endfor %}</select></label>
+  <form id="qr-form" class="client-form" action="{{ url_for('settings_qr_code') }}" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="qr-track-option"><input id="qr-track" type="checkbox" name="track" value="1" checked> Track scans in Business reports</label>
+    <label>QR code name<input id="qr-name" name="name" maxlength="120" placeholder="e.g. Business cards or event poster" required></label>
+    <label>Campaign label (optional)<input id="qr-campaign" name="campaign" maxlength="120" placeholder="e.g. Autumn events 2026"></label>
+    <p>Use different names to compare where scans come from. Regenerating the same name and link keeps its existing analytics.</p>
+    <label>Link to encode<input id="qr-url" type="url" name="url" value="{{ settings.website }}" maxlength="2000" placeholder="https://example.com" required></label>
+    <label>Centre image (optional)<input id="qr-image" type="file" name="image" accept="image/png,image/jpeg,image/webp"></label>
+    <p>Choose a PNG, JPEG or WebP logo up to 5 MB. A small image with a white border will appear in the centre.</p>
+    <button id="qr-remove-image" class="btn" type="button">Remove image</button>
+    <button class="btn primary" type="submit">Generate QR code</button>
+  </form>
+  <p id="qr-status" role="status" aria-live="polite"></p>
+  <div id="qr-result" hidden><img id="qr-preview" alt="Generated QR code" width="280" height="280" style="max-width:100%;height:auto"><p id="qr-target" style="overflow-wrap:anywhere"></p><div class="paint-actions"><a id="qr-download" class="btn" download="cl-paints-qr-code.png">Download PNG</a><button id="qr-print" class="btn" type="button">Print branded sign</button></div><p>Scan the code with your phone to check the link before printing.</p></div>
+</section>
+<script>
+(() => {
+  const form = document.getElementById('qr-form');
+  const input = document.getElementById('qr-url');
+  const result = document.getElementById('qr-result');
+  const status = document.getElementById('qr-status');
+  let imageUrl;
+  let controller;
+  document.getElementById('qr-print').addEventListener('click', () => {
+    if (!imageUrl) return;
+    const preview = window.open('', '_blank');
+    if (!preview) { status.textContent = 'Allow pop-ups to open your printable sign.'; return; }
+    preview.opener = null;
+    const doc = preview.document;
+    doc.title = 'CL Paints — printable QR sign';
+    const style = doc.createElement('style');
+    style.textContent = 'body{font-family:Segoe UI,Arial,sans-serif;color:#10213f;text-align:center;margin:40px}h1{font-size:32px}img{width:320px;max-width:100%;height:auto}p{line-height:1.6;overflow-wrap:anywhere}button{padding:12px 20px;font:inherit;cursor:pointer}@media print{button{display:none}img{width:85mm}body{margin:20mm}}';
+    doc.head.append(style);
+    const brand = doc.createElement('h2'); brand.textContent = 'CL Paints';
+    const title = doc.createElement('h1'); title.textContent = nameInput.value.trim() || 'Scan to visit';
+    const image = doc.createElement('img'); image.src = imageUrl; image.alt = 'Your generated QR code';
+    const caption = doc.createElement('p'); caption.textContent = 'Scan with your phone camera';
+    const destination = doc.createElement('p'); destination.textContent = document.getElementById('qr-target').textContent;
+    const print = doc.createElement('button'); print.type = 'button'; print.textContent = 'Print / save as PDF'; print.onclick = () => preview.print();
+    doc.body.append(print, brand, title, caption, image, destination);
+  });
+  function clearPreview() {
+    if (controller) controller.abort();
+    result.hidden = true;
+    status.textContent = '';
+    if (imageUrl) { URL.revokeObjectURL(imageUrl); imageUrl = null; }
+  }
+  input.addEventListener('input', clearPreview);
+  const imageInput = document.getElementById('qr-image');
+  const trackInput = document.getElementById('qr-track');
+  const nameInput = document.getElementById('qr-name');
+  trackInput.addEventListener('change', () => {
+    nameInput.required = trackInput.checked;
+    nameInput.disabled = !trackInput.checked;
+    clearPreview();
+  });
+  nameInput.addEventListener('input', clearPreview);
+  document.getElementById('qr-campaign').addEventListener('input', clearPreview);
+  imageInput.addEventListener('change', clearPreview);
+  document.getElementById('qr-remove-image').addEventListener('click', () => {
+    imageInput.value = '';
+    clearPreview();
+  });
+  document.getElementById('qr-preset').addEventListener('change', event => {
+    clearPreview();
+    if (event.target.value) input.value = event.target.value;
+    input.focus();
+  });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    clearPreview();
+    const pending = new AbortController();
+    controller = pending;
+    status.textContent = 'Generating QR code…';
+    try {
+      const link = input.value.trim();
+      if (imageInput.files[0] && imageInput.files[0].size > 5 * 1024 * 1024) throw new Error('Choose an image smaller than 5 MB.');
+      const data = new FormData(form);
+      data.set('url', link);
+      const response = await fetch(form.action, {method: 'POST', body: data, signal: pending.signal});
+      if (!response.ok) throw new Error(response.status === 400 ? await response.text() : 'QR code could not be generated. Please try again.');
+      if (!(response.headers.get('Content-Type') || '').startsWith('image/png')) throw new Error('Reload Settings and sign in again to generate your QR code.');
+      const blob = await response.blob();
+      if (pending.signal.aborted) return;
+      imageUrl = URL.createObjectURL(blob);
+      document.getElementById('qr-preview').src = imageUrl;
+      document.getElementById('qr-download').href = imageUrl;
+      document.getElementById('qr-target').textContent = link;
+      result.hidden = false;
+      status.textContent = trackInput.checked ? 'Tracked QR code ready. View scans in Business reports → QR code analytics.' : 'QR code ready.';
+    } catch (error) {
+      if (error.name !== 'AbortError') status.textContent = error.message;
+    }
+  });
+})();
+</script>

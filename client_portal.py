@@ -378,6 +378,16 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         query = request.args.get('q','').strip()
         if len(query)>100: abort(400)
         account_query = Account.query
+        account_filter = request.args.get('status', 'all')
+        if account_filter not in ('all', 'booked', 'unbooked', 'confirmed'):
+            abort(400)
+        matching_bookings = Booking.query.filter(db.func.lower(db.func.trim(Booking.email)) == db.func.lower(db.func.trim(Account.email)))
+        if account_filter == 'booked':
+            account_query = account_query.filter(matching_bookings.exists())
+        elif account_filter == 'unbooked':
+            account_query = account_query.filter(~matching_bookings.exists())
+        elif account_filter == 'confirmed':
+            account_query = account_query.filter(matching_bookings.filter(Booking.status == 'Accepted').exists())
         if query:
             pattern='%'+query.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
             expressions=[column.ilike(pattern,escape='\\') for column in
@@ -387,7 +397,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
             from sqlalchemy import or_
             account_query=account_query.filter(or_(*expressions))
         pagination=account_query.order_by(Account.first_name,Account.last_name,Account.id).paginate(page=max(1,request.args.get('page',1,type=int)),per_page=24,error_out=False)
-        return render_template('admin_clients.html', clients=clients, client_rows=pagination.items,pagination=pagination,query=query,
+        return render_template('admin_clients.html', clients=clients, client_rows=pagination.items,pagination=pagination,query=query,account_filter=account_filter,
                                enquiries=Enquiry.query.order_by(Enquiry.created_at.desc()).limit(5).all(),
                                accounts={a.id: a for a in clients}, owners=Owner.query.all(), client_csrf=csrf())
     from studio_community import register as register_studio_community

@@ -201,7 +201,8 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
         except ValueError as problem:
             error = str(problem)
             data = build_data({})
-        return render_template('admin_reports.html', **data, error=error)
+        return render_template('admin_reports.html', **data, error=error,
+                               targets=app.extensions['report_targets_data']())
 
     @app.get('/admin/reports/export')
     @admin_required
