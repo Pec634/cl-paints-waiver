@@ -4,6 +4,7 @@ import json
 import secrets
 from flask import abort, jsonify, request, session, url_for, render_template
 from sqlalchemy.exc import SQLAlchemyError
+from client_notifications import EMAIL_KINDS
 
 DEFAULT=dict(width=600,padding=24,font_size=16,line_height=1.6,radius=16,
              background='#f1f4f9',paper='#ffffff',text='#243047',align='left',font='Arial',
@@ -57,7 +58,7 @@ def validate(value,items):
     return result
 
 def register(app,db,Setting,Media,settings,admin_required):
-    def items(kind): return Media.query.filter(Media.area.in_(['both',kind])).order_by(Media.id).all()
+    def items(kind): return Media.query.filter(Media.area.in_([kind,'all']+(['both'] if kind in ('booking','reward') else []))).order_by(Media.id).all()
     def saved(kind):
         row=db.session.get(Setting,'email_layout_'+kind)
         try: data=json.loads(row.value) if row else {}
@@ -66,11 +67,12 @@ def register(app,db,Setting,Media,settings,admin_required):
         allowed={'heading','body','portal','footer'}|{f'media-{i.id}' for i in items(kind)}|set(data.get('text_blocks',{}))
         data['order']=[key for key in data.get('order',[]) if key in allowed]
         if not row:
+            if 'enquiry' in kind:data['portal_label']='View your enquiry'
             data['order']=['heading']+[f'media-{i.id}' for i in items(kind) if i.kind=='image']+['body','portal','footer']+[f'media-{i.id}' for i in items(kind) if i.kind!='image']
         return validate(data,items(kind))
     @app.context_processor
     def context():
-        return {'email_layouts':{kind:saved(kind) for kind in ('booking','reward')}} if request.endpoint in ('admin_settings','communications_templates') else {}
+        return {'email_layouts':{kind:saved(kind) for kind in EMAIL_KINDS}} if request.endpoint in ('admin_settings','communications_templates') else {}
     def render(config,kind,heading,body,footer,link,preview=False,draft=None,variables=None):
         layout=validate(draft,items(kind)) if draft is not None else saved(kind)
         esc=html.escape
@@ -78,7 +80,7 @@ def register(app,db,Setting,Media,settings,admin_required):
         plain={'body':body}
         blocks=dict(heading=f'<h1 style="font-size:{layout["font_size"]+8}px;color:{config["notification_colour"]}">{esc(heading)}</h1>',
             body=f'<p style="white-space:pre-line">{esc(body)}</p>',
-            portal=f'<p><a href="{esc(link,quote=True)}" style="color:{config["notification_colour"]}">{esc(layout["portal_label"])}</a></p>',
+            portal=f'<p><a href="{esc(link,quote=True)}" style="color:{config["notification_colour"]}">{esc(layout["portal_label"])}</a></p>' if link else '',
             footer=f'<p style="white-space:pre-line">{esc(footer)}</p>')
         for key,block in layout['text_blocks'].items():
             content=block['text'].format(**variables)
@@ -106,7 +108,7 @@ def register(app,db,Setting,Media,settings,admin_required):
     @app.post('/admin/email-layout/<kind>/<action>')
     @admin_required
     def email_layout_action(kind,action):
-        if kind not in ('booking','reward') or action not in ('preview','save'): abort(404)
+        if kind not in EMAIL_KINDS or action not in ('preview','save'): abort(404)
         if not session.get('settings_csrf') or not secrets.compare_digest(session['settings_csrf'],request.headers.get('X-CSRF-Token','')): abort(400)
         data=request.get_json(silent=True)
         try:
@@ -126,7 +128,8 @@ def register(app,db,Setting,Media,settings,admin_required):
                     if row: row.value=value
                     else: db.session.add(Setting(key=key,value=value))
                 db.session.commit()
-            subject,_,_,message=render_notification(config,'Sample client',kind,'SAMPLE-001','Sample booking or reward update.',url_for('client.login',_external=True),preview=True,layout=layout)
+            subject,_,_,message=render_notification(config,'Sample client',kind,'SAMPLE-001','Sample enquiry reply.' if 'enquiry' in kind else 'Sample booking or reward update.',
+                '' if kind=='website_enquiry' else url_for('client.contact' if kind=='portal_enquiry' else 'client.login',_external=True),preview=True,layout=layout)
             return jsonify(html=render_template('email_preview_embed.html',subject=subject,message=message),saved=action=='save')
         except ValueError as exc:
             return jsonify(error=str(exc)),400

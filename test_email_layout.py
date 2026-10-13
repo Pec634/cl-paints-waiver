@@ -69,6 +69,29 @@ class EmailLayoutTest(unittest.TestCase):
                        {'text-one':{'text':'x'*5001}}, {'text-one':{'text':123}},
                        {f'text-{index}':{'text':'Block'} for index in range(9)}]:
             self.assertEqual(self.post('preview',dict(text_blocks=blocks)).status_code,400)
+
+    def test_enquiry_template_preview_save_and_media_scope(self):
+        self.fixture.add('link',area='both',label='Booking and reward guide',url='https://clpaints.com/booking-guide')
+        self.fixture.add('link',area='website_enquiry',label='Visitor guide',url='https://clpaints.com/visitor-guide')
+        for kind in ('portal_enquiry','website_enquiry'):
+            fields={f'notification_{kind}_subject':'Reply about {reference}',
+                    f'notification_{kind}_body':'Dear {name},\n\n{details}\n\nOur custom sign-off'}
+            response=self.fixture.admin.post(f'/admin/email-layout/{kind}/save',json={'layout':{'text_blocks':{'text-after':{'text':'Extra enquiry text'}}},'fields':fields},headers={'X-CSRF-Token':self.fixture.csrf})
+            self.assertEqual(response.status_code,200,response.data)
+            self.assertEqual(self.fixture.admin.get(f'/admin/email-preview/{kind}?embed=1').status_code,200)
+            link='' if kind=='website_enquiry' else 'https://clpaints.com/client/contact'
+            subject,plain,_,message=render_notification(main.get_business_settings(),'Visitor',kind,'Enquiry #42','Actual written reply',link)
+            self.assertEqual(subject,'Reply about Enquiry #42')
+            self.assertIn('Dear Visitor',message)
+            self.assertIn('Actual written reply',plain)
+            self.assertIn('Extra enquiry text',message)
+            self.assertNotIn('Booking and reward guide',message)
+            if kind=='website_enquiry':
+                self.assertIn('Visitor guide',message)
+                self.assertNotIn('href=""',message)
+            else:self.assertNotIn('Visitor guide',message)
+        response=self.fixture.admin.post('/admin/email-layout/website_enquiry/save',json={'fields':{'notification_website_enquiry_body':'No reply placeholder'}},headers={'X-CSRF-Token':self.fixture.csrf})
+        self.assertEqual(response.status_code,400)
     @unittest.skipUnless(browsers.EDGE.is_file(),'Microsoft Edge is not installed')
     def test_live_typing_reorder_and_save_in_browser(self):
         page=self.fixture.admin.get('/admin/settings?tab=email')

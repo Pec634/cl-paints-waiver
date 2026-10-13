@@ -11,7 +11,7 @@
     workspace.querySelectorAll('[data-email-select]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.emailSelect===kind)));
     workspace.querySelector('[data-email-preview]').src='/admin/email-preview/'+kind+'?embed=1';
     workspace.querySelector('[data-email-preview-link]').href='/admin/email-preview/'+kind;
-    workspace.querySelector('[data-email-preview]').title=(kind==='booking'?'Booking':'Reward')+' email preview';
+    workspace.querySelector('[data-email-preview]').title=({booking:'Booking',reward:'Reward',portal_enquiry:'Client portal enquiry',website_enquiry:'Website enquiry'})[kind]+' email preview';
     try { sessionStorage.setItem('email-composer-kind',kind); } catch (_) {}
     workspace.dispatchEvent(new CustomEvent('email-template-selected',{detail:kind}));
   }
@@ -42,6 +42,6 @@
   media.querySelector('[name="kind"]').addEventListener('change',()=>updateMedia(media));updateMedia(media);
   let kind='booking';
   try { kind=sessionStorage.getItem('email-composer-kind')||kind; } catch (_) {}
-  select(kind==='reward'?'reward':'booking');
+  select(['booking','reward','portal_enquiry','website_enquiry'].includes(kind)?kind:'booking');
   if (location.hash==='#email-media') workspace.querySelector('.email-media-drawer').open=true;
 })();

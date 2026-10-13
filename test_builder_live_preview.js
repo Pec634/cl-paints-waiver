@@ -31,6 +31,8 @@ function runLivePreviewTests(source) {
   const layout=new Element('script');layout.textContent=JSON.stringify(initial);
   const document={getElementById:id=>({'content':main,'website-extra-blocks':extra,'website-layout':layout})[id],createElement:tag=>new Element(tag)};
   const window={scrollX:0,scrollY:180};
+  window.getComputedStyle=node=>({position:node.initialPosition||'static'});
+  nativeImage.offsetWidth=100;nativeImage.offsetHeight=100;nativeSection.clientWidth=200;
   let observed=0;
   class Observer{observe(){observed++;}unobserve(){}}
   new Function('document','window','IntersectionObserver','innerWidth','addEventListener',source)(document,window,Observer,1200,()=>{});
@@ -66,6 +68,15 @@ function runLivePreviewTests(source) {
   check(row.children[1].querySelector('iframe')===video,'Changing a sibling block type preserves the video');
   modified._blocks=[];editor.apply(modified,'desktop');
   check(row.parentElement===null&&main.firstElementChild===nativeSection,'Removing a row preserves native sections');
+  modified[editor.keys[0]]={desktop:{width:50},style:{height:160}};editor.apply(modified,'desktop');
+  const slot=nativeImage.parentElement;
+  check(slot!==nativeSection&&slot.className==='wb-image-slot','Resizing a native image retains its own layout slot');
+  check(slot.style.aspectRatio==='200 / 100','Original image footprint is retained instead of adopting its resized height');
+  modified[editor.keys[0]].style.height=240;editor.apply(modified,'desktop');
+  check(nativeImage.parentElement===slot&&slot.style.aspectRatio==='200 / 100','Repeated resizing does not grow the image layout slot');
+  check(paragraph.parentElement===nativeSection,'Neighbouring content stays in its existing container');
+  delete modified[editor.keys[0]];editor.apply(modified,'desktop');
+  check(nativeImage.parentElement===nativeSection,'Reset restores the natural image layout');
   return `${checks} live-preview DOM checks passed`;
 }
 if(typeof module!=='undefined'&&module.exports)console.log(runLivePreviewTests(require('node:fs').readFileSync('static/website-layout.js','utf8')));

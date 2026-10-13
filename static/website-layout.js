@@ -11,11 +11,15 @@
  });
  let edits=JSON.parse(document.getElementById('website-layout').textContent),previewDevice;
  const applied=new WeakMap(),decorated=new WeakMap(),baselines=new WeakMap(),blockRows=[...extra.children];
+ const imageSlots=new WeakMap(),originalPositions=new WeakMap(),blockImageHeights=new WeakMap();
+ nodes.filter(node=>node.tagName==='IMG').forEach(node=>originalPositions.set(node,window.getComputedStyle?.(node).position||'static'));
  nodes.forEach((node,index)=>{const style=document.createElement('span').style;style.cssText=originals[index].style||'';baselines.set(node,style);});
  const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('wb-animated','wb-'+entry.target.dataset.wbAnimation);observer.unobserve(entry.target);}}));
  function decorate(n,e={}){
    const previous=decorated.get(n)||{},baseline=baselines.get(n)||{};
-   n.hidden=!!e.hidden;const p=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};n.style.position='relative';n.style.left=(p.x||0)+'px';n.style.top=(p.y||0)+'px';n.style.width=p.width?p.width+'%':baseline.width||'';
+   n.hidden=!!e.hidden;const p=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};
+   const originalPosition=originalPositions.get(n)||'static';n.style.position=originalPosition==='static'?'relative':originalPosition;
+   n.style.left=p.x?p.x+'px':baseline.left||'';n.style.top=p.y?p.y+'px':baseline.top||'';n.style.width=p.width?p.width+'%':baseline.width||'';
    Object.keys(previous.style||{}).forEach(key=>{if(!(key in (e.style||{})))n.style[key]=baseline[key]||'';});
    Object.entries(e.style||{}).forEach(([k,v])=>{n.style[k]=['fontSize','height','padding','gap','borderRadius','borderWidth'].includes(k)?(v||['borderRadius','borderWidth'].includes(k)?v+'px':''):v;});if(e.style?.borderWidth)n.style.borderStyle='solid';
    else if(previous.style?.borderWidth)n.style.borderStyle=baseline.borderStyle||'';
@@ -31,6 +35,17 @@
  function setAttribute(n,key,value){if(value===undefined||value===null||(value===''&&key!=='alt')){if(n.hasAttribute(key))n.removeAttribute(key);}else if(n.getAttribute(key)!==String(value))n.setAttribute(key,value);}
  function setText(n,value){if(n.textContent!==value)n.textContent=value;}
  function reconcile(parent,desired){let cursor=parent.firstElementChild;desired.forEach(node=>{if(node!==cursor)parent.insertBefore(node,cursor);cursor=node.nextElementSibling;});}
+ function preserveImageSlot(n,e){
+   const position=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};
+   const resized=!!position.width||!!e.style?.height;
+   if(!resized){const slot=imageSlots.get(n);if(slot){slot.parentElement.insertBefore(n,slot);slot.remove();imageSlots.delete(n);}return;}
+   if(imageSlots.has(n)||['absolute','fixed'].includes(originalPositions.get(n)))return;
+   const width=n.offsetWidth,height=n.offsetHeight;if(!width||!height)return;
+   const slot=document.createElement('div');slot.className='wb-image-slot';
+   const parentWidth=n.parentElement.clientWidth||width;
+   slot.style.width='100%';slot.style.aspectRatio=parentWidth+' / '+height;slot.style.position='relative';slot.style.overflow='visible';
+   n.parentElement.insertBefore(slot,n);slot.append(n);imageSlots.set(n,slot);
+ }
  function renderBlocks(){
    while(blockRows.length>(edits._blocks||[]).length){const removed=blockRows.pop();observer.unobserve(removed);removed.querySelectorAll('.wb-cell').forEach(node=>observer.unobserve(node));removed.remove();}
    (edits._blocks||[]).forEach((row,r)=>{
@@ -51,7 +66,11 @@
        else if(cell.kind==='video'){n.title=cell.text||'Video';n.loading='lazy';let source='';if(cell.video){try{const url=new URL(cell.video);if(url.protocol==='https:'&&['www.youtube-nocookie.com','www.youtube.com','player.vimeo.com'].includes(url.hostname)&&/^\/(embed|video)\//.test(url.pathname))source=url.href;}catch{}}setAttribute(n,'src',source);if(!n.hasAttribute('allowfullscreen'))n.setAttribute('allowfullscreen','');}
        else{setText(n,cell.text||'');}
        if(cell.kind==='review'){let caption=article.querySelector('p');if(cell.caption){if(!caption){caption=document.createElement('p');article.append(caption);}setText(caption,cell.caption);}else caption?.remove();}
-       decorate(article,cell);if(cell.kind==='image'){for(const key of ['objectFit','objectPosition'])n.style[key]=cell.style?.[key]||'';n.style.borderRadius=cell.style?.borderRadius!==undefined?cell.style.borderRadius+'px':'';n.style.height=cell.style?.height?cell.style.height+'px':'';if(cell.style?.height)article.style.height='';}
+       const cellPosition=cell[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||cell.desktop||{};
+       const freeImageSize=cell.kind==='image'&&(!!cellPosition.width||!!cell.style?.height);
+       if(freeImageSize&&!blockImageHeights.has(article)&&n.offsetHeight)blockImageHeights.set(article,n.offsetHeight);
+       if(!freeImageSize)blockImageHeights.delete(article);
+       decorate(article,cell);if(cell.kind==='image'){for(const key of ['objectFit','objectPosition'])n.style[key]=cell.style?.[key]||'';n.style.borderRadius=cell.style?.borderRadius!==undefined?cell.style.borderRadius+'px':'';n.style.height=cell.style?.height?cell.style.height+'px':'';article.style.height=blockImageHeights.has(article)?blockImageHeights.get(article)+'px':'';}
        if(article.parentElement!==section)section.append(article);
      });
    });
@@ -64,6 +83,7 @@
    nodes.forEach((n,i)=>{
      const original=originals[i],e=edits[keys[i]]||edits[i]||{},signature=JSON.stringify([e,previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]),previous=applied.get(n);
      if(previous?.signature===signature)return;
+     if(n.tagName==='IMG')preserveImageSlot(n,e);
      if(n.tagName!=='IMG'){if('text' in e)setText(n,e.text);else if(previous?.text)n.innerHTML=original.html;}
      if(n.tagName==='IMG'){setAttribute(n,'src',e.photo?e.image:original.src);setAttribute(n,'srcset',e.photo?null:original.srcset);setAttribute(n,'alt',e.photo?e.alt:original.alt);}
      if(n.tagName==='A')setAttribute(n,'href',e.link||original.href);decorate(n,e);if(n.tagName==='IMG'&&e.photo&&!e.image)n.hidden=true;

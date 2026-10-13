@@ -140,7 +140,7 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
     @admin_required
     def admin_settings():
         token = session.setdefault('settings_csrf', secrets.token_urlsafe(32))
-        email_sections = {'notifications', 'email_bookings', 'email_rewards', 'email_design'}
+        email_sections = {'notifications', 'email_bookings', 'email_rewards', 'email_portal_enquiry', 'email_website_enquiry', 'email_design'}
         active_tab = 'email' if request.endpoint == 'communications_templates' or request.args.get('tab') == 'email' or request.form.get('section') in email_sections else 'general'
         if request.method == 'POST':
             if not secrets.compare_digest(request.form.get('csrf_token', ''), token):
@@ -176,10 +176,12 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                                       or parsed.port not in (None,443) or not (host == domain or host.endswith('.'+domain))):
                             raise ValueError(f'Use an HTTPS link on {domain}, or leave it blank to hide it.')
                         values[key] = value
-                elif section in {'notifications', 'email_bookings', 'email_rewards', 'email_design'}:
+                elif section in email_sections:
                     groups = {
                         'email_bookings': ['notification_booking_subject', 'notification_booking_body'],
                         'email_rewards': ['notification_reward_subject', 'notification_reward_body'],
+                        'email_portal_enquiry': ['notification_portal_enquiry_subject', 'notification_portal_enquiry_body'],
+                        'email_website_enquiry': ['notification_website_enquiry_subject', 'notification_website_enquiry_body'],
                         'email_design': ['notification_heading', 'notification_footer', 'notification_colour', 'notification_layout'],
                     }
                     keys = groups.get(section, EMAIL_DEFAULTS)

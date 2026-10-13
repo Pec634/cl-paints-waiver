@@ -6,12 +6,17 @@ from datetime import datetime
 from string import Formatter
 from flask import abort, current_app, redirect, request, session, url_for, has_app_context
 import secrets
+EMAIL_KINDS = ('booking', 'reward', 'portal_enquiry', 'website_enquiry')
 
 EMAIL_DEFAULTS = {
     'notification_booking_subject': 'Your CL Paints booking {reference} has been updated',
     'notification_booking_body': 'Hello {name},\n\nWe have updated your booking {reference}.\n\n{details}\n\nPlease open your booking to review the highlighted changes.',
     'notification_reward_subject': 'A rewards update from CL Paints',
     'notification_reward_body': 'Hello {name},\n\n{details}\n\nOpen your Rewards page to see your codes and points.',
+    'notification_portal_enquiry_subject': 'CL Paints: reply to your enquiry {reference}',
+    'notification_portal_enquiry_body': 'Hello {name},\n\n{details}\n\nKind regards,\nCL Paints',
+    'notification_website_enquiry_subject': 'CL Paints: reply to your enquiry {reference}',
+    'notification_website_enquiry_body': 'Hello {name},\n\n{details}\n\nKind regards,\nCL Paints',
     'notification_heading': 'A little update from CL Paints',
     'notification_footer': 'Bringing colour to life - One face at time',
     'notification_colour': '#f52f83',
@@ -31,6 +36,8 @@ def validate_email_settings(values):
                 raise ValueError('Email subjects allow 200 characters; other text allows 5,000.')
             if 'subject' in key and ('\n' in value or '\r' in value):
                 raise ValueError('Email subjects must be a single line.')
+            if key in ('notification_portal_enquiry_body','notification_website_enquiry_body') and '{details}' not in value:
+                raise ValueError('Keep {details} in the enquiry message so your written reply is included.')
             try:
                 for _, field, spec, conversion in Formatter().parse(value):
                     if field is not None and (field not in ['name', 'reference', 'details'] or spec or conversion):

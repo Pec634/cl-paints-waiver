@@ -50,7 +50,7 @@ def file_type(filename, content, kind):
 
 def register(app,db,Media,admin_required):
     def rows(kind):
-        return Media.query.filter(Media.area.in_(['both',kind])).order_by(Media.id).all()
+        return Media.query.filter(Media.area.in_([kind,'all']+(['both'] if kind in ('booking','reward') else []))).order_by(Media.id).all()
     def check():
         if not session.get('settings_csrf') or not secrets.compare_digest(session['settings_csrf'],request.form.get('csrf_token','')):
             abort(400)
@@ -64,7 +64,7 @@ def register(app,db,Media,admin_required):
         try:
             area,kind=request.form.get('area'),request.form.get('kind')
             label=request.form.get('label','').strip()
-            if area not in ('both','booking','reward') or kind not in ('image','document','link') or not 1<=len(label)<=150:
+            if area not in ('both','all','booking','reward','portal_enquiry','website_enquiry') or kind not in ('image','document','link') or not 1<=len(label)<=150:
                 raise ValueError('Choose an email group, item type and label of up to 150 characters.')
             if Media.query.count()>=12: raise ValueError('Keep up to 12 email items. Remove an unused item first.')
             item=Media(area=area,kind=kind,label=label)

@@ -172,8 +172,10 @@ def register(app, db, models, settings, send_email, admin_required):
                         flash('The reply could not be saved. Reload this conversation and check the history before trying again.', 'error')
                         return redirect(url_for('communications_public_enquiry', enquiry_id=enquiry.id))
                     try:
-                        sent = bool(send_email(enquiry.email, f'CL Paints: reply to your enquiry #{enquiry.id}',
-                                              f'Hello {enquiry.name},\n\n{body}\n\nCL Paints\n{settings()["contact_email"]}'))
+                        from client_notifications import render_notification
+                        subject,plain,_,message=render_notification(settings(),enquiry.name,'website_enquiry',f'Enquiry #{enquiry.id}',body,'')
+                        attachments=app.extensions['email_media_attachments']('website_enquiry')
+                        sent = bool(send_email(enquiry.email,subject,plain,message,attachments))
                     except Exception:
                         sent = False
                     reply.delivery = 'accepted' if sent else 'failed'

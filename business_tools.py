@@ -272,7 +272,10 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
         db.session.commit()
         if changed:
             account=db.session.get(Account,enquiry.client_id)
-            sent=send_email(account.email,'CL Paints: reply to your enquiry',f'Hello {account.first_name},\n\n{reply}\n\nView your enquiry: {url_for("client.contact",_external=True)}')
+            from client_notifications import render_notification
+            subject,plain,_,message=render_notification(settings(),account.first_name,'portal_enquiry',f'Enquiry #{enquiry.id}',reply,url_for('client.contact',_external=True))
+            attachments=app.extensions['email_media_attachments']('portal_enquiry')
+            sent=send_email(account.email,subject,plain,message,attachments)
             db.session.add(Notice(email=account.email,kind='enquiry',reference=f'Enquiry #{enquiry.id}',details=reply,email_sent=sent))
             db.session.commit()
             flash('Reply saved and emailed.' if sent else 'Reply saved; email delivery failed. Contact the client.', 'success' if sent else 'error')
@@ -320,8 +323,14 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
     @app.get('/admin/email-preview/<kind>')
     @admin_required
     def email_preview(kind):
-        if kind not in ['booking','reward']: abort(404)
-        from client_notifications import render_notification
+        from client_notifications import EMAIL_KINDS, render_notification
+        if kind not in EMAIL_KINDS: abort(404)
+        if 'enquiry' in kind:
+            subject,body,footer,message=render_notification(settings(),'Sample visitor',kind,'Enquiry #1','Thank you for getting in touch. We would love to help with your event.',
+                '' if kind=='website_enquiry' else url_for('client.contact',_external=True),preview=True)
+            response=app.make_response(render_template('email_preview_embed.html' if request.args.get('embed')=='1' else 'admin_email_preview.html',subject=subject,message=message))
+            response.headers['Cache-Control']='private, no-store'
+            return response
         subject, body, footer, message=render_notification(settings(),'Sample client',kind,'05/10/2026 - B - 0001' if kind=='booking' else '05/10/2026 - L - 0001',
             'Travel charge: £0.00 → £15.00' if kind=='booking' else 'One loyalty point earned. Current balance: 1/3.',url_for('client.login',_external=True),preview=True)
         response=app.make_response(render_template('email_preview_embed.html' if request.args.get('embed')=='1' else 'admin_email_preview.html',subject=subject,message=message))
