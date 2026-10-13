@@ -99,6 +99,9 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
     @app.route('/admin/connecteam', methods=['GET', 'POST'])
     @admin_required
     def connecteam_rota():
+        date_order = request.args.get('order', 'asc')
+        if date_order not in ('asc', 'desc'):
+            abort(400, 'Choose ascending or descending date order.')
         token = session.setdefault('client_csrf', secrets.token_urlsafe(32))
         schedules = []; shifts = []; error = None
         selected = db.session.get(Setting, 'connecteam_scheduler_id')
@@ -176,6 +179,7 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
             shifts = [shift for shift in shifts if not shift.get('assignedUserIds')]
         elif staff_filter:
             shifts = [shift for shift in shifts if staff_filter in {str(user) for user in (shift.get('assignedUserIds') or [])}]
+        shifts.sort(key=lambda shift: shift.get('startTime', 0), reverse=date_order == 'desc')
         rows = []
         links = {(item.booking_id, item.event_index): item for item in Link.query.all()}
         for booking in Booking.query.filter_by(status='Accepted').order_by(Booking.event_date).all():
@@ -186,5 +190,5 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
                     except (ValueError, KeyError, TypeError): changed = True
                 rows.append(dict(booking=booking, index=index, event=event, link=link, changed=changed))
         return render_template('admin_connecteam.html', schedules=schedules, selected_id=selected_id,
-                               shifts=shifts, rows=rows, error=error, csrf=token, staff_filter=staff_filter,
+                               shifts=shifts, rows=rows, error=error, csrf=token, staff_filter=staff_filter, date_order=date_order,
                                staff_options=sorted(staff_options.items(), key=lambda item: item[1].casefold()), total_shifts=total_shifts)

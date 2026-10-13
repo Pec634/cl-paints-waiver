@@ -2051,9 +2051,10 @@ def admin_bookings():
     bookings = Booking.query.order_by(Booking.submitted_at.desc()).all()
     from zoneinfo import ZoneInfo
     today = datetime.now(ZoneInfo('Europe/London')).date()
-    filters = [('all','All bookings'),('review','Awaiting review'),('upcoming','Upcoming confirmed'),
-               ('deposit','Deposits due'),('balance','Balances outstanding'),
-               ('requests','Change / cancellation requests'),('cancelled','Cancelled'),('declined','Declined')]
+    filters = [('all','All bookings'),('review','Awaiting review'),('confirmed','All time bookings confirmed'),
+               ('declined','Declined'),('cancelled','Cancelled'),
+               ('upcoming','Future bookings confirmed'),('requests','Change / cancellation requests'),
+               ('deposit','Deposits due'),('balance','Balances outstanding')]
     active_filter = request.args.get('filter', 'all')
     if active_filter not in dict(filters): abort(400)
     pending_ids = {item.booking_id for item in BookingRequest.query.filter_by(status='Pending').all()}
@@ -2085,7 +2086,7 @@ def admin_bookings():
             try: dates.append(datetime.strptime(event.get('date',''), '%Y-%m-%d').date())
             except (ValueError,TypeError): pass
         active = booking.status in ('Accepted','Under Review')
-        flags = dict(all=True, review=booking.status == 'Under Review',
+        flags = dict(all=True, review=booking.status == 'Under Review', confirmed=booking.status == 'Accepted',
             upcoming=booking.status == 'Accepted' and any(date >= today for date in dates),
             deposit=active and payment['deposit'] > payment['paid'] and bool(payment['deposit_due']) and payment['deposit_due'] <= today,
             balance=active and payment['outstanding'] > 0,

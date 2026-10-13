@@ -56,6 +56,24 @@ class ConnecteamTest(unittest.TestCase):
             self.booking.status='Declined'; main.db.session.commit()
             self.assertEqual(self.post('export', booking_id=self.booking.id, event_index=0).status_code, 400)
 
+    def test_shift_date_order_and_staff_filter(self):
+        main.db.session.add(main.BusinessSetting(key='connecteam_scheduler_id',value='123'));main.db.session.commit()
+        def response(path,payload=None):
+            if path=='/scheduler/v1/schedulers':return self.schedules
+            return {'shifts':[
+                dict(id='late',title='LATER_SHIFT',startTime=1792108800,endTime=1792112400,assignedUserIds=[]),
+                dict(id='early',title='EARLIER_SHIFT',startTime=1792022400,endTime=1792026000,assignedUserIds=[])]}
+        with patch('connecteam_rota.api',side_effect=response) as api:
+            ascending=self.admin.get('/admin/connecteam?order=asc&staff=unassigned')
+            descending=self.admin.get('/admin/connecteam?order=desc&staff=unassigned')
+            self.assertEqual(ascending.status_code,200)
+            self.assertLess(ascending.data.index(b'EARLIER_SHIFT'),ascending.data.index(b'LATER_SHIFT'))
+            self.assertLess(descending.data.index(b'LATER_SHIFT'),descending.data.index(b'EARLIER_SHIFT'))
+            self.assertIn(b'value="desc" selected',descending.data)
+            api.reset_mock()
+            self.assertEqual(self.admin.get('/admin/connecteam?order=invalid').status_code,400)
+            api.assert_not_called()
+
     def test_uk_summer_time_and_invalid_duration(self):
         event = dict(date='2026-07-01', start_time='10:00', finish_time='12:00', event_address='Venue', event_type='Party')
         payload = shift_payload(self.booking, event, 0)
