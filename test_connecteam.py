@@ -5,6 +5,10 @@ from zoneinfo import ZoneInfo
 import test_business_tools as fixtures
 from connecteam_rota import shift_payload
 from connecteam_rota import enrich_shifts, note_text
+from connecteam_rota import api as connecteam_api, RateLimited, retry_time
+from urllib.error import HTTPError
+from io import BytesIO
+import json
 
 main = fixtures.main
 
@@ -73,6 +77,38 @@ class ConnecteamTest(unittest.TestCase):
             api.reset_mock()
             self.assertEqual(self.admin.get('/admin/connecteam?order=invalid').status_code,400)
             api.assert_not_called()
+
+    def test_api_cache_and_rate_limit_cooldown(self):
+        path='/scheduler/v1/schedulers'
+        data={'data':self.schedules}
+        with patch.dict('os.environ',{'CONNECTEAM_API_KEY':'test-cache-key'}),patch('connecteam_rota.time.time',return_value=1000):
+            with patch('connecteam_rota.urlopen',return_value=BytesIO(json.dumps(data).encode())) as network:
+                first=connecteam_api(path);first['schedulers'][0]['name']='Locally changed'
+                second=connecteam_api(path)
+                self.assertEqual(second['schedulers'][0]['name'],'Staff rota')
+                self.assertEqual(network.call_count,1)
+            with patch('connecteam_rota.time.time',return_value=5000),patch('connecteam_rota.urlopen',side_effect=HTTPError('https://api.connecteam.com',429,'Limited',{'Retry-After':'120'},None)) as network:
+                stale=connecteam_api(path)
+                self.assertEqual(stale,self.schedules)
+                with self.assertRaises(RateLimited):connecteam_api('/scheduler/v1/schedulers/123/shifts?new=1')
+                with self.assertRaises(RateLimited):connecteam_api('/scheduler/v1/schedulers/123/shifts',[])
+                self.assertEqual(network.call_count,1)
+            with patch('connecteam_rota.time.time',return_value=5121),patch('connecteam_rota.urlopen',return_value=BytesIO(json.dumps(data).encode())) as network:
+                self.assertEqual(connecteam_api(path),self.schedules)
+                self.assertEqual(network.call_count,1)
+
+    def test_rate_limit_daily_reset_and_export_can_retry(self):
+        with patch('connecteam_rota.time.time',return_value=1000):
+            self.assertEqual(retry_time({'x-ratelimit-day-remaining':'0','x-ratelimit-day-reset':'80000','x-ratelimit-minute-reset':'1060'}),80000)
+            self.assertEqual(retry_time({'Retry-After':'120'}),1120)
+            self.assertEqual(retry_time({}),1060)
+        with patch('connecteam_rota.api',return_value=self.schedules):self.post('schedule',scheduler_id=123)
+        def response(path,payload=None):
+            if payload is None:return self.schedules
+            raise RateLimited(1792108800)
+        with patch('connecteam_rota.api',side_effect=response):
+            self.post('export',booking_id=self.booking.id,event_index=0)
+        self.assertEqual(main.ConnecteamShiftLink.query.count(),0)
 
     def test_uk_summer_time_and_invalid_duration(self):
         event = dict(date='2026-07-01', start_time='10:00', finish_time='12:00', event_address='Venue', event_type='Party')

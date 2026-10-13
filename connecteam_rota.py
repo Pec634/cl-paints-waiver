@@ -5,12 +5,61 @@ import html
 import json
 import os
 import secrets
+import hashlib
+import time
+from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from flask import abort, flash, redirect, render_template, request, session, url_for
-from sqlalchemy.exc import IntegrityError
+from flask import abort, flash, redirect, render_template, request, session, url_for, current_app, has_app_context, g
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+
+
+class RateLimited(ValueError):
+    def __init__(self, retry_at):
+        self.retry_at=retry_at
+        when=datetime.fromtimestamp(retry_at,ZoneInfo('Europe/London')).strftime('%d %b at %H:%M UK time')
+        super().__init__('Connecteam is temporarily limiting API requests. Try again after '+when+'.')
+
+
+def retry_time(headers):
+    now=time.time()
+    def number(key):
+        try:return float(headers.get(key,''))
+        except (ValueError,TypeError):return None
+    remaining=number('x-ratelimit-day-remaining')
+    reset=number('x-ratelimit-day-reset' if remaining==0 else 'x-ratelimit-minute-reset')
+    if reset is not None and now<reset<=now+7*86400:return reset
+    delay=number('Retry-After')
+    if delay is not None and 0<delay<=7*86400:return now+delay
+    try:
+        value=parsedate_to_datetime(headers.get('Retry-After','')).timestamp()
+        if now<value<=now+7*86400:return value
+    except (ValueError,TypeError,OverflowError):pass
+    return now+60
+
+
+def cached_setting(key,value=None):
+    backend=current_app.extensions.get('connecteam_cache') if has_app_context() else None
+    if not backend:return None
+    db,Setting=backend
+    try:
+        row=db.session.get(Setting,key)
+        if value is None:return json.loads(row.value) if row else None
+        if row is None:row=Setting(key=key,value='');db.session.add(row)
+        row.value=json.dumps(value);db.session.commit()
+    except (ValueError,SQLAlchemyError):
+        db.session.rollback()
+    return None
+
+
+def saved_response(cached,notice):
+    if has_app_context():
+        notices=getattr(g,'connecteam_notices',[])
+        when=datetime.fromtimestamp(cached['at'],ZoneInfo('Europe/London')).strftime('%d %b %H:%M')
+        notices.append(notice+' Showing saved data from '+when+' UK time.');g.connecteam_notices=notices
+    return json.loads(json.dumps(cached['data']))
 
 
 def note_text(value):
@@ -53,6 +102,17 @@ def api(path, payload=None):
     key = os.getenv('CONNECTEAM_API_KEY', '').strip()
     if not key:
         raise ValueError('CONNECTEAM_API_KEY is not configured on this server.')
+    account=hashlib.sha256(key.encode()).hexdigest()[:24]
+    cache_key='ct_cache_'+hashlib.sha256((key+path).encode()).hexdigest()[:32]
+    wait_key='ct_wait_'+account
+    cached=cached_setting(cache_key) if payload is None else None
+    ttl=21600 if path.startswith('/users/') else 3600 if path=='/scheduler/v1/schedulers' else 900
+    if cached and time.time()<cached.get('expires',cached['at']+ttl):return saved_response(cached,'Using cached Connecteam data.')
+    waiting=cached_setting(wait_key)
+    if waiting and waiting.get('until',0)>time.time():
+        error=RateLimited(waiting['until'])
+        if cached and time.time()-cached['at']<86400:return saved_response(cached,str(error))
+        raise error
     req = Request('https://api.connecteam.com' + path,
                   data=json.dumps(payload).encode() if payload is not None else None,
                   headers={'X-API-KEY': key, 'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'CLPaints/1.0'})
@@ -61,8 +121,13 @@ def api(path, payload=None):
             data = json.load(response)
         if not isinstance(data, dict) or not isinstance(data.get('data'), dict):
             raise ValueError('Connecteam returned an unexpected response.')
+        if payload is None:cached_setting(cache_key,dict(at=time.time(),data=data['data']))
         return data['data']
     except HTTPError as error:
+        if error.code==429:
+            limited=RateLimited(retry_time(error.headers or {}));cached_setting(wait_key,dict(until=limited.retry_at))
+            if cached and time.time()-cached['at']<86400:return saved_response(cached,str(limited))
+            raise limited from None
         raise ValueError(f'Connecteam returned HTTP {error.code}. Check API permissions, quota and schedule access.') from None
     except (URLError, TimeoutError, OSError, json.JSONDecodeError):
         raise ValueError('Could not confirm the Connecteam response. Check the connection and rota before trying again.') from None
@@ -96,6 +161,7 @@ def shift_payload(booking, event, index):
 
 
 def register(app, db, Link, Setting, Booking, schedule, admin_required):
+    app.extensions['connecteam_cache']=(db,Setting)
     @app.route('/admin/connecteam', methods=['GET', 'POST'])
     @admin_required
     def connecteam_rota():
@@ -150,7 +216,16 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
                     if len(created) != 1 or not created[0].get('id'):
                         raise ValueError('Connecteam did not confirm the new shift. Check the rota manually.')
                     link.shift_id = str(created[0]['id']); link.status = 'exported'
+                    day_start=now.replace(hour=0,minute=0,second=0,microsecond=0)
+                    query=urlencode(dict(startTime=int(day_start.timestamp()),endTime=int((day_start+timedelta(days=30)).timestamp()),limit=100))
+                    path=f'/scheduler/v1/schedulers/{selected_id}/shifts?{query}'
+                    key='ct_cache_'+hashlib.sha256((os.getenv('CONNECTEAM_API_KEY','').strip()+path).encode()).hexdigest()[:32]
+                    cached=cached_setting(key)
+                    if cached:cached['expires']=0;cached_setting(key,cached)
                     flash('Draft shift created. Assign staff and publish it in Connecteam.', 'success')
+                except RateLimited as exc:
+                    db.session.delete(link)
+                    flash(str(exc)+' No shift was sent; retry after the limit resets.', 'error')
                 except ValueError as exc:
                     link.status = 'check_required'; flash(str(exc) + ' Export is blocked to prevent duplicates; review Connecteam.', 'error')
                 db.session.commit()
@@ -159,7 +234,8 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
             return redirect(url_for('connecteam_rota'))
         if selected_id in active:
             try:
-                query = urlencode(dict(startTime=int(now.timestamp()), endTime=int((now + timedelta(days=30)).timestamp()), limit=100))
+                day_start=now.replace(hour=0,minute=0,second=0,microsecond=0)
+                query = urlencode(dict(startTime=int(day_start.timestamp()), endTime=int((day_start + timedelta(days=30)).timestamp()), limit=100))
                 shifts = api(f'/scheduler/v1/schedulers/{selected_id}/shifts?{query}').get('shifts', [])
                 for shift in shifts:
                     shift['display_start'] = datetime.fromtimestamp(shift['startTime'], ZoneInfo('Europe/London')).strftime('%d/%m/%Y %H:%M')
@@ -191,4 +267,5 @@ def register(app, db, Link, Setting, Booking, schedule, admin_required):
                 rows.append(dict(booking=booking, index=index, event=event, link=link, changed=changed))
         return render_template('admin_connecteam.html', schedules=schedules, selected_id=selected_id,
                                shifts=shifts, rows=rows, error=error, csrf=token, staff_filter=staff_filter, date_order=date_order,
-                               staff_options=sorted(staff_options.items(), key=lambda item: item[1].casefold()), total_shifts=total_shifts)
+                               staff_options=sorted(staff_options.items(), key=lambda item: item[1].casefold()), total_shifts=total_shifts,
+                               cache_notices=list(dict.fromkeys(getattr(g,'connecteam_notices',[]))))
