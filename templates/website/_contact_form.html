@@ -4,16 +4,16 @@
 {% set values = contact_values|default({}) %}
 <form action="{{ url_for('public_contact_submit') }}" method="post" class="website-contact-form">
 <input type="hidden" name="csrf_token" value="{{ contact_csrf }}">
+<div class="website-contact-fields"><label>Your name<input name="name" maxlength="120" autocomplete="name" value="{{ values.get('name','') }}" required></label><label>Email address<input type="email" name="email" maxlength="254" autocomplete="email" value="{{ values.get('email','') }}" required></label></div>
+<label>Subject <span>(optional)</span><input name="subject" maxlength="160" value="{{ values.get('subject','') }}" placeholder="What can we help with?"></label>
+<label>Your message<textarea name="message" rows="6" maxlength="5000" required placeholder="Tell us about your question or event…">{{ values.get('message','') }}</textarea></label>
+<div class="website-contact-trap" aria-hidden="true"><label>Leave this field blank<input name="company_website" tabindex="-1" autocomplete="off"></label></div>
+<p class="fine">We’ll use your details to respond to this enquiry. <a href="{{ url_for('privacy_policy') }}">Privacy policy</a></p>
 {% if contact_captcha_unavailable %}<p class="website-contact-error" role="alert">The security check is temporarily unavailable. Please email <a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>.</p>
 {% elif contact_captcha_site_key %}
 <div class="g-recaptcha" data-sitekey="{{ contact_captcha_site_key }}" data-size="compact"></div>
 <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 <noscript><p>Please enable JavaScript to complete the security check, or email us directly.</p></noscript>
 {% endif %}
-<div class="website-contact-fields"><label>Your name<input name="name" maxlength="120" autocomplete="name" value="{{ values.get('name','') }}" required></label><label>Email address<input type="email" name="email" maxlength="254" autocomplete="email" value="{{ values.get('email','') }}" required></label></div>
-<label>Subject <span>(optional)</span><input name="subject" maxlength="160" value="{{ values.get('subject','') }}" placeholder="What can we help with?"></label>
-<label>Your message<textarea name="message" rows="6" maxlength="5000" required placeholder="Tell us about your question or event…">{{ values.get('message','') }}</textarea></label>
-<div class="website-contact-trap" aria-hidden="true"><label>Leave this field blank<input name="company_website" tabindex="-1" autocomplete="off"></label></div>
-<p class="fine">We’ll use your details to respond to this enquiry. <a href="{{ url_for('privacy_policy') }}">Privacy policy</a></p>
 <button class="button pink" type="submit">Send message →</button>
 </form></div></section>
