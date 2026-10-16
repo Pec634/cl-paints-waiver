@@ -6,3 +6,10 @@ instance/
 .vscode/
 *.db
 portal-server.*.log
+android-client/.gradle/
+android-client/.idea/
+android-client/**/build/
+android-client/local.properties
+android-client/*.jks
+android-client/*.keystore
+.android-tools/

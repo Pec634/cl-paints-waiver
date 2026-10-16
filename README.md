@@ -4,6 +4,11 @@ This is the first safe development stage for the new Waiver module.
 
 ## What it includes
 
+The Android client app is in [android-client](android-client/README.md). It connects
+to the existing portal with native navigation, file uploads and downloads.
+The Android preview APK GitHub workflow tests and builds an installable preview;
+see the app guide for installation and the remaining Play Store release steps.
+
 For the current form builder, booking features and setup instructions, see [Form builder guide](FORM_BUILDER_GUIDE.md).
 
 Both portals have mobile quick links and menus that close with Escape or an
