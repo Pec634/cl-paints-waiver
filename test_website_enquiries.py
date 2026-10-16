@@ -11,6 +11,10 @@ class WebsiteEnquiriesTest(unittest.TestCase):
         self.context.push()
         main.db.drop_all()
         main.db.create_all()
+        # These tests exercise manual replies independently of automation.
+        for topic in ('pricing', 'availability', 'other'):
+            main.db.session.add(main.BusinessSetting(key=f'auto_{topic}_enabled', value='0'))
+        main.db.session.commit()
         self.visitor = main.app.test_client()
         self.admin = main.app.test_client()
         with self.admin.session_transaction() as state:
@@ -60,6 +64,22 @@ class WebsiteEnquiriesTest(unittest.TestCase):
             self.visitor.post('/contact/message', data=self.data())
             self.assertEqual(self.visitor.post('/contact/message', data=self.data()).status_code, 429)
         self.assertEqual(self.Enquiry.query.count(), 1)
+
+    def test_captcha_blocks_before_save_or_email_and_preserves_message(self):
+        data = self.data()
+        with patch('website_enquiries.verify_captcha', return_value=False), patch.object(main, 'send_client_email') as send:
+            response = self.visitor.post('/contact/message', data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b'Please complete the reCAPTCHA check', response.data)
+        self.assertIn(b'Do you paint at festivals?', response.data)
+        self.assertEqual(self.Enquiry.query.count(), 0)
+        send.assert_not_called()
+
+    def test_captcha_widget_only_on_contact_page(self):
+        with patch.dict(os.environ, {'RECAPTCHA_SITE_KEY': 'public-site-key', 'RECAPTCHA_SECRET_KEY': 'private-secret'}):
+            response = self.visitor.get('/contact')
+        self.assertIn(b'data-sitekey="public-site-key"', response.data)
+        self.assertNotIn(b'private-secret', response.data)
 
     def test_admin_reply_delivery_and_search(self):
         with patch.object(main, 'send_client_email', return_value=True):

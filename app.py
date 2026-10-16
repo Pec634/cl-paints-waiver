@@ -2803,5 +2803,8 @@ register_qr_analytics(app, db, qr_models, admin_required)
 from report_targets import register as register_report_targets
 register_report_targets(app, db, BusinessSetting, Booking, Waiver, tool_models[1], qr_models[1], admin_required)
 
+from enquiry_automation import register as register_enquiry_automation
+register_enquiry_automation(app, db, website_enquiry_models[1], tool_models[3], notification_models[1], get_business_settings, lambda *args: send_client_email(*args))
+
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

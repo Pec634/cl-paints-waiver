@@ -11,6 +11,8 @@ DEFAULTS = dict(business_name='CL Paints', contact_email='info@clpaints.com', ph
                 max_event_dates='10', free_miles='10', mile_rate='1.00', travel_cap='50.00',
                 recovery_email='')
 from client_notifications import EMAIL_DEFAULTS, validate_email_settings
+from enquiry_automation import DEFAULTS as AUTO_REPLY_DEFAULTS
+DEFAULTS.update(AUTO_REPLY_DEFAULTS)
 DEFAULTS.update(EMAIL_DEFAULTS)
 DEFAULTS['login_reviews'] = json.dumps(DEFAULT_REVIEWS, ensure_ascii=False)
 DEFAULTS.update(website_giveaway_announcement='')
@@ -159,6 +161,9 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                     values['contact_email'] = validate_email(values['contact_email'], check_deliverability=False).normalized
                     if values['website'] and not values['website'].startswith(('https://', 'http://')):
                         raise ValueError('The website must begin with https:// or http://.')
+                elif section == 'enquiry_automation':
+                    from enquiry_automation import validate_settings
+                    values = validate_settings(request.form)
                 elif section == 'website_giveaway':
                     announcement = request.form.get('website_giveaway_announcement', '').strip()
                     if len(announcement) > 2000:

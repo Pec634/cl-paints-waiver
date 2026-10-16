@@ -342,8 +342,14 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                     f'Review in the admin app: {url_for("admin_clients", _external=True)}#enquiry-{enquiry.id}\n'
                     f'Reply to the client at {account.email}.'
                 )
-                if not send_email(settings()['contact_email'], f'CL Paints: new enquiry #{enquiry.id}', notification):
+                try:
+                    notified = send_email(settings()['contact_email'], f'CL Paints: new enquiry #{enquiry.id}', notification)
+                except Exception:
+                    notified = False
+                    app.logger.exception('Client enquiry notification failed')
+                if not notified:
                     app.logger.warning('Enquiry %s saved, but its email notification could not be sent.', enquiry.id)
+                app.extensions['send_enquiry_auto_reply']('portal', enquiry, account)
                 flash('Your message has been saved for CL Paints to review.', 'success')
                 return redirect(url_for('client.contact'))
         return render_template('client/contact.html', error=error)

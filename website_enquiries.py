@@ -5,6 +5,7 @@ import secrets
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
+from contact_captcha import configuration as captcha_configuration, verify as verify_captcha
 
 
 def now():
@@ -42,7 +43,10 @@ def register(app, db, models, settings, send_email, admin_required):
     def contact_context():
         if request.endpoint not in ('website_contact', 'public_contact_submit'):
             return {}
-        return dict(contact_csrf=session.setdefault('public_contact_csrf', secrets.token_urlsafe(32)),
+        site_key, secret_key = captcha_configuration()
+        return dict(contact_captcha_site_key=site_key,
+                    contact_captcha_unavailable=bool(site_key or secret_key) and not bool(site_key and secret_key),
+                    contact_csrf=session.setdefault('public_contact_csrf', secrets.token_urlsafe(32)),
                     contact_sent=session.pop('public_contact_sent', False))
 
     @app.after_request
@@ -90,6 +94,8 @@ def register(app, db, models, settings, send_email, admin_required):
         last = session.get('public_contact_last')
         if last and now().replace(tzinfo=timezone.utc).timestamp() - last < 60:
             return contact_error('Please wait a minute before sending another message.', values, 429)
+        if not verify_captcha(request.form.get('g-recaptcha-response', ''), settings()['public_app_url']):
+            return contact_error('Please complete the reCAPTCHA check and send your message again. If the check is unavailable, please email us directly.', values)
         try:
             enquiry = Enquiry(**values, submission_token=token)
             db.session.add(enquiry)
@@ -109,6 +115,7 @@ def register(app, db, models, settings, send_email, admin_required):
         except Exception:
             db.session.rollback()
             app.logger.warning('Website enquiry notification could not be recorded or delivered')
+        app.extensions['send_enquiry_auto_reply']('website', enquiry)
         return redirect(url_for('website_contact') + '#message-form')
 
     @app.get('/admin/communications/website-enquiries')
