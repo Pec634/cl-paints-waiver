@@ -65,3 +65,14 @@
   .workspace-pagination .btn { flex: 1; }
 }
 @media print { .admin aside, .portal-admin-toolbar, .workspace-pagination, .workspace-list-tools, .portal-display-controls { display: none !important; } .admin { display: block; } }
+.website-enquiries-scroll {
+  max-height: 65vh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+  padding-inline: 4px 12px;
+}
+.website-enquiries-scroll:focus-visible {
+  outline: 2px solid #f52f83;
+  outline-offset: 3px;
+}
