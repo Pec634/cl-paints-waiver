@@ -6,6 +6,7 @@ Client Booking Request | CL Paints
 
 {% block body %}
 <main class="booking-public">
+{% if kiosk_item %}<a class="btn" href="{{ url_for('kiosk_menu') }}">Back to kiosk forms</a>{% endif %}
 {% if booking_offer %}<p class="client-booking-banner"><strong>{{ booking_offer.title }}</strong> ? Save ?{{ booking_offer.saving }} per hour. Offer applies when your request is submitted during the promotion period; travel and minimum duration still apply.</p>{% endif %}
     {% if portal_account %}<p class="client-booking-banner"><a href="{{ url_for('client.bookings') }}">← My bookings</a> · Signed in as {{ portal_account.email }}</p>{% endif %}
     <header class="booking-public-header">

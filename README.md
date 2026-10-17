@@ -289,3 +289,38 @@ No historical browser-saved designs are uploaded automatically. Studio sharing
 uses supplied templates and the illustrated character; there is no photo-upload
 control. Admins should inspect the image, title and display name before approval.
 The separate local design gallery still saves only on the current browser.
+
+Wedding fair kiosk form: in Admin → Kiosk, use **Create wedding fair form**,
+select it, enter the staff PIN and start the kiosk. Event waivers are optional. Visitors enter first
+name, last name and email; wedding date/year, venue and guest estimate are
+optional. Contact permission is recorded with the submitted terms. Entries
+are available under Forms → Your forms → View submissions.
+
+The wedding template queues one pricing and booking information email per
+entry, due four hours after submission. No immediate receipt is sent. Email
+uses the saved business hourly rate, minimum hours and public app URL. Queue
+records are stored in the database; restarting the app creates the new
+`wedding_followup` table. Active app workers check every 30 seconds and claim
+jobs atomically before sending. Existing marketing unsubscribes are honoured;
+these enquiries do not subscribe visitors to general marketing campaigns.
+Recent delivery states are shown under Admin → Kiosk. Failed deliveries retry
+up to three attempts, 15 minutes apart. An uncertain provider exception needs
+review rather than automatic resending.
+
+Edit the wedding email at **Communications → Wedding follow-up**. The subject
+and message support the listed name, pricing, contact and booking placeholders.
+Preview changes without sending, then save to update queued and future emails.
+The contact explanation and unsubscribe link are always appended automatically.
+The default subject names Aston Hall Hotel Wedding Fair. A custom saved subject
+is retained. On kiosk forms, two minutes of inactivity shows a 20-second warning;
+visitors can continue or clear the form. Expiry clears visible answers, invalidates
+the previous submission token and reopens a fresh form. Repeating the same email
+on the same wedding form updates the enquiry and keeps the original follow-up
+due time, including when the email has already been sent. Existing duplicate
+queued emails for that form/address are suppressed when processed.
+
+Keep the web service running for timely email delivery. Sleeping or stopped
+hosting cannot deliver at the due time; overdue jobs send when it resumes.
+An external scheduler can also run `flask --app app send-wedding-followups`
+every minute against the same database and email configuration. Run tests with
+`python -m unittest test_kiosk test_wedding_followups test_native_forms`.

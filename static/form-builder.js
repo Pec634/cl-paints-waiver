@@ -13,6 +13,7 @@
     const features = window.CLNativeFeatures;
     const textTypes = ['text', 'textarea', 'email', 'tel', 'url'];
     const guidance = {
+        enquiry: ['Collect quick contact details and wedding plans. No booking or immediate email is created. Wedding fair templates email information four hours after entry.', 'Explain what information you will email after the fair and how customers can stop contact.'],
         giveaway: ['Clients sign in with a verified account. Each account can enter once per giveaway.', 'Describe the prize, eligibility, closing date and how you will choose and contact the winner.'],
         photo: ['Clients sign in, name participants, confirm permission and upload one to three photos or videos.', 'Explain where media may be used, permission limits and how clients can contact you to withdraw consent.'],
         booking: ['Adds your information and questions to the standard booking form. Requests appear in Bookings.', 'Explain the seasonal service, pricing, travel details and any restrictions.']
@@ -353,7 +354,7 @@
             previewGrid.append(block);
         });
         else preview.append(node('p', 'Correct the advanced block settings to use the visual editor.'));
-        preview.append(node('h4', kind.value === 'giveaway' ? 'Giveaway rules' : kind.value === 'photo' ? 'Photography / video permissions' : 'Seasonal booking information'));
+        preview.append(node('h4', kind.value === 'giveaway' ? 'Giveaway rules' : kind.value === 'photo' ? 'Photography / video permissions' : kind.value === 'enquiry' ? 'Contact permission' : 'Seasonal booking information'));
         preview.append(node('p', document.getElementById('builder-terms').value || 'Your rules or information will appear here.', 'builder-preserve'));
         preview.append(node('p', 'Customers confirm they have read and agree to this wording.'));
         if (kind.value==='booking') {

@@ -2676,6 +2676,29 @@ label.moodboard-admin-card > div {
 .kiosk-shell > header { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 18px; background:white; border-bottom:1px solid var(--border); }
 .kiosk-shell > header strong { margin-right:auto; }
 .kiosk-shell > iframe { flex:1; width:100%; min-height:0; border:0; }
+.client-form .kiosk-form-choice { display:flex; align-items:center; gap:12px; padding:10px 0; }
+.client-form .kiosk-form-choice input[type="checkbox"] { width:20px; height:20px; flex:0 0 20px; margin:0; padding:0; accent-color:var(--pink); }
+.client-form .native-consent-choice { display:flex; align-items:flex-start; gap:12px; }
+.client-form .native-consent-choice input[type="checkbox"] { width:20px; height:20px; flex:0 0 20px; margin:3px 0 0; padding:0; accent-color:var(--pink); }
+.kiosk-next-person-box { margin-top:24px; padding:16px; border:2px solid var(--pink); border-radius:16px; background:#fff5fa; }
+.kiosk-next-person-track { position:relative; }
+.kiosk-next-person-button { position:relative; display:inline-flex; justify-content:center; align-items:center; gap:12px; width:100%; min-width:0; min-height:64px; padding:0; border:0; overflow:hidden; box-sizing:border-box; white-space:nowrap; text-align:center; }
+.kiosk-next-person-button > span { flex-shrink:0; }
+.kiosk-next-person-button.is-counting { animation:kiosk-next-person-shrink 10s linear forwards; }
+.kiosk-next-person-count { flex-shrink:0; padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.22); font-variant-numeric:tabular-nums; }
+#kioskNextPersonCount { display:inline-block; min-width:2ch; }
+@keyframes kiosk-next-person-shrink { from { width:100%; } to { width:0; } }
+@media (prefers-reduced-motion:reduce) { .kiosk-next-person-button.is-counting { animation:none; } }
+.kiosk-fireworks { position:fixed; inset:0; z-index:20; overflow:hidden; pointer-events:none; }
+.kiosk-firework-burst { position:absolute; width:0; height:0; }
+.kiosk-firework-spark { position:absolute; width:6px; height:6px; border-radius:50%; background:var(--spark-colour); opacity:0; animation:kiosk-firework-burst 1.6s cubic-bezier(.15,.65,.3,1) both; }
+@keyframes kiosk-firework-burst {
+  0% { opacity:0; transform:translate(0,0) scale(.3); }
+  12% { opacity:.9; }
+  70% { opacity:.65; }
+  100% { opacity:0; transform:translate(var(--spark-x),var(--spark-y)) scale(.15); }
+}
+@media (prefers-reduced-motion:reduce) { .kiosk-fireworks { display:none; } }
 .kiosk-customer { max-width:620px; margin:24px auto; padding:24px; }
 #kioskStaffDialog { border:1px solid var(--border); border-radius:20px; padding:24px; max-width:calc(100% - 32px); }
 #kioskStaffDialog::backdrop { background:#07142b99; }

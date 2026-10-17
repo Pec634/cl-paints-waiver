@@ -12,7 +12,7 @@
     <p>Choose a starting point, then personalise the wording, questions and dates.</p>
     <form method="post" class="builder-actions">
         <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="preset">
-        <label>Template<select name="preset"><option value="giveaway">Quarterly VIP giveaway</option><option value="photo">Photography consent</option><option value="halloween">Halloween booking promotion</option></select></label>
+        <label>Template<select name="preset"><option value="wedding_fair">Wedding fair enquiry</option><option value="giveaway">Quarterly VIP giveaway</option><option value="photo">Photography consent</option><option value="halloween">Halloween booking promotion</option></select></label>
         <button class="btn">Create draft from template</button>
         <a class="btn" href="{{ url_for('native_forms_admin') }}#form-editor">Start a blank form</a>
     </form>
@@ -33,7 +33,7 @@
         <fieldset {% if locked %}disabled{% endif %}>
         <legend>1. Form details</legend>
         <label>Form type<select name="kind" id="builder-kind" {% if edit_form %}disabled{% endif %}>
-            <option value="giveaway" {% if selected_kind == 'giveaway' %}selected{% endif %}>Giveaway entry</option>
+            <option value="enquiry" {% if selected_kind == 'enquiry' %}selected{% endif %}>Quick enquiry / lead capture</option><option value="giveaway" {% if selected_kind == 'giveaway' %}selected{% endif %}>Giveaway entry</option>
             <option value="photo" {% if selected_kind == 'photo' %}selected{% endif %}>Photo / video consent</option>
             <option value="booking" {% if selected_kind == 'booking' %}selected{% endif %}>Seasonal booking</option>
         </select></label>
@@ -116,7 +116,7 @@
 {% for form in forms %}
 {% set state = 'draft' if not form.enabled else ('open' if available(form) else ('scheduled' if form.starts_at and form.starts_at > now else 'closed')) %}
 <article class="panel builder-form-card" data-title="{{ form.title|lower }}" data-state="{{ state }}">
-<h3>{{ form.title }}</h3><p><strong>{{ {'draft':'Draft', 'open':'Open now', 'scheduled':'Scheduled', 'closed':'Closed'}[state] }}</strong> &middot; {{ {'giveaway':'Giveaway', 'photo':'Photo / video consent', 'booking':'Seasonal booking'}[form.kind] }}</p>
+<h3>{{ form.title }}</h3><p><strong>{{ {'draft':'Draft', 'open':'Open now', 'scheduled':'Scheduled', 'closed':'Closed'}[state] }}</strong> &middot; {{ {'enquiry':'Quick enquiry', 'giveaway':'Giveaway', 'photo':'Photo / video consent', 'booking':'Seasonal booking'}[form.kind] }}</p>
 {% if form.starts_at %}<p>Opens: {{ local(form.starts_at)|replace('T', ' ') }} UK time</p>{% endif %}
 {% if form.ends_at %}<p>Closes: {{ local(form.ends_at)|replace('T', ' ') }} UK time</p>{% endif %}
 <div class="builder-actions">

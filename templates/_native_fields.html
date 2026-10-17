@@ -1,5 +1,5 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='native-fields.css') }}">
-<div class="native-fields" data-native-fields data-native-schema="{{ fields|tojson|forceescape }}" data-activity-csrf="{{ workflow_csrf }}" data-activity-url="{{ url_for('form_activity',form_id=field_form.id) if field_form is defined and field_form else '' }}" data-draft-url="{{ url_for('native_form_draft', form_id=field_form.id) if field_form is defined and field_form else '' }}">
+<div class="native-fields" data-native-fields data-native-schema="{{ fields|tojson|forceescape }}" data-activity-csrf="{{ workflow_csrf }}" data-activity-url="{{ url_for('form_activity',form_id=field_form.id) if field_form is defined and field_form else '' }}" data-draft-url="{{ url_for('native_form_draft', form_id=field_form.id) if field_form is defined and field_form and not kiosk_item else '' }}">
 {% include '_form_spam.html' %}
 {% for field in fields %}
 {% set index = loop.index0 %}

@@ -20,12 +20,229 @@ class KioskTest(unittest.TestCase):
     def tearDown(self):
         self.fixture.tearDown()
 
+    def test_admin_can_replace_saved_pin_and_unlock_with_new_pin(self):
+        from werkzeug.security import check_password_hash
+        item = main.db.session.get(main.KioskSession, self.kiosk_id)
+        self.admin.post('/kiosk/staff', data=dict(csrf_token=item.csrf, pin='583729', action='exit'))
+        self.admin.get('/admin/kiosk')
+        with self.admin.session_transaction() as state: csrf = state['client_csrf']
+        payload = dict(csrf_token=csrf, event_id=self.event.id, pin='917264')
+        response = self.admin.post('/admin/kiosk', data=payload)
+        self.assertIn(b'Set a new staff PIN', response.data)
+        with self.admin.session_transaction() as state: self.assertNotIn('kiosk_id', state)
+        payload['replace_pin'] = 'yes'
+        self.assertEqual(self.admin.post('/admin/kiosk', data={**payload, 'csrf_token':'wrong'}).status_code, 400)
+        self.assertTrue(check_password_hash(main.db.session.get(main.BusinessSetting, 'kiosk_pin_hash').value, '583729'))
+        self.assertEqual(self.admin.post('/admin/kiosk', data=payload).status_code, 302)
+        with self.admin.session_transaction() as state: identity = state['kiosk_id']
+        item = main.db.session.get(main.KioskSession, identity)
+        self.admin.post('/kiosk/staff', data=dict(csrf_token=item.csrf, pin='583729', action='exit'))
+        self.assertNotEqual(item.phase, 'closed')
+        self.admin.post('/kiosk/staff', data=dict(csrf_token=item.csrf, pin='917264', action='exit'))
+        self.assertEqual(item.phase, 'closed')
+
+    def test_wedding_fair_form_is_quick_and_does_not_email_during_fair(self):
+        import json
+        item = main.db.session.get(main.KioskSession, self.kiosk_id)
+        self.admin.post('/kiosk/staff', data=dict(csrf_token=item.csrf, pin='583729', action='exit'))
+        self.admin.get('/admin/kiosk')
+        with self.admin.session_transaction() as state: csrf = state['client_csrf']
+        for _ in range(2):
+            self.admin.post('/admin/kiosk', data=dict(csrf_token=csrf, action='wedding_fair'))
+        Form, Submission, _ = main.native_form_models
+        form = Form.query.filter_by(kind='enquiry').one()
+        self.assertTrue(form.enabled)
+        page = self.admin.get(f'/admin/kiosk?wedding_form={form.id}&event_id={self.event.id}')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(f'name="form_ids" value="{form.id}" checked'.encode(), page.data)
+        self.assertIn(f'name="event_ids" value="{self.event.id}" checked'.encode(), page.data)
+        self.assertEqual(self.admin.get('/admin/kiosk?wedding_form=invalid&event_id=invalid').status_code, 200)
+        self.assertTrue(all(not field['required'] for field in json.loads(form.fields_json)))
+        self.event.status = 'Closed'; main.db.session.commit()
+        self.admin.post('/admin/kiosk', data=dict(csrf_token=csrf, selection_present='1',
+            form_ids=str(form.id), pin='583729'))
+        with self.admin.session_transaction() as state: kiosk_id = state['kiosk_id']
+        kiosk = main.db.session.get(main.KioskSession, kiosk_id)
+        self.assertIsNone(kiosk.event_id)
+        self.assertEqual(self.admin.get('/kiosk').status_code, 200)
+        self.assertIn(form.title.encode(), self.admin.get('/kiosk/customer').data)
+        self.assertEqual(self.admin.post('/kiosk/new-waiver', data=dict(csrf_token=kiosk.csrf)).status_code, 403)
+        page = self.admin.get(f'/forms/{form.id}')
+        self.assertIn(b'Send me wedding information', page.data)
+        self.assertIn(b'data-draft-url=""', page.data)
+        self.assertNotIn(b'Submit media and consent', page.data)
+        with self.admin.session_transaction() as state:
+            payload = dict(csrf_token=state['client_csrf'], submission_token=state['native_form_'+str(form.id)],
+                guest_first_name='Wedding', guest_last_name='Visitor', guest_email='visitor@example.com',
+                custom_0='Summer 2028', custom_1='', custom_2='Not sure yet', agree='yes')
+        # Background requests and redirects must not invalidate the visible form.
+        self.admin.get('/phone-push-worker.js')
+        self.admin.get(f'/forms/{form.id}/draft', follow_redirects=True)
+        self.admin.get('/kiosk/customer')
+        with self.admin.session_transaction() as state:
+            self.assertEqual(state['client_csrf'], payload['csrf_token'])
+        activity = self.admin.post(f'/forms/{form.id}/activity', json=dict(started=True, steps=[0]),
+            headers={'X-CSRF-Token': payload['csrf_token']})
+        self.assertEqual(activity.status_code, 200)
+        self.assertEqual(self.admin.post(f'/forms/{form.id}/activity', json={},
+            headers={'X-CSRF-Token': 'wrong'}).status_code, 400)
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            response = self.admin.post(f'/forms/{form.id}', data=payload)
+        send.assert_not_called()
+        self.assertTrue(response.location.endswith('/kiosk/form-done'))
+        confirmation = self.admin.get(response.location)
+        self.assertIn(b'Your form has been received.', confirmation.data)
+        self.assertIn(b'10 seconds', confirmation.data)
+        self.assertIn(b'Click for next person', confirmation.data)
+        self.assertIn(b'const duration = 10000;', confirmation.data)
+        self.assertIn(f'href="/forms/{form.id}"'.encode(), confirmation.data)
+        fresh_form = self.admin.get(f'/forms/{form.id}')
+        self.assertEqual(fresh_form.status_code, 200)
+        self.assertNotIn(b'visitor@example.com', fresh_form.data)
+        self.assertNotIn(b'Summer 2028', fresh_form.data)
+        with self.admin.session_transaction() as state:
+            self.assertNotEqual(state['native_form_'+str(form.id)], payload['submission_token'])
+        entry = Submission.query.filter_by(form_id=form.id).one()
+        self.assertEqual(entry.email, 'visitor@example.com')
+        self.assertEqual(json.loads(entry.answers_json)['Wedding date or expected year'], 'Summer 2028')
+        queue = main.app.extensions['wedding_followups']
+        job = queue['model'].query.filter_by(submission_id=entry.id).one()
+        self.assertEqual(job.due_at, entry.created_at + timedelta(hours=4))
+        original_due = job.due_at
+        with self.admin.session_transaction() as state:
+            payload.update(csrf_token=state['client_csrf'], submission_token=state['native_form_'+str(form.id)])
+        payload.update(guest_email='VISITOR@example.com', custom_0='Summer 2030')
+        repeated = self.admin.post(f'/forms/{form.id}', data=payload)
+        self.assertTrue(repeated.location.endswith('/kiosk/form-done'))
+        self.assertEqual(Submission.query.filter_by(form_id=form.id).count(), 1)
+        self.assertEqual(queue['model'].query.count(), 1)
+        self.assertEqual(job.due_at, original_due)
+        self.assertEqual(json.loads(entry.answers_json)['Wedding date or expected year'], 'Summer 2030')
+        self.admin.get(repeated.location)
+        self.admin.get(f'/forms/{form.id}')
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            queue['process'](job.due_at - timedelta(seconds=1))
+            send.assert_not_called()
+            queue['process'](job.due_at)
+            queue['process'](job.due_at + timedelta(minutes=1))
+        send.assert_called_once()
+        self.assertEqual(send.call_args.args[0], 'visitor@example.com')
+        self.assertIn('/booking', send.call_args.args[2])
+        self.assertIn('per hour', send.call_args.args[2])
+        self.assertEqual(main.app.test_client().get('/booking').status_code, 200)
+        self.assertEqual(job.status, 'sent')
+        self.assertTrue(entry.email_sent)
+        # Updating a contact after the email was sent must not queue another.
+        with self.admin.session_transaction() as state:
+            payload.update(csrf_token=state['client_csrf'], submission_token=state['native_form_'+str(form.id)])
+        payload.update(guest_email='VISITOR@example.com', custom_0='Summer 2029')
+        self.assertEqual(self.admin.post(f'/forms/{form.id}', data=payload).status_code, 302)
+        self.assertEqual(Submission.query.filter_by(form_id=form.id).count(), 1)
+        self.assertEqual(queue['model'].query.count(), 1)
+        self.assertEqual(json.loads(entry.answers_json)['Wedding date or expected year'], 'Summer 2029')
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            queue['process'](job.due_at + timedelta(days=1))
+        send.assert_not_called()
+
+    def test_idle_reset_clears_session_and_invalidates_old_submission_token(self):
+        import json
+        Form = main.native_form_models[0]
+        form = Form(kind='enquiry', title='Idle reset enquiry', terms='Contact permission', enabled=True, fields_json='[]')
+        main.db.session.add(form); main.db.session.commit()
+        item = main.db.session.get(main.KioskSession, self.kiosk_id)
+        item.choices_json = json.dumps(dict(events=[self.event.id], forms=[form.id]))
+        main.db.session.commit()
+        page = self.admin.get(f'/forms/{form.id}')
+        self.assertIn(b'kioskIdleDialog', page.data)
+        with self.admin.session_transaction() as state:
+            old_token = state['native_form_'+str(form.id)]
+            state['native_draft_owner'] = 'old-person'
+        path = f'/kiosk/forms/{form.id}/reset'
+        self.assertEqual(self.admin.post(path).status_code, 400)
+        self.assertEqual(self.admin.post(path, headers={'X-CSRF-Token':item.csrf}).status_code, 200)
+        self.admin.get(f'/forms/{form.id}')
+        with self.admin.session_transaction() as state:
+            self.assertNotEqual(old_token, state['native_form_'+str(form.id)])
+            csrf = state['client_csrf']
+        self.assertEqual(self.admin.post(f'/forms/{form.id}', data=dict(csrf_token=csrf, submission_token=old_token)).status_code, 400)
+
+    def test_selected_events_and_forms_are_enforced(self):
+        import json
+        Form = main.native_form_models[0]
+        selected = Form(kind='giveaway', title='Kiosk giveaway', terms='Entry rules', enabled=True, fields_json='[]')
+        hidden = Form(kind='giveaway', title='Other giveaway', terms='Entry rules', enabled=True, fields_json='[]')
+        second, _ = self.fixture.event()
+        second.name = 'Second selected event'
+        main.db.session.add_all([selected, hidden]); main.db.session.commit()
+        item = main.db.session.get(main.KioskSession, self.kiosk_id)
+        self.admin.post('/kiosk/staff', data=dict(csrf_token=item.csrf, pin='583729', action='exit'))
+        self.admin.get('/admin/kiosk')
+        with self.admin.session_transaction() as state: csrf = state['client_csrf']
+        self.admin.post('/admin/kiosk', data=dict(csrf_token=csrf, selection_present='1',
+            event_ids=[str(self.event.id), str(second.id)], form_ids=str(selected.id), pin='583729'))
+        with self.admin.session_transaction() as state: identity = state['kiosk_id']
+        item = main.db.session.get(main.KioskSession, identity)
+        self.assertEqual(json.loads(item.choices_json)['forms'], [selected.id])
+        menu = self.admin.get('/kiosk/customer')
+        self.assertIn(b'Kiosk giveaway', menu.data)
+        self.assertIn(b'Second selected event', menu.data)
+        self.assertNotIn(b'Other giveaway', menu.data)
+        self.assertEqual(self.admin.get(f'/forms/{hidden.id}').status_code, 302)
+        self.assertIn(b'guest_email', self.admin.get(f'/forms/{selected.id}').data)
+        with self.admin.session_transaction() as state:
+            form_csrf = state['client_csrf']
+            submission_token = state['native_form_'+str(selected.id)]
+        with patch.object(main, 'send_client_email', return_value=True):
+            response = self.admin.post(f'/forms/{selected.id}', data=dict(csrf_token=form_csrf,
+                submission_token=submission_token, agree='yes', guest_first_name='Guest',
+                guest_last_name='Customer', guest_email=self.fixture.account.email))
+        self.assertTrue(response.location.endswith('/kiosk/form-done'))
+        submission = main.native_form_models[1].query.filter_by(form_id=selected.id).one()
+        self.assertEqual(submission.name, 'Guest Customer')
+        self.assertEqual(self.admin.get(f'/client/form-submissions/{submission.id}').status_code, 302)
+        with self.admin.session_transaction() as state: self.assertNotIn('client_id', state)
+        self.assertEqual(self.admin.post('/kiosk/choose', data=dict(event_id=second.id)).status_code, 400)
+        self.admin.post('/kiosk/choose', data=dict(csrf_token=item.csrf, event_id=second.id))
+        self.assertEqual(item.event_id, second.id)
+        self.assertIn(b'I already have a waiver', self.admin.get('/kiosk/customer').data)
+        self.admin.get('/kiosk/menu')
+        selected.enabled=False; main.db.session.commit()
+        self.assertNotIn(b'Kiosk giveaway', self.admin.get('/kiosk/menu').data)
+        self.assertEqual(self.admin.get(f'/forms/{selected.id}').status_code, 404)
+
+    def test_legacy_event_requirement_is_removed_without_losing_sessions(self):
+        from kiosk import ensure_schema
+        from sqlalchemy import text, inspect
+        main.db.session.remove()
+        with main.db.engine.begin() as connection:
+            connection.execute(text('''CREATE TABLE kiosk_session_legacy (
+                id VARCHAR(64) PRIMARY KEY, event_id INTEGER NOT NULL REFERENCES event(id),
+                phase VARCHAR(20) NOT NULL, csrf VARCHAR(64) NOT NULL,
+                waiver_id INTEGER REFERENCES waiver(id), completed_at DATETIME,
+                choices_json TEXT, pin_attempts INTEGER NOT NULL, locked_until DATETIME)'''))
+            columns = 'id, event_id, phase, csrf, waiver_id, completed_at, choices_json, pin_attempts, locked_until'
+            connection.execute(text(f'INSERT INTO kiosk_session_legacy ({columns}) SELECT {columns} FROM kiosk_session'))
+            connection.execute(text('DROP TABLE kiosk_session'))
+            connection.execute(text('ALTER TABLE kiosk_session_legacy RENAME TO kiosk_session'))
+        ensure_schema(main.db)
+        ensure_schema(main.db)
+        column = next(c for c in inspect(main.db.engine).get_columns('kiosk_session') if c['name'] == 'event_id')
+        self.assertTrue(column['nullable'])
+        item = main.db.session.get(main.KioskSession, self.kiosk_id)
+        self.assertEqual(item.event_id, self.event.id)
+        self.assertEqual(item.phase, 'signup')
+        self.assertEqual(self.admin.get('/kiosk/customer').status_code, 200)
+        item.event_id = None; item.choices_json = '{"events": [], "forms": []}'
+        main.db.session.commit()
+        self.assertEqual(self.admin.get('/kiosk').status_code, 200)
+
     def test_existing_kiosk_table_is_upgraded_without_losing_session(self):
         from kiosk import ensure_schema
         from sqlalchemy import text, inspect
         main.db.session.remove()
         with main.db.engine.begin() as connection:
             connection.execute(text('ALTER TABLE kiosk_session DROP COLUMN completed_at'))
+            connection.execute(text('ALTER TABLE kiosk_session DROP COLUMN choices_json'))
         ensure_schema(main.db)
         ensure_schema(main.db)
         self.assertIn('completed_at', {column['name'] for column in inspect(main.db.engine).get_columns('kiosk_session')})

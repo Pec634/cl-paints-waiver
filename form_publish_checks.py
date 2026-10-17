@@ -9,7 +9,7 @@ from form_workflows import catalog
 def checklist(form, settings, image_exists):
     errors=[];warnings=[]
     if not form.title.strip() or len(form.title)>150:errors.append('Add a form title under 151 characters.')
-    if form.kind in ('giveaway','photo') and not form.terms.strip():errors.append('Add the rules or permissions customers will accept.')
+    if form.kind in ('giveaway','photo','enquiry') and not form.terms.strip():errors.append('Add the rules or permissions customers will accept.')
     try:
         fields=validate_fields(json.loads(form.fields_json))
         warnings.extend(accessibility_issues(fields))

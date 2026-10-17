@@ -541,6 +541,8 @@ from admin_security import define_models as define_admin_security_models
 admin_security_models = define_admin_security_models(db)
 from native_forms import define_models as define_native_form_models
 native_form_models = define_native_form_models(db)
+from wedding_followups import define_model as define_wedding_followup_model
+WeddingFollowup = define_wedding_followup_model(db)
 from photo_library import define_models as define_photo_library_models, ensure_schema as ensure_photo_library_schema
 photo_library_models = define_photo_library_models(db)
 from website_reports import define_models as define_website_report_models
@@ -2805,6 +2807,10 @@ register_report_targets(app, db, BusinessSetting, Booking, Waiver, tool_models[1
 
 from enquiry_automation import register as register_enquiry_automation
 register_enquiry_automation(app, db, website_enquiry_models[1], tool_models[3], notification_models[1], get_business_settings, lambda *args: send_client_email(*args))
+
+from wedding_followups import register as register_wedding_followups
+register_wedding_followups(app, db, WeddingFollowup, native_form_models[1], marketing_models[0],
+                          get_business_settings, lambda *args: send_client_email(*args), BusinessSetting, admin_required)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

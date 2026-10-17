@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block body %}<main class="kiosk-customer"><a class="btn" href="{{ url_for('kiosk_menu') }}">Back to kiosk forms</a>{% for category,message in get_flashed_messages(with_categories=true) %}<p role="status">{{ message }}</p>{% endfor %}{% block content %}{% endblock %}</main>{% endblock %}{% block brand_footer %}{% endblock %}

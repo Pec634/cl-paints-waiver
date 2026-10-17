@@ -37,6 +37,14 @@ def field(label, kind='text', required=True, options=None):
     return result
 
 PRESETS = {
+    'wedding_fair': dict(kind='enquiry', title='Lovely to meet you at the wedding fair',
+        description="Enjoy the fair - we will email you pricing and how to check dates or book with CL Paints four hours after you submit. This takes about 30 seconds. Estimates are fine; leave anything undecided blank.",
+        terms='CL Paints will use these details to email pricing and how to check dates or book four hours after your enquiry and respond to your enquiry. This is an enquiry, not a booking. You can ask us to stop contacting you at any time.',
+        fields=[
+            dict(field('Wedding date or expected year', required=False), placeholder='e.g. 12 June 2027, summer 2028, or not decided', help='An exact date or just the year is fine.'),
+            dict(field('Venue (if planned)', required=False), placeholder='Venue name or area, if known'),
+            dict(field('Roughly how many guests?', 'select', False, ['Under 50', '50-99', '100-149', '150-199', '200+', 'Not sure yet'])),
+        ]),
     'giveaway': dict(kind='giveaway',title='Quarterly VIP Give-away',description='Enter for a chance to win a free two-hour face painting booking. Entry is free. Your name and email come from your verified account.',terms=GIVEAWAY_TERMS,fields=[
         field('I confirm I am aged 18 or over','checkbox'),
         field('I am not an employee, contractor or immediate family member of CL Paints','checkbox'),

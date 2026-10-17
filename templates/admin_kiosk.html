@@ -1,1 +1,21 @@
-{% extends 'rewards/base.html' %}{% block content %}<h1>Public-event kiosk</h1><section class="panel"><p>Customers complete their waiver without signing up or verifying their email. After a completed waiver, the kiosk resets automatically after 30 seconds. Staff must enter the PIN to exit.</p><p>Use your device’s kiosk mode or Guided Access to lock browser controls. Full-screen mode alone cannot prevent browser navigation.</p><form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><label>Public event<select name="event_id" required>{% for event in events %}<option value="{{ event.id }}" {% if request.args.get('event_id', type=int) == event.id %}selected{% endif %}>{{ event.name }} · {{ event.event_date }}</option>{% endfor %}</select></label><label>{{ 'Staff PIN' if pin_configured else 'Set your staff PIN (first setup)' }}<input type="password" name="pin" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" required></label><button class="btn primary">Start kiosk</button></form></section>{% endblock %}
+{% extends 'rewards/base.html' %}
+{% block content %}
+<h1>Kiosk</h1>
+<section class="panel"><h2>Wedding fair</h2><p>A short form for names, email, wedding date or year, venue and estimated guest numbers. Emails pricing and a link to check dates or book four hours after each entry, with permission. No immediate email is sent.</p><form method="post"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn" name="action" value="wedding_fair">Create wedding fair form</button></form></section>
+<section class="panel">
+<p>Choose the event waivers and published forms customers can open on this device. Completed waivers reset after 30 seconds. A staff PIN is required to exit.</p>
+<p>Use your device's kiosk mode or Guided Access to lock browser controls.</p>
+<form method="post" class="client-form">
+<input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+<input type="hidden" name="selection_present" value="1">
+<fieldset><legend>Event waivers</legend><p>Optional. Select events only if you want waiver lookup and check-in. You can run the kiosk with just a published form.</p>
+{% for event in events %}<label class="kiosk-form-choice"><input type="checkbox" name="event_ids" value="{{ event.id }}" {% if event.id|string in request.form.getlist('event_ids') or (request.args.get('event_id', '')|int) == event.id %}checked{% endif %}> {{ event.name }} &middot; {{ event.event_date }}</label>{% else %}<p>No open public events are available.</p>{% endfor %}</fieldset>
+<fieldset><legend>Published forms</legend>
+{% for form in forms %}<label class="kiosk-form-choice"><input type="checkbox" name="form_ids" value="{{ form.id }}" {% if form.id|string in request.form.getlist('form_ids') or (request.args.get('wedding_form', '')|int) == form.id %}checked{% endif %}> {{ form.title }}</label>{% else %}<p>No published forms are currently open.</p>{% endfor %}
+<p><a href="{{ url_for('native_forms_admin') }}">Manage forms</a></p></fieldset>
+<label>{{ 'Staff PIN' if pin_configured else 'Set your staff PIN (first setup)' }}<input type="password" name="pin" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off" required></label>
+{% if pin_configured %}<p>Enter your saved PIN, or tick below to replace it with a new one.</p><label class="kiosk-form-choice"><input type="checkbox" name="replace_pin" value="yes" {% if request.form.get('replace_pin') == 'yes' %}checked{% endif %}> Set a new staff PIN</label><p>This saves the PIN entered above for unlocking all kiosks.</p>{% endif %}
+<button class="btn primary">Start kiosk</button>
+</form></section>
+{% if followups %}<section class="panel"><h2>Recent wedding follow-ups</h2><p>Automatic emails are due four hours after entry. The app must be running to send them; overdue emails are picked up after a restart.</p><table><thead><tr><th>Entry</th><th>Due (UTC)</th><th>Email status</th></tr></thead><tbody>{% for job in followups %}<tr><td>F-{{ job.submission_id }}</td><td>{{ job.due_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ {'duplicate':'Duplicate suppressed', 'pending':'Queued', 'sending':'Sending', 'sent':'Sent', 'cancelled':'Unsubscribed', 'failed':'Failed - needs attention', 'review':'Delivery uncertain - needs review'}.get(job.status, job.status) }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+{% endblock %}

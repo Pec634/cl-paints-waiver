@@ -1,0 +1,7 @@
+<dialog id="kioskIdleDialog" aria-labelledby="kioskIdleTitle" data-reset-url="{{ url_for('kiosk_reset_form', form_id=form.id) }}" data-form-url="{{ url_for('native_form_open', form_id=form.id) }}" data-csrf="{{ kiosk_item.csrf }}">
+  <h2 id="kioskIdleTitle">Still filling this in?</h2>
+  <p role="status">Your answers will clear in <span id="kioskIdleCountdown">20</span> seconds so the next person can start.</p>
+  <button class="btn primary" type="button" id="kioskIdleContinue">I'm still here</button>
+  <button class="btn" type="button" id="kioskIdleReset">Clear and start again</button>
+</dialog>
+<script src="{{ url_for('static', filename='kiosk-idle-reset.js', v='1') }}" defer></script>

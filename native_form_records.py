@@ -146,7 +146,11 @@ def register(app, db, models, Account, Booking, current_client, admin_required, 
 
     def record_submission(form, item, values, uploads):
         version = record_version(form)
-        db.session.add(SubmissionRecord(submission_id=item.id, version_id=version.id, snapshot_json=version.snapshot_json))
+        record = db.session.get(SubmissionRecord, item.id)
+        if record:
+            record.version_id = version.id; record.snapshot_json = version.snapshot_json
+        else:
+            db.session.add(SubmissionRecord(submission_id=item.id, version_id=version.id, snapshot_json=version.snapshot_json))
         save_files(uploads, values, submission_id=item.id)
 
     def record_booking(form, booking, values, uploads):

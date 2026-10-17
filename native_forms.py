@@ -145,6 +145,8 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                     if not preset:raise ValueError('Choose a listed template.')
                     form=Form(kind=preset['kind'],title=preset['title'],description=preset['description'],terms=preset['terms'],fields_json=json.dumps(preset['fields']))
                     db.session.add(form)
+                    if request.form.get('preset') == 'wedding_fair':
+                        db.session.flush(); records['set_settings'](form, {'wedding_followup': '4h'})
                 elif request.form.get('action')=='duplicate':
                     source=db.get_or_404(Form,request.form.get('id',type=int))
                     form=Form(kind=source.kind,title=source.title[:143]+' (copy)',description=source.description,
@@ -160,9 +162,9 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                 else:
                     kind=request.form.get('kind');title=request.form.get('title','').strip()
                     terms=request.form.get('terms','').strip();description=request.form.get('description','').strip()
-                    if kind not in ('giveaway','photo','booking') or not title or len(title)>150 or len(description)>2000 or len(terms)>10000:
+                    if kind not in ('giveaway','photo','booking','enquiry') or not title or len(title)>150 or len(description)>2000 or len(terms)>10000:
                         raise ValueError('Check the form type, title and text lengths.')
-                    if kind in ('giveaway','photo') and not terms:raise ValueError('Add the giveaway rules or photography permissions before creating this form.')
+                    if kind in ('giveaway','photo','enquiry') and not terms:raise ValueError('Add the rules, permissions or contact information before creating this form.')
                     fields=parse_fields(request.form)
                     settings_data=validate_settings(request.form)
                     from form_workflows import catalog
@@ -192,6 +194,7 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                     if form.enabled or form.kind!=kind:raise ValueError('Unpublish before editing; form type cannot change.')
                     form.title=title;form.description=description;form.terms=terms;form.fields_json=json.dumps(fields);form.starts_at=start;form.ends_at=end
                     db.session.add(form)
+                    if records['settings'](form).get('wedding_followup') == '4h': settings_data['wedding_followup'] = '4h'
                     db.session.flush();records['set_settings'](form,settings_data)
                 records['record_version'](form)
                 db.session.commit()
@@ -229,7 +232,7 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
             if records['settings'](form).get('waitlist_enabled')=='yes':return redirect(url_for('form_waiting_list',form_id=form.id))
             abort(404)
         if form.kind=='booking':return redirect(url_for('booking_request',seasonal=form.id))
-        if not current_client():
+        if not current_client() and not session.get('kiosk_id'):
             session['native_return_form']=form.id
             return redirect(url_for('client.login'))
         workflows['track'](form);db.session.commit()
@@ -239,13 +242,28 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     @app.post('/forms/<int:form_id>')
     def native_form_submit(form_id):
         form=db.get_or_404(Form,form_id);account=current_client()
-        if not account:abort(401)
+        kiosk_guest = bool(session.get('kiosk_id'))
+        if not account and not kiosk_guest:abort(401)
         check()
         if not available(form) or form.kind=='booking':abort(404)
         token=session.get('native_form_'+str(form.id),'')
         if not token or not secrets.compare_digest(token,request.form.get('submission_token','')):abort(400)
         if request.content_length and request.content_length>32_000_000:abort(413)
         try:
+            if kiosk_guest:
+                from email_validator import validate_email, EmailNotValidError
+                from types import SimpleNamespace
+                first = request.form.get('guest_first_name', '').strip()
+                last = request.form.get('guest_last_name', '').strip()
+                if not first or not last or max(len(first), len(last)) > 100:
+                    raise ValueError('Enter your first and last name.')
+                try: email = validate_email(request.form.get('guest_email', ''), check_deliverability=False).normalized.casefold()
+                except EmailNotValidError: raise ValueError('Enter a valid email address.')
+                owner = Account.query.filter_by(email=email).first()
+                if not owner:
+                    owner = Account(email=email, first_name=first, last_name=last)
+                    db.session.add(owner); db.session.flush()
+                account = SimpleNamespace(id=owner.id, email=email, first_name=first, last_name=last)
             workflows['guard']()
             Form.query.filter_by(id=form.id).with_for_update().first()
             if workflows['full'](form):raise ValueError('This form has reached its response limit. Contact CL Paints or join its waiting list.')
@@ -279,16 +297,31 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                     elif content[4:8]==b'ftyp':mime,extension='video/mp4','mp4'
                     else:raise ValueError('Use JPG, PNG, WebP or MP4 media.')
                     uploads.append((content,mime,'upload-'+str(len(uploads)+1)+'.'+extension))
-            item=Submission(form_id=form.id,client_id=account.id,token=token,giveaway_key=f'{form.id}:{account.id}' if form.kind=='giveaway' else None,
-                email=account.email,name=(account.first_name+' '+account.last_name).strip(),answers_json=json.dumps(data),terms_snapshot=form.terms,title_snapshot=form.title)
+            wedding = form.kind == 'enquiry' and records['settings'](form).get('wedding_followup') == '4h'
+            item = Submission.query.filter_by(form_id=form.id, email=account.email).order_by(Submission.id).first() if wedding else None
+            if item:
+                item.name=(account.first_name+' '+account.last_name).strip()
+                item.answers_json=json.dumps(data); item.terms_snapshot=form.terms; item.title_snapshot=form.title
+                # Replacing a wedding enquiry also replaces any custom uploads.
+                db._native_extra_models[5].query.filter_by(submission_id=item.id).delete()
+            else:
+                key = f'wedding:{form.id}:{account.id}' if wedding else (f'{form.id}:{account.id}' if form.kind=='giveaway' else None)
+                item=Submission(form_id=form.id,client_id=account.id,token=token,giveaway_key=key,
+                    email=account.email,name=(account.first_name+' '+account.last_name).strip(),answers_json=json.dumps(data),terms_snapshot=form.terms,title_snapshot=form.title)
             db.session.add(item);db.session.flush()
             records['record_submission'](form,item,data,field_uploads)
+            if wedding:
+                app.extensions['wedding_followups']['enqueue'](item)
             for content,mime,filename in uploads:db.session.add(Media(submission_id=item.id,content=content,mime=mime,filename=filename))
             records['clear_draft'](form);workflows['track'](form,completed=True);db.session.commit()
             messages=confirmation(records['settings'](form),account.first_name,form.title,'F-'+str(item.id))
-            item.email_sent=send_email(account.email,messages.get('email_subject') or 'CL Paints: '+form.title+' received',messages.get('email_body') or f'Hello {account.first_name},\n\nWe received your submission for {form.title}. Reference: F-{item.id}.\n\nThis is not a booking confirmation or notification of a giveaway win.\n\nCL Paints')
+            if form.kind != 'enquiry':
+                item.email_sent=send_email(account.email,messages.get('email_subject') or 'CL Paints: '+form.title+' received',messages.get('email_body') or f'Hello {account.first_name},\n\nWe received your submission for {form.title}. Reference: F-{item.id}.\n\nThis is not a booking confirmation or notification of a giveaway win.\n\nCL Paints')
             db.session.commit();session.pop('native_form_'+str(form.id),None)
             flash('Submission received. Reference F-'+str(item.id)+'.','success')
+            if kiosk_guest:
+                session['kiosk_completed_form'] = form.id
+                return redirect(url_for('kiosk_form_done'))
             return redirect(url_for('native_form_submission',submission_id=item.id))
         except IntegrityError:
             db.session.rollback();flash('This entry has already been received. Giveaway entry is limited to one per account per giveaway.','error')

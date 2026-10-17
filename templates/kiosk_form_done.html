@@ -1,0 +1,45 @@
+{% extends 'kiosk_form_base.html' %}
+{% block content %}
+<div class="kiosk-fireworks" id="kioskFireworks" aria-hidden="true"></div>
+<section class="panel">
+  <h1>Thank you</h1>
+  <p role="status">Your form has been received.</p>
+  <p>The form will start again for the next person in 10 seconds. Tap the button to start sooner.</p>
+  <div class="kiosk-next-person-box">
+    <div class="kiosk-next-person-track">
+      <a class="btn primary kiosk-next-person-button" id="kioskNextPerson" href="{{ next_url }}">
+        <span>Click for next person</span>
+        <span class="kiosk-next-person-count" id="kioskNextPersonTimer" hidden aria-hidden="true"><span id="kioskNextPersonCount">10</span>s</span>
+      </a>
+    </div>
+  </div>
+</section>
+<script>
+(() => {
+  const button = document.getElementById('kioskNextPerson');
+  const count = document.getElementById('kioskNextPersonCount');
+  const duration = 10000;
+  const deadline = Date.now() + duration;
+  document.getElementById('kioskNextPersonTimer').hidden = false;
+  button.classList.add('is-counting');
+  let finished = false;
+  const nextPerson = () => {
+    if (finished) return;
+    finished = true;
+    location.replace({{ next_url|tojson }});
+  };
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    nextPerson();
+  });
+  const update = () => {
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    count.textContent = remaining;
+    if (!remaining) nextPerson();
+  };
+  setInterval(update, 100);
+  setTimeout(nextPerson, duration);
+})();
+</script>
+<script src="{{ url_for('static', filename='kiosk-fireworks.js', v='2') }}" defer></script>
+{% endblock %}

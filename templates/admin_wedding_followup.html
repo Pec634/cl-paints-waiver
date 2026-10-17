@@ -1,0 +1,20 @@
+{% extends 'rewards/base.html' %}
+{% block title %}Wedding follow-up | CL Paints{% endblock %}
+{% block content %}
+{% include '_communications_nav.html' %}
+<section class="panel">
+  <h2>Wedding fair follow-up email</h2>
+  <p>Sent automatically four hours after each wedding enquiry. Changes apply to emails still waiting to send and future enquiries.</p>
+  {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" class="client-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Email subject<input name="subject" maxlength="200" required value="{{ config.wedding_followup_subject }}"></label>
+    <label>Email message<textarea name="body" rows="16" maxlength="10000" required>{{ config.wedding_followup_body }}</textarea></label>
+    <p>Insert these placeholders for each customer's details and your current pricing:</p>
+    <p>{% for placeholder in placeholders %}<code>{{ '{' ~ placeholder ~ '}' }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    <p>The contact explanation and unsubscribe link are added automatically.</p>
+    <div class="builder-actions"><button class="btn" name="action" value="preview">Preview changes</button><button class="btn primary" name="action" value="save">Save wedding email</button></div>
+  </form>
+</section>
+{% if preview_body %}<section class="panel"><h2>Email preview</h2><p>Example for Alex Guest using your current prices. Previewing does not send an email.</p><h3>{{ preview_subject }}</h3><div class="rota-note">{{ preview_body }}</div></section>{% endif %}
+{% endblock %}
