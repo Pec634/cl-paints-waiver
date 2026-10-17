@@ -3,6 +3,7 @@
     if (nav) {
         const markers = [...nav.querySelectorAll('[data-nav-group]')];
         const groups = new Map();
+        const toolSearch = document.getElementById('admin-tool-search');
         for (const marker of markers) {
             const title = marker.dataset.navGroup;
             if (!groups.has(title)) {
@@ -13,7 +14,7 @@
                 summary.textContent = title;
                 group.append(summary);
                 group.addEventListener('toggle', () => {
-                    if (!group.open) return;
+                    if (!group.open || toolSearch?.value.trim()) return;
                     nav.querySelectorAll('.admin-navigation-group[open]').forEach(other => {
                         if (other !== group) other.open = false;
                     });
@@ -24,11 +25,51 @@
             groups.get(title).append(link);
             if (link.matches('[aria-current="page"]')) groups.get(title).open = true;
         }
-        for (const title of ['Bookings & events','Clients & rewards','Communications','Business settings']) {
+        for (const title of ['Bookings & events','Clients & rewards','Communications','Website & content','Finance & reports','System & settings']) {
             const group = groups.get(title);
             if (group) markers[0].before(group);
         }
         markers.forEach(marker => marker.remove());
+        if (toolSearch) {
+            toolSearch.closest('.admin-tool-search').hidden = false;
+            const status = document.getElementById('admin-tool-search-status');
+            let previousOpen = null;
+            const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const filterTools = () => {
+                const words = normalize(toolSearch.value).trim().split(/\s+/).filter(Boolean);
+                if (words.length && previousOpen === null) {
+                    previousOpen = new Map([...groups.values()].map(group => [group, group.open]));
+                    groups.forEach(group => group.removeAttribute('name'));
+                }
+                let count = 0;
+                groups.forEach((group, title) => {
+                    let matches = 0;
+                    group.querySelectorAll('a').forEach(link => {
+                        const text = normalize(title + ' ' + link.textContent);
+                        const visible = words.length ? words.every(word => text.includes(word)) : !link.hasAttribute('data-tool-search-only');
+                        link.hidden = !visible;
+                        if (visible) matches++;
+                    });
+                    group.hidden = words.length > 0 && matches === 0;
+                    if (words.length) group.open = matches > 0;
+                    count += matches;
+                });
+                if (!words.length && previousOpen !== null) {
+                    groups.forEach(group => {
+                        group.open = previousOpen.get(group);
+                        group.setAttribute('name', 'admin-navigation-folders');
+                    });
+                    previousOpen = null;
+                }
+                status.textContent = words.length ? (count ? `${count} matching ${count === 1 ? 'tool or setting' : 'tools and settings'}` : 'No matching tools or settings.') : '';
+            };
+            toolSearch.addEventListener('input', filterTools);
+            toolSearch.addEventListener('search', filterTools);
+            toolSearch.addEventListener('keydown', event => {
+                if (event.key === 'Escape') { toolSearch.value = ''; filterTools(); }
+            });
+            filterTools();
+        }
     }
 
     // Save only list filter URLs on this device, never client details or form content.

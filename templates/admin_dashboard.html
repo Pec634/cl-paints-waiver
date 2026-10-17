@@ -30,26 +30,33 @@
             <a href="{{ url_for('rewards.dashboard', section='earned') }}"><article><span>Rewards available</span><strong>{{ reward_count }}</strong><small>View earned rewards →</small></article></a>
         </section>
         <div class="dashboard-grid">
-            <section class="panel dashboard-upcoming dashboard-tools-panel"><details class="dashboard-tools-folder"><summary><span aria-hidden="true">📁</span> Business tools <span class="dashboard-folder-hint">Tap to open or close</span></summary><div class="panel-heading"><div><h2>Business tools</h2><p>Manage your diary, payments and client communication.</p></div></div><div class="dashboard-tools">
+            <section class="panel dashboard-upcoming dashboard-tools-panel"><details class="dashboard-tools-folder"><summary><span aria-hidden="true">📁</span> Business tools <span class="dashboard-folder-hint">Tap to open or close</span></summary><div class="panel-heading"><div><h2>Business tools</h2><p>Manage your diary, payments and event tools.</p></div></div><div class="dashboard-tools">
                 <a class="dashboard-tool" href="{{ url_for('admin_calendar') }}"><strong>Availability calendar</strong><span>Check bookings, overlaps and unavailable time.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('admin_website_builder') }}"><strong>Website builder</strong><span>Edit your website pages and content.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('admin_settings', _anchor='qr-generator') }}"><strong>QR code generator</strong><span>Create and download QR codes for your website, booking page or social links.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('backups') }}"><strong>Backup &amp; recovery</strong><span>Protect your records and view recovery instructions.</span></a>
-                <a class="dashboard-tool" href="{{ url_for('admin_settings') }}"><strong>Booking reminders</strong><span>Configure reminder timing and the public app URL.</span></a>
-                <a class="dashboard-tool" href="{{ url_for('admin_clients') }}#recent-enquiries"><strong>Client enquiries</strong><span>Reply to messages and track their status.</span></a>
-                <a class="dashboard-tool" href="{{ url_for('admin_settings', tab='email') }}"><strong>Email configuration</strong><span>Edit booking and reward emails and preview layouts.</span></a>
-                <a class="dashboard-tool" href="{{ url_for('email_history') }}"><strong>Email sending history</strong><span>Check notification attempts and sending failures.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('event_day_dashboard') }}"><strong>Event day</strong><span>Today's events, kiosk, check-in, loyalty QR and staff rota.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('kiosk_setup') }}"><strong>Event waiver kiosk</strong><span>Full-screen signup and waivers with PIN-protected exit.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('forms_offers') }}"><strong>Forms &amp; seasonal offers</strong><span>Giveaway, photo consent, staff reports, booking links and timed discounts.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('admin_events') }}"><strong>Loyalty visits</strong><span>Open an event to view scans or correct an award.</span></a>
-                <a class="dashboard-tool" href="{{ url_for('marketing_dashboard') }}"><strong>Marketing emails</strong><span>Create campaigns for opted-in customers and review sending history.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('payments_overview') }}"><strong>Payments &amp; deposits</strong><span>View deposits due, outstanding balances and received payments.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('loyalty.check_in') }}"><strong>Public-event check-in</strong><span>Find waiver members and check loyalty eligibility.</span></a>
                 <a class="dashboard-tool" href="{{ url_for('connecteam_rota') }}"><strong>Staff rota</strong><span>View Connecteam shifts and export accepted bookings.</span></a>
             </div></details></section>
+            <section class="panel dashboard-upcoming dashboard-tools-panel"><details class="dashboard-tools-folder"><summary>Communications <span class="dashboard-folder-hint">Tap to open or close</span></summary><div class="dashboard-tools">
+                <a class="dashboard-tool" href="{{ url_for('admin_notification_centre') }}"><strong>Activity &amp; notifications</strong><span>Review communication updates and alerts.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('communications_configuration') }}"><strong>Email configuration &amp; automatic emails</strong><span>Manage reminders, automatic replies and phone alerts.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('communications_templates') }}"><strong>Email templates &amp; layout</strong><span>Edit email content and preview designs.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('communications_messages', view='all') }}"><strong>Chat history</strong><span>Read incoming and sent client messages.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('communications_messages', view='enquiries') }}"><strong>Client enquiries</strong><span>Read and reply to portal enquiries.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('communications_public_enquiries') }}"><strong>Website enquiries</strong><span>Manage website conversations.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('communications_history') }}"><strong>Email history</strong><span>Check delivery attempts and failures.</span></a>
+                <a class="dashboard-tool" href="{{ url_for('marketing_dashboard') }}"><strong>Email campaigns</strong><span>Create campaigns and review delivery.</span></a>
+            </div></details></section>
             <section class="panel dashboard-upcoming" aria-label="Recent correspondence">
-                <div class="panel-heading"><div><h2>Recent correspondence</h2><p>Client portal messages · {{ correspondence_week_count }} received in the last 7 days.</p></div><a class="btn" href="{{ url_for('admin_clients') }}#recent-enquiries">View messages</a></div>
+                <div class="panel-heading"><div><h2>Recent correspondence</h2><p>Client portal messages · {{ correspondence_week_count }} received in the last 7 days.</p></div><a class="btn" href="{{ url_for('communications_messages', view='enquiries') }}">View messages</a></div>
                 {% for enquiry, client in recent_correspondence %}
-                <a class="dashboard-item" href="{{ url_for('admin_clients') }}#enquiry-{{ enquiry.id }}"><div><span class="dashboard-tag">Client enquiry</span><h3>{{ enquiry.subject }}</h3><p>{{ client.first_name }} {{ client.last_name }} · {{ client.email }} · {{ enquiry.created_at.strftime('%d/%m/%Y %H:%M') }}</p><p>{{ enquiry.message|truncate(160, true) }}</p></div><span aria-hidden="true">→</span></a>
+                <a class="dashboard-item" href="{{ url_for('communications_messages', view='enquiries', q=client.email) }}"><div><span class="dashboard-tag">Client enquiry</span><h3>{{ enquiry.subject }}</h3><p>{{ client.first_name }} {{ client.last_name }} · {{ client.email }} · {{ enquiry.created_at.strftime('%d/%m/%Y %H:%M') }}</p><p>{{ enquiry.message|truncate(160, true) }}</p></div><span aria-hidden="true">→</span></a>
                 {% else %}<div class="dashboard-empty"><p>No client correspondence yet. Messages sent through the client portal will appear here.</p></div>{% endfor %}
             </section>
             <section class="panel dashboard-quick">

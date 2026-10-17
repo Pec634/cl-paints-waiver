@@ -91,7 +91,7 @@ body { font-size: 1rem; }
 #your-references details { margin:4px 0 8px; }
 #your-references summary { cursor:pointer; }
 .admin-clients-heading { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px; }
-.admin-client-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)));gap:14px; }
+.admin-client-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:14px;max-height:65vh;overflow-y:auto;padding:4px;scrollbar-gutter:stable; }
 .admin-client-card { display:grid;align-content:start;gap:7px;border:1px solid var(--border);border-radius:12px;padding:16px;overflow-wrap:anywhere; }
 .admin-account-number { font-family:ui-monospace,monospace;font-weight:700;color:var(--navy); }
 .admin main nav[aria-label="Client profile sections"] { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px; }

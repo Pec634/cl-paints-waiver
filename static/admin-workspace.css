@@ -76,3 +76,8 @@
   outline: 2px solid #f52f83;
   outline-offset: 3px;
 }
+
+.admin-tool-search { margin-bottom: 16px; }
+.admin-tool-search label { display: block; color: white; font-size: .85rem; margin-bottom: 8px; }
+.admin-tool-search input { box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; border: 1px solid #9aa9bf; border-radius: 8px; background: white; color: #183354; }
+.admin-tool-search [role=status] { color: white; font-size: .8rem; margin: 8px 0 0; }

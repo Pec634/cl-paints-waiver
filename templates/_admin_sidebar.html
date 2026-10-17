@@ -1,28 +1,50 @@
 <aside>
     <div class="brand light">CL <span>Paints</span></div>
-    <nav aria-label="Admin navigation">
+    <div class="admin-tool-search" hidden>
+        <label for="admin-tool-search">Find tools &amp; settings</label>
+        <input id="admin-tool-search" type="search" placeholder="Search tools or settings" autocomplete="off" aria-controls="admin-tool-navigation" aria-describedby="admin-tool-search-status">
+        <p id="admin-tool-search-status" role="status" aria-live="polite"></p>
+    </div>
+    <nav id="admin-tool-navigation" aria-label="Admin navigation">
         <a href="{{ url_for('admin_dashboard') }}" {% if request.endpoint == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
         <hr class="admin-nav-divider">
         {% set current = request.endpoint or '' %}
         {% for endpoint, label, active in [
-            ('admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages', 'admin_payments', 'admin_booking_invoices']),
+            ('admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages']),
+            ('admin_calendar', 'Availability calendar', current == 'admin_calendar'),
+            ('event_day_dashboard', 'Event-day tools', current in ['event_day_dashboard','kiosk_setup']),
+            ('connecteam_rota', 'Staff rota', current == 'connecteam_rota'),
+            ('forms_offers', 'Forms & seasonal offers', current == 'forms_offers'),
             ('admin_clients', 'Clients', current in ['admin_clients','admin_client_profile']),
             ('admin_events', 'Events', current in ['admin_events', 'loyalty.event_admin']),
             ('admin_website_stories', 'Event stories', current == 'admin_website_stories'),
             ('admin_record_imports', 'Imports', current in ['admin_record_imports', 'admin_record_import_review']),
             ('admin_moodboard', 'Moodboard', current in ['admin_moodboard', 'admin_event_moodboard']),
-            ('admin_notification_centre', 'Notifications & messages', current in ['admin_notification_centre','communications_messages','communications_public_enquiries','communications_public_enquiry','communications_history','communications_templates','communications_configuration','email_history','email_preview','marketing_dashboard','marketing_campaign','marketing_email_preview'] or (current == 'admin_settings' and request.args.get('tab')=='email')),
+            ('admin_notification_centre', 'Activity & notifications', current == 'admin_notification_centre'),
+            ('communications_messages', 'Chat history', current == 'communications_messages'),
+            ('communications_public_enquiries', 'Website enquiries', current in ['communications_public_enquiries','communications_public_enquiry']),
+            ('communications_history', 'Email history', current in ['communications_history','email_history']),
+            ('communications_templates', 'Email templates & layout', current in ['communications_templates','email_preview'] or (current == 'admin_settings' and request.args.get('tab')=='email')),
+            ('communications_configuration', 'Email configuration & automatic emails', current == 'communications_configuration'),
+            ('marketing_dashboard', 'Email campaigns', current in ['marketing_dashboard','marketing_campaign','marketing_email_preview']),
             ('admin_participants', 'Participants', current in ['admin_participants', 'admin_waivers', 'admin_archived_waivers', 'admin_waiver_detail']),
             ('admin_photo_library', 'Photo library', current == 'admin_photo_library'),
-            ('admin_reports', 'Reports', current in ['admin_reports', 'admin_qr_analytics']),
+            ('admin_reports', 'Business reports', current == 'admin_reports'),
             ('admin_rewards', 'Rewards', current == 'admin_rewards' or current.startswith('rewards.')),
+            ('loyalty.check_in', 'Loyalty visits & check-in', current == 'loyalty.check_in'),
+            ('payments_overview', 'Payments, deposits & invoices', current in ['payments_overview','admin_payments','admin_booking_invoices']),
+            ('admin_qr_analytics', 'QR analytics', current == 'admin_qr_analytics'),
             ('admin_settings', 'Settings', current == 'admin_settings' and request.args.get('tab')!='email'),
             ('studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin'),
             ('admin_website_builder', 'Website builder', current == 'admin_website_builder'),
+            ('backups', 'Backup & recovery', current == 'backups'),
             ('admin_website_report', 'Website report', current == 'admin_website_report')
         ] %}
-        {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards'] else ('Communications' if endpoint == 'admin_notification_centre' else 'Business settings')) %}
-        <span data-nav-group="{{ group }}" hidden></span><a href="{{ url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
+        {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard','admin_calendar','event_day_dashboard','connecteam_rota','forms_offers'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards','loyalty.check_in'] else ('Communications' if endpoint in ['admin_notification_centre','communications_messages','communications_public_enquiries','communications_history','communications_templates','communications_configuration','marketing_dashboard'] else ('Website & content' if endpoint in ['admin_website_builder','admin_website_stories','admin_photo_library','studio_gallery_admin','admin_website_report'] else ('Finance & reports' if endpoint in ['payments_overview','admin_reports','admin_qr_analytics'] else 'System & settings')))) %}
+        <span data-nav-group="{{ group }}" hidden></span><a href="{{ url_for(endpoint, view='all') if endpoint == 'communications_messages' else url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+        {% for section, label in [('qr-generator','QR code generator'),('business','Business details & contact information'),('booking','Pricing & booking rules'),('travel','Travel charges'),('operations','Availability & travel buffer'),('account','Admin account & password'),('social','Social media & reviews'),('website_giveaway','Website giveaway announcements')] %}
+        <span data-nav-group="System &amp; settings" hidden></span><a data-tool-search-only hidden href="{{ url_for('admin_settings', _anchor=section) }}">{{ label }}</a>
         {% endfor %}
         <hr class="admin-nav-divider">
         <a href="{{ url_for('admin_logout') }}">Logout</a>
