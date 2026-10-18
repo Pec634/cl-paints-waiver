@@ -26,6 +26,7 @@ def item(raw, validate_photo):
     result={}
     for key in ('text','caption'):
         if key in raw: result[key]=text(raw[key])
+    if 'alt' in raw: result['alt']=text(raw['alt'],300)
     if raw.get('photo'):
         validate_photo(raw['photo']);result['photo']=raw['photo']
     if 'link' in raw: result['link']=link(raw['link'])
@@ -48,7 +49,7 @@ def item(raw, validate_photo):
             if style[key] not in choices: raise ValueError('Invalid style')
             safe[key]=style[key]
     result['style']=safe
-    for flag in ('hidden','locked','deleted','compactImage'):
+    for flag in ('hidden','locked','deleted','compactImage','naturalImage'):
         result[flag]=bool(raw.get(flag,False))
     animation=raw.get('animation',{})
     kind=animation.get('kind','none')

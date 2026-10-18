@@ -83,13 +83,15 @@ class WebsitePagesTest(unittest.TestCase):
         ''')
 
     def test_tidy_spacing_settings_survive_publish_and_validate(self):
-        layout={'_spacing': {'0': {'padding': 24, 'gap': 24}}, 'e-abc': {'compactImage': True}}
+        layout={'_spacing': {'0': {'padding': 24, 'gap': 24}}, 'e-abc': {'compactImage': True, 'naturalImage': True, 'alt': 'Custom photo description'}}
         response=self.admin.post('/admin/website-builder',data=dict(page='home',action='publish',
                                  csrf_token=self.csrf,layout=json.dumps(layout)))
         self.assertEqual(response.status_code,200)
         saved=json.loads(fixtures.main.db.session.get(fixtures.main.db._website_layout,'home').content)
         self.assertEqual(saved['_spacing']['0']['padding'],24)
         self.assertTrue(saved['e-abc']['compactImage'])
+        self.assertTrue(saved['e-abc']['naturalImage'])
+        self.assertEqual(saved['e-abc']['alt'],'Custom photo description')
         self.assertIn(b'compactImage',self.guest.get('/').data)
         for spacing in [{'bad': {'padding': 24}}, {'0': {'padding': -1}}, {'0': {'gap': 999}}]:
             response=self.admin.post('/admin/website-builder',data=dict(page='home',action='draft',

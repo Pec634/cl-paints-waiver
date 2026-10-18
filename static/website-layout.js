@@ -1,6 +1,10 @@
 (() => {
  const main=document.getElementById('content'),extra=document.getElementById('website-extra-blocks');
  const nodes=[...main.querySelectorAll('img,h1,h2,h3,p,a.button')].filter(n=>!extra.contains(n));
+ // Append labels so older layouts that address fields by number keep their original order.
+ const labels=[...main.querySelectorAll('span,small')].filter(n=>!extra.contains(n)&&n.textContent.trim()&&
+   !n.closest('form,button,a,[aria-hidden="true"]')&&!nodes.some(parent=>parent.contains(n)||n.contains(parent)));
+ nodes.push(...labels.filter(n=>!labels.some(parent=>parent!==n&&parent.contains(n))));
  const originals=nodes.map(n=>({html:n.innerHTML,style:n.getAttribute('style'),src:n.getAttribute('src'),srcset:n.getAttribute('srcset'),alt:n.getAttribute('alt'),href:n.getAttribute('href')}));
  const sections=[...main.children].filter(n=>n!==extra);
  const keys=nodes.map(n=>{
@@ -20,9 +24,11 @@
    n.hidden=!!(e.hidden||e.deleted);const p=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};
    const originalPosition=originalPositions.get(n)||'static';n.style.position=originalPosition==='static'?'relative':originalPosition;
    n.style.left=p.x?p.x+'px':baseline.left||'';n.style.top=p.y?p.y+'px':baseline.top||'';n.style.width=p.width?p.width+'%':baseline.width||'';
+   if(n.matches('a.button')){n.style.flex=p.width?'0 0 auto':baseline.flex||'';n.style.boxSizing=p.width?'border-box':baseline.boxSizing||'';}
    Object.keys(previous.style||{}).forEach(key=>{if(!(key in (e.style||{})))n.style[key]=baseline[key]||'';});
    Object.entries(e.style||{}).forEach(([k,v])=>{n.style[k]=['fontSize','height','padding','gap','borderRadius','borderWidth'].includes(k)?(v||['borderRadius','borderWidth'].includes(k)?v+'px':''):v;});if(e.style?.borderWidth)n.style.borderStyle='solid';
    else if(previous.style?.borderWidth)n.style.borderStyle=baseline.borderStyle||'';
+   if(n.tagName==='IMG'){n.style.objectFit=e.style?.objectFit||(e.photo?'contain':baseline.objectFit||'');if(e.naturalImage&&!e.style?.height)n.style.height='auto';}
    const a=e.animation||{},animationKey=JSON.stringify(a);decorated.set(n,{style:{...e.style},animationKey});
    if(previous.animationKey===animationKey)return;
    observer.unobserve(n);n.classList.remove('wb-animated',...['fade','slide-up','slide-left','zoom','bounce','float','pulse','rotate'].map(k=>'wb-'+k));n.onmouseenter=null;n.onmouseleave=null;delete n.dataset.wbAnimation;
@@ -71,7 +77,7 @@
        const freeImageSize=cell.kind==='image'&&(!!cellPosition.width||!!cell.style?.height);
        if(freeImageSize&&!blockImageHeights.has(article)&&n.offsetHeight)blockImageHeights.set(article,n.offsetHeight);
        if(!freeImageSize)blockImageHeights.delete(article);
-       decorate(article,cell);if(cell.kind==='image'){for(const key of ['objectFit','objectPosition'])n.style[key]=cell.style?.[key]||'';n.style.borderRadius=cell.style?.borderRadius!==undefined?cell.style.borderRadius+'px':'';n.style.height=cell.style?.height?cell.style.height+'px':'';article.style.height=blockImageHeights.has(article)?blockImageHeights.get(article)+'px':'';}
+       decorate(article,cell);if(cell.kind==='image'){for(const key of ['objectFit','objectPosition'])n.style[key]=cell.style?.[key]||(key==='objectFit'?'contain':'');n.style.borderRadius=cell.style?.borderRadius!==undefined?cell.style.borderRadius+'px':'';n.style.height=cell.style?.height?cell.style.height+'px':'';article.style.height=blockImageHeights.has(article)?blockImageHeights.get(article)+'px':'';}
        if(article.parentElement!==section)section.append(article);
      });
    });
@@ -93,7 +99,7 @@
      if(previous?.signature===signature)return;
      if(n.tagName==='IMG')preserveImageSlot(n,e);
      if(n.tagName!=='IMG'){if('text' in e)setText(n,e.text);else if(previous?.text)n.innerHTML=original.html;}
-     if(n.tagName==='IMG'){setAttribute(n,'src',e.photo?e.image:original.src);setAttribute(n,'srcset',e.photo?null:original.srcset);setAttribute(n,'alt',e.photo?e.alt:original.alt);}
+     if(n.tagName==='IMG'){setAttribute(n,'src',e.photo?e.image:original.src);setAttribute(n,'srcset',e.photo?null:original.srcset);setAttribute(n,'alt',e.alt??original.alt);}
      if(n.tagName==='A')setAttribute(n,'href',e.link||original.href);decorate(n,e);if(n.tagName==='IMG'&&e.photo&&!e.image)n.hidden=true;
      applied.set(n,{signature,text:'text' in e});
    });

@@ -183,7 +183,7 @@ def register(app, db, models, native_models, current_client, admin_required):
             if edit.get('photo'):
                 key=edit['photo']; photo=db.session.get(Asset,int(key[6:])) if key.startswith('admin-') else db.session.get(Photo,int(key))
                 edit['image']=image_url(photo) if visible(photo) else ''
-                edit['alt']=photo.alt if visible(photo) else ''
+                edit.setdefault('alt', photo.alt if visible(photo) else '')
         for key,edit in edits.items():
             if not key.startswith('_'):resolve(edit)
         for row in edits.get('_blocks',[]):

@@ -426,6 +426,123 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(image.parentElement.style.aspectRatio===ratio,'restoring slot preserves its original footprint');
         ''')
 
+    def test_website_editor_labels_are_editable_and_movable(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const frame=document.getElementById('builder-preview'),doc=frame.contentDocument,editor=frame.contentWindow.websiteEditor;
+            const label=doc.querySelector('.eyebrow');
+            assert(editor.nodes.includes(label),'location label must be selectable');
+            assert(editor.nodes.includes(doc.querySelector('.photo-label')),'photo caption must be selectable');
+            assert(!editor.nodes.includes(doc.querySelector('.hero-spark')),'decorative icons remain excluded');
+            const firstLabel=editor.nodes.indexOf(label);
+            assert(editor.nodes.slice(0,firstLabel).every(node=>!['SPAN','SMALL'].includes(node.tagName)),'new labels are appended after legacy fields');
+            label.click();
+            const text=document.getElementById('builder-text');text.value='DONCASTER AND BEYOND';input(text);
+            assert(label.textContent==='DONCASTER AND BEYOND','label wording updates live');
+            document.getElementById('builder-snap').checked=false;
+            const rect=label.getBoundingClientRect();
+            label.dispatchEvent(new frame.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:31,clientX:rect.left+2,clientY:rect.top+2}));
+            doc.dispatchEvent(new frame.contentWindow.PointerEvent('pointermove',{pointerId:31,clientX:rect.left+32,clientY:rect.top+22}));
+            doc.dispatchEvent(new frame.contentWindow.PointerEvent('pointerup',{pointerId:31}));
+            assert(label.style.left==='30px'&&label.style.top==='20px','label can be dragged');
+            document.getElementById('builder-undo').click();
+            assert((parseFloat(label.style.left)||0)===0&&label.textContent==='DONCASTER AND BEYOND','Undo restores label position and preserves earlier wording');
+            document.getElementById('builder-redo').click();assert(label.style.left==='30px','Redo restores label movement');
+            let saved;
+            window.fetch=async(url,options)=>{saved=JSON.parse(options.body.get('layout'));return {ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>({published:false,layout:saved})};};
+            document.getElementById('builder-draft').click();await new Promise(resolve=>setTimeout(resolve,20));
+            const key=editor.keys[firstLabel];
+            assert(saved[key].text==='DONCASTER AND BEYOND'&&saved[key].desktop.x===30,'label edits and position are included in saved layout');
+        ''')
+
+    def test_website_editor_existing_buttons_resize(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const frame=document.getElementById('builder-preview'),doc=frame.contentDocument;
+            const buttonStyle=doc.createElement('style');buttonStyle.textContent='.button{display:inline-flex;align-items:center;justify-content:center;padding:14px 24px;box-sizing:border-box}';doc.head.append(buttonStyle);
+            const button=doc.querySelector('#content a.button');button.click();
+            assert(doc.querySelectorAll('.builder-resize-handle').length===8,'selected button shows resize handles automatically');
+            document.getElementById('builder-snap').checked=false;
+            const rect=button.getBoundingClientRect(),handle=doc.getElementById('builder-resize-handle');
+            handle.dispatchEvent(new frame.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:44,clientX:rect.right,clientY:rect.bottom}));
+            handle.dispatchEvent(new frame.contentWindow.PointerEvent('pointermove',{pointerId:44,clientX:rect.right+40,clientY:rect.bottom+20}));
+            handle.dispatchEvent(new frame.contentWindow.PointerEvent('pointerup',{pointerId:44}));
+            assert(parseFloat(button.style.width)>0,'button width is saved');
+            assert(parseFloat(button.style.height)>rect.height,'button height increases');
+            assert(button.getBoundingClientRect().width>rect.width,'button visibly widens');
+            const newWidth=button.style.width;
+            document.getElementById('builder-undo').click();assert(!button.style.width,'Undo restores original button width');
+            document.getElementById('builder-redo').click();assert(button.style.width===newWidth,'Redo restores button size');
+            button.click();document.getElementById('builder-lock').click();
+            assert(!doc.querySelector('.builder-resize-handle'),'locked button cannot be resized');
+        ''')
+
+    def test_website_editor_photo_tools(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const frame=document.getElementById('builder-preview'),doc=frame.contentDocument,editor=frame.contentWindow.websiteEditor;
+            const get=id=>document.getElementById('builder-'+id),image=editor.nodes.find(node=>node.tagName==='IMG');
+            assert(get('tab-photo').hidden,'Photo tab starts hidden');image.click();
+            assert(!get('tab-photo').hidden&&get('tab-photo').getAttribute('aria-selected')==='true','selecting image opens Photo tab');
+            const fit=document.querySelector('[data-builder-style="objectFit"]');fit.value='contain';input(fit);
+            assert(image.style.objectFit==='contain','Show whole image prevents cropping');
+            fit.value='cover';input(fit);assert(image.style.objectFit==='cover','Fill frame is available explicitly');
+            get('photo-alt').value='Colourful face-painting setup';input(get('photo-alt'));
+            assert(image.alt==='Colourful face-painting setup','description updates selected image');
+            const height=document.querySelector('[data-builder-style="height"]');height.value='180';input(height);
+            get('photo-reset').click();assert(image.style.height==='auto'&&image.style.objectFit==='contain','reset restores natural proportions');
+            get('undo').click();assert(image.style.height==='180px','Undo restores previous image size');
+            get('redo').click();assert(image.style.height==='auto','Redo restores natural image size');image.click();
+            const option=new Option('Uploaded photo','admin-999');option.dataset.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';option.dataset.alt='Uploaded description';get('photo').add(option);
+            get('photo').value='admin-999';input(get('photo'));
+            assert(image.style.objectFit==='contain','replacement uses whole-image display');
+            assert(image.alt==='Uploaded description','replacement starts with library description');
+            get('photo-alt').value='My custom image description';input(get('photo-alt'));
+            let saved;window.fetch=async(url,options)=>{saved=JSON.parse(options.body.get('layout'));return {ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>({published:false,layout:saved})};};
+            get('draft').click();await new Promise(resolve=>setTimeout(resolve,20));
+            const key=editor.keys[editor.nodes.indexOf(image)];assert(saved[key].alt==='My custom image description','custom description is saved');
+            doc.querySelector('#content a.button').click();assert(get('tab-photo').hidden,'Photo tab hides for other selections');
+        ''')
+
     def test_website_editor_mobile_layout_and_reduced_motion(self):
         browsers.NativeFormBrowserTest().browser(self.admin.get('/admin/website-builder').data, '''
             const source=document.getElementById('builder-upload-source'),upload=document.getElementById('builder-upload');
