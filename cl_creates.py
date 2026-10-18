@@ -154,6 +154,11 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
     def creates_shop():
         token = csrf()
         account = get_current_client()
+        back_url = request.form.get('return_to', '') if request.method == 'POST' else request.args.get('return_to', '')
+        if (not back_url.startswith('/') or back_url.startswith('//') or
+                chr(92) in back_url or any(ord(char) < 32 for char in back_url) or
+                back_url.split('?', 1)[0].startswith('/cl-creates')):
+            back_url = url_for('client.dashboard' if account else 'website_home')
         defaults = {}
         if account:
             defaults = {key: getattr(account, key) for key in ('first_name', 'last_name', 'email')}
@@ -164,7 +169,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                                 address_line2=details.get('address_street', ''),
                                 town=details.get('address_city', ''), postcode=details.get('address_postcode', ''))
         shop_context = dict(client_account=account, client_csrf=session.get('client_csrf', ''),
-                            shop_base='client/base.html' if account else 'base.html', defaults=defaults)
+                            shop_base='client/base.html' if account else 'base.html', defaults=defaults, back_url=back_url)
         config = settings()
         products = Product.query.filter_by(active=True).all()
         error = None

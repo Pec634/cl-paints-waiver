@@ -81,6 +81,24 @@ class CreatesTest(unittest.TestCase):
         self.assertNotIn(b'value="Rainbow Road"', anonymous.data)
         self.assertNotIn(b'aria-label="Client navigation"', anonymous.data)
 
+    def test_shop_back_link_preserves_source_and_rejects_external_urls(self):
+        page = self.client.get('/cl-creates', query_string={'return_to': '/services'})
+        self.assertIn(b'href="/services">&larr; Back</a>', page.data)
+        data = self.form()
+        data['return_to'] = '/services'
+        data['wording'] = ''
+        invalid = self.client.post('/cl-creates', data=data)
+        self.assertIn(b'href="/services">&larr; Back</a>', invalid.data)
+        data['wording'] = 'HELLO'
+        confirmation = self.client.post('/cl-creates', data=data)
+        self.assertIn(b'href="/services">&larr; Back</a>', confirmation.data)
+        for destination in ['https://example.com', '//example.com', '/\\example.com']:
+            fallback = self.client.get('/cl-creates', query_string={'return_to': destination})
+            self.assertIn(b'href="/">&larr; Back</a>', fallback.data)
+        self.fixture.signup()
+        portal = self.client.get('/cl-creates', query_string={'return_to': '/client/bookings'})
+        self.assertIn(b'href="/client/bookings">&larr; Back</a>', portal.data)
+
     def test_order_totals_duplicate_and_private_details(self):
         data = self.form()
         data.update(product=[str(self.product.id)] * 2, wording=['HELLO WORLD', 'A B C'], quantity=['2', '3'])
