@@ -418,12 +418,25 @@ class PhotoLibraryTest(unittest.TestCase):
             get('tidy-close').click();await new Promise(resolve=>setTimeout(resolve,20));
             const editor=frame.contentWindow.websiteEditor,index=editor.nodes.findIndex(node=>node.tagName==='IMG'),image=editor.nodes[index],key=editor.keys[index];
             editor.apply({[key]:{desktop:{width:50},style:{height:100}}},'desktop');
-            const slot=image.parentElement,ratio=slot.style.aspectRatio;
+            const slot=image.parentElement,ratio=slot.style.aspectRatio,beforeCompact=image.getBoundingClientRect();
             assert(slot.classList.contains('wb-image-slot'),'resized image has a reserved slot');
             editor.apply({[key]:{desktop:{width:50},style:{height:100},compactImage:true}},'desktop');
-            assert(!image.parentElement.classList.contains('wb-image-slot'),'compact image releases reserved space');
+            assert(image.parentElement===slot&&parseFloat(slot.style.height)===image.offsetHeight,'compact image trims reserved height while retaining its wrapper');
+            assert(Math.abs(image.getBoundingClientRect().left-beforeCompact.left)<1&&Math.abs(image.getBoundingClientRect().top-beforeCompact.top)<1,'compacting must preserve image position');
             editor.apply({[key]:{desktop:{width:50},style:{height:100}}},'desktop');
             assert(image.parentElement.style.aspectRatio===ratio,'restoring slot preserves its original footprint');
+            const sample='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+            const initialImages={_blocks:[{style:{padding:60,gap:70},cells:[{kind:'image',image:sample,style:{height:300}},{kind:'image',image:sample,style:{height:300}}]}]};
+            editor.apply(initialImages,'desktop');
+            const resizedImages=structuredClone(initialImages);resizedImages._blocks[0].cells.forEach(cell=>cell.style.height=80);
+            editor.apply(resizedImages,'desktop');
+            const row=doc.querySelector('.wb-row');row.style.gridTemplateColumns='repeat(2,minmax(0,1fr))';const oldHeight=row.getBoundingClientRect().height;
+            const before=[...row.querySelectorAll('img')].map(node=>node.getBoundingClientRect());
+            const plan=window.planBuilderTidy({layout:resizedImages,editor,scope:{row:0},empty:false,gaps:true,images:true,computedStyle:node=>frame.contentWindow.getComputedStyle(node)});
+            editor.apply(plan.layout,'desktop');
+            assert(row.getBoundingClientRect().height<oldHeight-100,'cleanup removes stale height below added images');
+            [...row.querySelectorAll('img')].forEach((node,i)=>{const after=node.getBoundingClientRect();assert(Math.abs(after.left-before[i].left)<1&&Math.abs(after.top-before[i].top)<1,'cleanup preserves image placement in its row '+JSON.stringify({before:{left:before[i].left,top:before[i].top},after:{left:after.left,top:after.top},oldHeight,newHeight:row.getBoundingClientRect().height}));});
+            assert(plan.layout._blocks[0].style.padding===60&&plan.layout._blocks[0].style.gap===70,'image-row padding and gaps remain unchanged');
         ''')
 
     def test_website_editor_labels_are_editable_and_movable(self):
@@ -541,6 +554,41 @@ class PhotoLibraryTest(unittest.TestCase):
             get('draft').click();await new Promise(resolve=>setTimeout(resolve,20));
             const key=editor.keys[editor.nodes.indexOf(image)];assert(saved[key].alt==='My custom image description','custom description is saved');
             doc.querySelector('#content a.button').click();assert(get('tab-photo').hidden,'Photo tab hides for other selections');
+        ''')
+
+    def test_website_editor_selected_text_fields_resize(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const frame=document.getElementById('builder-preview'),doc=frame.contentDocument;
+            const get=id=>document.getElementById('builder-'+id);
+            get('snap').checked=false;
+            const label=doc.querySelector('.eyebrow');label.style.fontSize='10px';label.click();
+            assert(doc.querySelectorAll('.builder-resize-handle').length===8,'labels show resize handles');
+            const rect=label.getBoundingClientRect(),handle=doc.getElementById('builder-resize-handle');
+            handle.dispatchEvent(new frame.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:55,clientX:rect.right,clientY:rect.bottom}));
+            handle.dispatchEvent(new frame.contentWindow.PointerEvent('pointermove',{pointerId:55,clientX:rect.right+30,clientY:rect.bottom+20}));
+            handle.dispatchEvent(new frame.contentWindow.PointerEvent('pointerup',{pointerId:55}));
+            assert(label.style.display==='inline-block'&&parseFloat(label.style.width)>0,'inline labels accept width');
+            assert(label.getBoundingClientRect().height>rect.height,'label height changes');
+            get('undo').click();assert(!label.style.width,'Undo restores label width');
+            get('redo').click();assert(parseFloat(label.style.width)>0,'Redo restores resized label');
+            const paragraph=doc.querySelector('.lead');paragraph.click();
+            assert(doc.querySelectorAll('.builder-resize-handle').length===8,'paragraphs show resize handles');
+            get('lock').click();assert(!doc.querySelector('.builder-resize-handle'),'locked fields have no handles');
+            get('add').click();assert(doc.querySelectorAll('.builder-resize-handle').length===8,'added text blocks show resize handles');
         ''')
 
     def test_website_editor_mobile_layout_and_reduced_motion(self):

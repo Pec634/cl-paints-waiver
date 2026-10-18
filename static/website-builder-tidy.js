@@ -8,8 +8,12 @@ window.planBuilderTidy=({layout,editor,scope,empty,gaps,images,computedStyle})=>
  for(let r=(result._blocks||[]).length-1;r>=0;r--){
    if(scope&&scope.row!==r)continue;
    const row=result._blocks[r];if(row.locked||row.hidden||row.cells.some(cell=>cell.locked))continue;
-   clean(row,`row ${r+1}`);
-   row.cells.forEach((cell,c)=>clean(cell,`row ${r+1}, block ${c+1}`));
+   const hasImages=row.cells.some(cell=>cell.kind==='image');
+   if(!hasImages)clean(row,`row ${r+1}`);
+   row.cells.forEach((cell,c)=>{
+     if(cell.kind!=='image')clean(cell,`row ${r+1}, block ${c+1}`);
+     if(images&&cell.kind==='image'&&!cell.hidden&&!cell.compactImage){cell.compactImage=true;changes.push(`Trim reserved space below image ${c+1} in row ${r+1}`);}
+   });
    if(empty){for(let c=row.cells.length-1;c>=0;c--)if(emptyText(row.cells[c])){row.cells.splice(c,1);changes.push(`Remove empty block ${c+1} from row ${r+1}`);}
      if(!row.cells.length){result._blocks.splice(r,1);changes.push(`Remove empty row ${r+1}`);}}
  }
@@ -22,13 +26,14 @@ window.planBuilderTidy=({layout,editor,scope,empty,gaps,images,computedStyle})=>
    if(empty&&['P','H1','H2','H3'].includes(node.tagName)&&!String(edit.text??node.textContent).trim()){
      result[key]={...edit,deleted:true};changes.push('Remove an empty text field');return;
    }
-   const updated={...edit};clean(updated,node.tagName.toLowerCase());
+   const updated={...edit};if(node.tagName!=='IMG')clean(updated,node.tagName.toLowerCase());
    if(images&&node.tagName==='IMG'&&node.parentElement.classList.contains('wb-image-slot')&&!edit.compactImage){updated.compactImage=true;changes.push('Release unused layout space around a resized image');}
    if(JSON.stringify(updated)!==JSON.stringify(edit))result[key]=updated;
  });
  if(gaps){editor.sections.forEach((section,index)=>{
    if(scope&&(scope.row!==undefined||scope.section!==index))return;
    const locked=editor.nodes.some((node,i)=>section.contains(node)&&layout[editor.keys[i]]?.locked);if(locked)return;
+   if(section.querySelector('img'))return;
    const style=computedStyle(section),spacing={...(result._spacing?.[index]||{})};
    if(parseFloat(style.paddingTop)>48||parseFloat(style.paddingBottom)>48){spacing.padding=24;changes.push(`Reduce section ${index+1} vertical padding to 24 px`);}
    if(parseFloat(style.rowGap)>32||parseFloat(style.columnGap)>32){spacing.gap=24;changes.push(`Reduce section ${index+1} gaps to 24 px`);}

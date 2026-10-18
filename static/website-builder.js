@@ -199,8 +199,7 @@
  function updateResizeHandle(){
    const doc=frame.contentDocument;if(!doc?.body)return;
    const node=selected===null?null:selectedNode(),image=node?.tagName==='IMG'?node:node?.querySelector('img');
-   const isButton=node?.matches('a.button');
-   if(!node||current().locked||node.hidden||(!image&&!isButton&&!resizeRequested)){doc.querySelectorAll('.builder-resize-handle').forEach(handle=>handle.remove());return;}
+   if(!node||current().locked||node.hidden){doc.querySelectorAll('.builder-resize-handle').forEach(handle=>handle.remove());return;}
    const directions=['nw','n','ne','e','se','s','sw','w'];
    for(const direction of directions){
      const id=direction==='se'?'builder-resize-handle':'builder-resize-'+direction;
