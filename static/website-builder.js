@@ -1,6 +1,7 @@
 (() => {
  const config=JSON.parse(document.getElementById('builder-data').textContent),frame=document.getElementById('builder-preview'),field=id=>document.getElementById('builder-'+id);
  let edits=config.layout,selected=null,mobile=false,deviceName="desktop",dirty=false,undo=[],redo=[];
+ let multiSelect=null;
  const editor=()=>frame.contentWindow.websiteEditor;
  const styles=[...document.querySelectorAll('[data-builder-style]')];
  const clone=value=>structuredClone(value);
@@ -27,7 +28,7 @@
    const sections=field('sections');sections.replaceChildren();const order=edits._sections?.length?edits._sections:editor()?.sections.map((_,i)=>i)||[];order.forEach((index,place)=>{const entry=document.createElement('div');entry.className='builder-row-actions';const label=document.createElement('span');label.textContent=(editor().sections[index]?.querySelector('h1,h2')?.textContent||`Section ${index+1}`).slice(0,60);entry.append(label);[-1,1].forEach(delta=>entry.append(button(delta<0?'↑':'↓',()=>{const target=place+delta;if(target<0||target>=order.length)return;checkpoint();edits._sections=[...order];[edits._sections[place],edits._sections[target]]=[edits._sections[target],edits._sections[place]];apply();})));sections.append(entry);});
  }
  function moveRow(index,delta){const target=index+delta;if(target<0||target>=edits._blocks.length)return;checkpoint();[edits._blocks[index],edits._blocks[target]]=[edits._blocks[target],edits._blocks[index]];selected=null;field('controls').hidden=true;field('delete').disabled=true;apply();}
- function choose(selection){const changed=JSON.stringify(selected)!==JSON.stringify(selection);selected=selection;const edit=current(),node=typeof selected==='number'?editor().nodes[selected]:null,isCell=typeof selected==='object'&&selected.cell!==undefined,isRow=typeof selected==='object'&&!isCell;
+ function choose(selection){multiSelect?.clear();const changed=JSON.stringify(selected)!==JSON.stringify(selection);selected=selection;const edit=current(),node=typeof selected==='number'?editor().nodes[selected]:null,isCell=typeof selected==='object'&&selected.cell!==undefined,isRow=typeof selected==='object'&&!isCell;
    field('controls').hidden=false;field('selection').textContent=node?`Selected ${node.tagName.toLowerCase()}`:isRow?`Row ${selected.row+1}`:`Row ${selected.row+1}, block ${selected.cell+1}`;
    field('delete').disabled=!!edit.locked;
    field('cell-kind').parentElement.hidden=!isCell;field('cell-kind').value=edit.kind||'text';
@@ -164,7 +165,7 @@
    field('status').textContent='Field deleted. Undo to restore it; publish to update the website.';
  };
  field('reset').onclick=()=>{checkpoint();if(typeof selected==='number')delete edits[editor().keys[selected]];else if(selected.cell!==undefined){const cell=current();edits._blocks[selected.row].cells[selected.cell]={kind:cell.kind,text:''};}else{const cells=current().cells;edits._blocks[selected.row]={before:-1,cells};}apply();choose(selected);};
- function history(source,target){if(!source.length)return;target.push(clone(edits));edits=source.pop();selected=null;field('controls').hidden=true;field('delete').disabled=true;dirty=true;initialise();apply();field('undo').disabled=!undo.length;field('redo').disabled=!redo.length;field('status').textContent='Unsaved changes';}
+ function history(source,target){multiSelect?.clear();if(!source.length)return;target.push(clone(edits));edits=source.pop();selected=null;field('controls').hidden=true;field('delete').disabled=true;dirty=true;initialise();apply();field('undo').disabled=!undo.length;field('redo').disabled=!redo.length;field('status').textContent='Unsaved changes';}
  field('undo').onclick=()=>history(undo,redo);field('redo').onclick=()=>history(redo,undo);
  field('device').onclick=()=>{mobile=!mobile;deviceName=mobile?'mobile':'desktop';frame.style.width=mobile?'390px':'100%';field('device').textContent=mobile?'Desktop preview':'Mobile preview';apply();if(selected!==null)choose(selected);};
  field('page').onchange=()=>{if(dirty&&!confirm('Discard unsaved changes?')){field('page').value=config.page;return;}location.href='?page='+field('page').value;};
@@ -265,4 +266,7 @@
  field('template-save').onclick=()=>{if(typeof selected!=='object'||selected===null){field('status').textContent='Select an added row or block first.';return;}const name=field('template-name').value.trim();if(!name)return;templates.push({name,row:clone(edits._blocks[selected.row])});templates=templates.slice(-30);try{localStorage.setItem(storageKey,JSON.stringify(templates));templateOptions();field('status').textContent='Section saved on this device.';}catch{field('status').textContent='This browser could not save the section.';}};
  field('template-add').onclick=()=>{const template=templates[field('templates').value];if(!template)return;checkpoint();edits._blocks.push(clone(template.row));apply();};
  addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+ multiSelect=window.createBuilderMultiSelect({frame,field,editor,getEdits:()=>edits,device:()=>deviceName,checkpoint,apply,
+   clearSingle(){selected=null;field('controls').hidden=true;field('delete').disabled=true;editor().nodes.forEach(node=>node.style.outline='');frame.contentDocument.querySelectorAll('[data-builder-cell]').forEach(node=>node.style.outline='');updateResizeHandle();}
+ });
 })();

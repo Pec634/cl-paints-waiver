@@ -318,6 +318,60 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(doc.querySelector('.wb-row').children.length===1,'undo must restore removed row');
         ''')
 
+    def test_website_editor_group_selection_and_move(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const frame=document.getElementById('builder-preview'),doc=frame.contentDocument;
+            const pointer=(target,type,x,y)=>target.dispatchEvent(new frame.contentWindow.PointerEvent(type,{bubbles:true,button:0,pointerId:21,clientX:x,clientY:y}));
+            document.getElementById('builder-columns').value='3';
+            document.getElementById('builder-add').click();
+            const cells=[...doc.querySelectorAll('[data-builder-cell]')];
+            cells[2].click();document.getElementById('builder-lock').click();
+            const bounds=doc.querySelector('.wb-row').getBoundingClientRect();
+            document.getElementById('builder-select-multiple').click();
+            pointer(cells[0],'pointerdown',bounds.left-1,bounds.top-1);
+            pointer(doc,'pointermove',bounds.right+1,bounds.bottom+1);
+            pointer(doc,'pointerup',bounds.right+1,bounds.bottom+1);
+            assert(document.getElementById('builder-multi-status').textContent.startsWith('2 fields selected'),'marquee must select two unlocked fields');
+            assert(!doc.querySelector('.builder-selection-box'),'selection box must clear on release');
+            assert(document.getElementById('builder-delete').disabled,'single-item delete must be disabled for a group');
+            document.getElementById('builder-snap').checked=false;
+            const rect=cells[0].getBoundingClientRect();
+            pointer(cells[0],'pointerdown',rect.left+5,rect.top+5);
+            pointer(doc,'pointermove',rect.left+35,rect.top+25);
+            pointer(doc,'pointerup',rect.left+35,rect.top+25);
+            assert(cells[0].style.left==='30px'&&cells[1].style.left==='30px','both selected fields must move together');
+            assert(cells[0].style.top==='20px'&&cells[1].style.top==='20px','group keeps vertical spacing');
+            assert((parseFloat(cells[2].style.left)||0)===0,'locked field stays in place');
+            document.getElementById('builder-undo').click();
+            assert((parseFloat(cells[0].style.left)||0)===0&&(parseFloat(cells[1].style.left)||0)===0,'one undo restores the whole group');
+            document.getElementById('builder-redo').click();
+            assert(cells[0].style.left==='30px'&&cells[1].style.left==='30px','redo restores group movement');
+            const native=frame.contentWindow.websiteEditor.nodes.filter(node=>node.tagName==='P').slice(0,2);
+            const a=native[0].getBoundingClientRect(),b=native[1].getBoundingClientRect();
+            document.getElementById('builder-select-multiple').click();
+            pointer(native[0],'pointerdown',Math.min(a.left,b.left)-1,Math.min(a.top,b.top)-1);
+            pointer(doc,'pointermove',Math.max(a.right,b.right)+1,Math.max(a.bottom,b.bottom)+1);
+            pointer(doc,'pointerup',Math.max(a.right,b.right)+1,Math.max(a.bottom,b.bottom)+1);
+            doc.body.dispatchEvent(new frame.contentWindow.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+            assert(native.every(node=>node.style.left==='1px'),'native fields can be selected and nudged together');
+            doc.body.dispatchEvent(new frame.contentWindow.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+            assert(!document.getElementById('builder-multi-status').textContent,'Escape clears group selection');
+        ''')
+
     def test_website_editor_mobile_layout_and_reduced_motion(self):
         browsers.NativeFormBrowserTest().browser(self.admin.get('/admin/website-builder').data, '''
             const source=document.getElementById('builder-upload-source'),upload=document.getElementById('builder-upload');
