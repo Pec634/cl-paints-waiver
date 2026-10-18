@@ -694,6 +694,8 @@ def admin_dashboard():
     return render_template(
         "admin_dashboard.html", today=today, confirmed_outstanding=confirmed_outstanding,
         website_enquiry_new_count=website_enquiry_models[0].query.filter_by(status='new').count(),
+        creates_attention_count=creates_models[0].query.filter(creates_models[0].status.notin_(['Shipped', 'Ready for collection'])).count(),
+        creates_attention=creates_models[0].query.filter(creates_models[0].status.notin_(['Shipped', 'Ready for collection'])).order_by(creates_models[0].created_at.asc()).limit(5).all(),
         recent_correspondence=correspondence,
         correspondence_week_count=ClientEnquiry.query.filter(
             ClientEnquiry.created_at >= datetime.now() - timedelta(days=7)).count(),
@@ -2794,6 +2796,8 @@ register_communications(app, db, Booking, BookingMessage, notification_models[1]
     get_business_settings, admin_required, ClientEnquiry, ClientAccount, tool_models[3])
 
 from public_website import register as register_public_website
+from website_pages import register as register_website_pages
+register_website_pages(app, db, BusinessSetting, admin_required)
 from photo_library import register as register_photo_library
 register_photo_library(app, db, photo_library_models, native_form_models, get_current_client, admin_required)
 register_public_website(app)
@@ -2818,6 +2822,9 @@ register_wedding_followups(app, db, WeddingFollowup, native_form_models[1], mark
 
 from cl_creates import register as register_creates
 register_creates(app, db, creates_models, BusinessSetting, admin_required, lambda *args: send_client_email(*args), get_current_client)
+from admin_client_timeline import register as register_client_timeline
+register_client_timeline(app, db, ClientAccount, Booking, BookingMessage, ClientEnquiry, BookingInvoice,
+                         tool_models[1], creates_models[0], creates_models[1], admin_required)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

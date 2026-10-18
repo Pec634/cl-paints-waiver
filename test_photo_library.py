@@ -288,6 +288,12 @@ class PhotoLibraryTest(unittest.TestCase):
         browsers.NativeFormBrowserTest().browser(markup.encode(), '''
             await new Promise(resolve=>setTimeout(resolve,400));
             const iframe=document.getElementById('builder-preview'),doc=iframe.contentDocument;
+            document.getElementById('builder-tab-pages').click();
+            iframe.contentWindow.websiteEditor.nodes[0].click();
+            assert(document.getElementById('builder-tab-content').getAttribute('aria-selected')==='true','selection must open content controls');
+            assert(document.querySelector('.builder-tools').scrollTop===0,'selection must bring controls to top');
+            document.getElementById('builder-tab-design').click();
+            assert(!document.getElementById('builder-pane-design').hidden,'selected design controls must be accessible');
             const layers=document.getElementById('builder-layers');
             layers.querySelector('button').click();
             document.getElementById('builder-lock').click();

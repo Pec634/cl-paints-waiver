@@ -16,6 +16,7 @@
  }
  function initialise(){edits._blocks??=[];edits._seo??={};field('seo-title').value=edits._seo.title||'';field('seo-description').value=edits._seo.description||'';}
  initialise();
+ field('rename-page').onchange=()=>{field('rename-name').value=field('rename-page').selectedOptions[0].dataset.name;};
  function checkpoint(){undo.push(clone(edits));if(undo.length>100)undo.shift();redo=[];dirty=true;field('undo').disabled=false;field('redo').disabled=true;field('status').textContent='Unsaved changes';}
  function current(){if(selected===null)return null;if(typeof selected==='number')return edits[editor().keys[selected]]??={};return selected.cell===undefined?edits._blocks[selected.row]:edits._blocks[selected.row].cells[selected.cell];}
  function enrich(item){if(item.photo){const option=[...field('photo').options].find(o=>o.value===item.photo);item.image=option?.dataset.src||'';item.alt=option?.dataset.alt||'';}}
@@ -26,7 +27,7 @@
    const sections=field('sections');sections.replaceChildren();const order=edits._sections?.length?edits._sections:editor()?.sections.map((_,i)=>i)||[];order.forEach((index,place)=>{const entry=document.createElement('div');entry.className='builder-row-actions';const label=document.createElement('span');label.textContent=(editor().sections[index]?.querySelector('h1,h2')?.textContent||`Section ${index+1}`).slice(0,60);entry.append(label);[-1,1].forEach(delta=>entry.append(button(delta<0?'↑':'↓',()=>{const target=place+delta;if(target<0||target>=order.length)return;checkpoint();edits._sections=[...order];[edits._sections[place],edits._sections[target]]=[edits._sections[target],edits._sections[place]];apply();})));sections.append(entry);});
  }
  function moveRow(index,delta){const target=index+delta;if(target<0||target>=edits._blocks.length)return;checkpoint();[edits._blocks[index],edits._blocks[target]]=[edits._blocks[target],edits._blocks[index]];selected=null;field('controls').hidden=true;field('delete').disabled=true;apply();}
- function choose(selection){selected=selection;const edit=current(),node=typeof selected==='number'?editor().nodes[selected]:null,isCell=typeof selected==='object'&&selected.cell!==undefined,isRow=typeof selected==='object'&&!isCell;
+ function choose(selection){const changed=JSON.stringify(selected)!==JSON.stringify(selection);selected=selection;const edit=current(),node=typeof selected==='number'?editor().nodes[selected]:null,isCell=typeof selected==='object'&&selected.cell!==undefined,isRow=typeof selected==='object'&&!isCell;
    field('controls').hidden=false;field('selection').textContent=node?`Selected ${node.tagName.toLowerCase()}`:isRow?`Row ${selected.row+1}`:`Row ${selected.row+1}, block ${selected.cell+1}`;
    field('delete').disabled=!!edit.locked;
    field('cell-kind').parentElement.hidden=!isCell;field('cell-kind').value=edit.kind||'text';
@@ -40,7 +41,7 @@
    const animation=edit.animation||{};field('animation').value=animation.kind||'none';['duration','delay','repeat','easing','trigger'].forEach(k=>field(k).value=animation[k]??({duration:1,delay:0,repeat:1,easing:'ease',trigger:'load'}[k]));
    field('controls').querySelectorAll('input,select,textarea').forEach(input=>input.disabled=!!edit.locked);
    editor().nodes.forEach(n=>n.style.outline='');if(node)node.style.outline='3px solid #ff2785';
-   updateResizeHandle();
+   window.websiteBuilderWorkspace?.selection(changed,!!edit.locked);updateResizeHandle();
  }
  frame.addEventListener('load',()=>{if(!editor())return;Object.keys(edits).filter(k=>/^\d+$/.test(k)).forEach(k=>{if(editor().keys[k]){edits[editor().keys[k]]??=edits[k];delete edits[k];}});apply();editor().nodes.forEach((node,i)=>{
    node.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();choose(i);});
@@ -168,7 +169,7 @@
  field('device').onclick=()=>{mobile=!mobile;deviceName=mobile?'mobile':'desktop';frame.style.width=mobile?'390px':'100%';field('device').textContent=mobile?'Desktop preview':'Mobile preview';apply();if(selected!==null)choose(selected);};
  field('page').onchange=()=>{if(dirty&&!confirm('Discard unsaved changes?')){field('page').value=config.page;return;}location.href='?page='+field('page').value;};
  ['title','description'].forEach(k=>field('seo-'+k).oninput=()=>{checkpoint();edits._seo[k]=field('seo-'+k).value;});
- async function save(action){field('save').disabled=field('draft').disabled=true;field('status').textContent='Saving…';try{const response=await fetch(location.pathname,{method:'POST',headers:{Accept:'application/json'},body:new URLSearchParams({page:config.page,csrf_token:config.csrf,action,revision:field('revision').value,layout:JSON.stringify(edits)})}),result=await readResponse(response);if(!response.ok)throw Error(result.error||'Save failed');if(action==='restore'){checkpoint();edits=result.layout;initialise();apply();selected=null;field('controls').hidden=true;field('delete').disabled=true;}dirty=false;field('status').textContent=result.published?'Published to website':action==='restore'?'Restored as private draft':'Draft saved privately';if(action==='publish')location.reload();}catch(error){field('status').textContent=error.message;}finally{field('save').disabled=field('draft').disabled=false;}}
+ async function save(action){field('save').disabled=field('draft').disabled=true;field('status').textContent='Saving…';try{const response=await fetch(location.pathname,{method:'POST',headers:{Accept:'application/json'},body:new URLSearchParams({page:config.page,csrf_token:config.csrf,action,revision:field('revision').value,layout:JSON.stringify(edits)})}),result=await readResponse(response);if(!response.ok)throw Error(result.error||'Save failed');if(action==='restore'){checkpoint();edits=result.layout;initialise();apply();selected=null;field('controls').hidden=true;field('delete').disabled=true;}dirty=false;field('publication-status').textContent=result.published?'Published':field('publication-status').textContent.startsWith('Published')?'Published · draft changes':'Draft';field('status').textContent=result.published?'Published to website':action==='restore'?'Restored as private draft':'Draft saved privately';if(action==='publish')location.reload();}catch(error){field('status').textContent=error.message;}finally{field('save').disabled=field('draft').disabled=false;}}
  field('save').onclick=()=>save('publish');field('draft').onclick=()=>save('draft');field('restore').onclick=()=>{if(field('revision').value&&(!dirty||confirm('Replace unsaved work with this version?')))save('restore');};
  function uploadSource(){const drive=field('upload-source').value==='drive',form=field('upload');field('device-photo').hidden=drive;field('drive-photo').hidden=!drive;form.elements.images.disabled=drive;form.elements.images.required=!drive;form.elements.drive_url.disabled=!drive;form.elements.drive_url.required=drive;}
  field('upload-source').onchange=uploadSource;

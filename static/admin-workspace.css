@@ -64,6 +64,7 @@
 .workspace-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 24px; }
 .workspace-shortcuts a { padding: 18px; background: white; border: 1px solid var(--border); border-radius: 14px; }
 .workspace-shortcuts strong, .workspace-shortcuts span { display: block; }
+.dashboard-main .workspace-shortcuts strong { font-weight: 800; }
 .workspace-shortcuts span { color: var(--muted); font-size: .85rem; margin-top: 8px; line-height: 1.45; }
 .workspace-shortcuts a:hover { border-color: var(--pink); }
 .qr-record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -104,3 +105,7 @@
 .admin-tool-search label { display: block; color: white; font-size: .85rem; margin-bottom: 8px; }
 .admin-tool-search input { box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; border: 1px solid #9aa9bf; border-radius: 8px; background: white; color: #183354; }
 .admin-tool-search [role=status] { color: white; font-size: .8rem; margin: 8px 0 0; }
+
+.admin-favourites{padding:12px 0;margin-bottom:12px;border-bottom:1px solid #ffffff30;color:white}.admin-favourites strong,.admin-favourites small{display:block;margin:6px 0}.admin-favourites a{display:block;padding:10px 8px;color:white;border-radius:6px}.admin-favourites small{font-size:.8rem;line-height:1.5}.admin-pin-row{display:flex;align-items:center;min-width:0}.admin-pin-row>a{flex:1;min-width:0}.admin-pin{flex:0 0 36px;border:0;background:transparent;color:#ffd16b;font-size:1.4rem;cursor:pointer;min-height:44px}.admin-pin:focus-visible{outline:2px solid white}
+#admin-quick-actions{width:min(440px,calc(100vw - 32px));box-sizing:border-box;border:1px solid #dce2eb;border-radius:16px;padding:24px;color:#243047}#admin-quick-actions::backdrop{background:#10213f88}#admin-quick-actions nav{display:grid;gap:10px;margin:18px 0}#admin-quick-actions .btn{min-height:44px;box-sizing:border-box}
+@media(max-width:800px){.admin{display:block}.admin>aside .admin-favourites{display:none;grid-column:1/-1}.admin>aside.admin-menu-open .admin-favourites{display:block}.portal-admin-toolbar{position:sticky;top:0;z-index:65;background:white;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0}.portal-admin-toolbar .btn{min-height:44px;display:inline-flex;align-items:center}.admin .client-action-row{flex-wrap:wrap}.admin .client-form input,.admin .client-form select,.admin .client-form textarea{min-width:0;max-width:100%;box-sizing:border-box}.admin main{min-width:0}.admin .admin-pin-row>a,.admin-favourites a{min-height:44px;box-sizing:border-box}.admin .workspace-shortcuts{grid-template-columns:minmax(0,1fr)}}

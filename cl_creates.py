@@ -13,6 +13,18 @@ from email_validator import validate_email, EmailNotValidError
 STATUSES = ('Under review', 'Paid', 'In production', 'Shipped', 'Ready for collection')
 
 
+def next_order_action(order):
+    if order.status in ('Shipped', 'Ready for collection'):
+        return 'View order and delivery details'
+    if order.status == 'Under review':
+        return 'Review order and send invoice'
+    if order.paid < order.total:
+        return 'Review invoice and outstanding payment'
+    if order.status == 'In production':
+        return 'Arrange collection' if order.fulfilment == 'collection' else 'Add tracking and arrange dispatch'
+    return 'Start production'
+
+
 def ensure_schema(db):
     """Upgrade existing orders; create_all only creates missing tables."""
     from sqlalchemy import inspect, text
@@ -74,6 +86,7 @@ def define_models(db):
 
 
 def register(app, db, models, Setting, admin_required, send_email, get_current_client=lambda: None):
+    app.jinja_env.globals['next_order_action'] = next_order_action
     Order, Message, Product, LibraryImage = models
     defaults = {'price': '5.00', 'postage': '6.00', 'emails': True,
                 'subject': 'CL Creates {order_number}: {status}',
@@ -338,7 +351,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     if status not in STATUSES or paid > order.total:
                         raise ValueError('Check the status and payment amount.')
                     if status != 'Under review' and paid != order.total:
-                        raise ValueError('Record full payment before moving the order into production or fulfilment.')
+                        raise ValueError(f'Record the full payment of £{order.total:.2f} in Payment received before selecting {status}. Check the invoice before recording payment.')
                     if (status == 'Shipped' and order.fulfilment != 'postage') or (status == 'Ready for collection' and order.fulfilment != 'collection'):
                         raise ValueError('The status must match the delivery method.')
                     changed = status != order.status

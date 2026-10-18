@@ -173,7 +173,11 @@ def register(app, db, models, native_models, current_client, admin_required):
         photos += Asset.query.options(defer(Asset.content)).filter_by(status='approved').order_by(Asset.id.desc()).all()
         stories = [s for s in Story.query.filter_by(published=True).order_by(Story.id.desc()).all()
                    if not (s.cover_id or s.admin_cover_id) or visible(cover(s))]
-        layout = db.session.get(db._website_layout, request.endpoint.removeprefix('website_')) if request.endpoint else None
+        page_key = request.endpoint.removeprefix('website_') if request.endpoint else None
+        if request.endpoint == 'website_custom_page':
+            page_key = next((key for key, entry in app.extensions['website_pages']().items()
+                             if entry.get('slug') == request.view_args.get('slug')), None)
+        layout = db.session.get(db._website_layout, page_key) if page_key else None
         edits = json.loads(layout.content) if layout else {}
         def resolve(edit):
             if edit.get('photo'):
@@ -192,7 +196,7 @@ def register(app, db, models, native_models, current_client, admin_required):
     @admin_required
     def admin_website_builder():
         page=request.values.get('page','home')
-        if page not in ('home','about','services','gallery','contact'): abort(400)
+        if page not in app.extensions['website_pages'](): abort(400)
         Layout=db._website_layout
         Draft=db._website_draft
         Revision=db._website_revision

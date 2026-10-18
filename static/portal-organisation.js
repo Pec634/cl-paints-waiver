@@ -76,7 +76,7 @@
 
     // Save only list filter URLs on this device, never client details or form content.
     document.querySelectorAll('.admin form[method="get"]').forEach(form => {
-        if (!form.querySelector('select[name="filter"], select[name="status"]')) return;
+        if (!form.querySelector('select[name="filter"], select[name="status"], select[name="sort"]')) return;
         const key = 'cl-paints-filter:' + location.pathname;
         const row = document.createElement('div');
         row.className = 'portal-saved-filter';
@@ -96,7 +96,7 @@
         };
         save.onclick = () => {
             const values = new URLSearchParams();
-            form.querySelectorAll('select[name="filter"], select[name="status"]').forEach(select => values.set(select.name,select.value));
+            form.querySelectorAll('select[name="filter"], select[name="status"], select[name="sort"]').forEach(select => values.set(select.name,select.value));
             try { localStorage.setItem(key,values.toString()); status.textContent = 'Filter saved on this device.'; refresh(); }
             catch (_) { status.textContent = 'Browser storage is unavailable.'; }
         };
@@ -105,7 +105,7 @@
     });
 
     const dirty = new Set();
-    document.querySelectorAll('form[data-warn-unsaved], .settings-column form:not(#qr-form)').forEach(form => {
+    document.querySelectorAll('form[data-warn-unsaved], .settings-column form:not(#qr-form), .admin form[method="post"]').forEach(form => {
         const baseline = () => JSON.stringify([...new FormData(form)].filter(([key])=>key!=='csrf_token').map(([key,value])=>[key,typeof value==='string'?value:value.name]));
         let initial = baseline();
         const changed = () => { if (baseline()===initial) dirty.delete(form); else dirty.add(form); };

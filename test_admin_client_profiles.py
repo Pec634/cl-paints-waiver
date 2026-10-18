@@ -12,6 +12,52 @@ class AdminClientProfilesTest(unittest.TestCase):
         self.path=f'/admin/clients/{self.account.id}'
     def tearDown(self): self.fixture.tearDown()
 
+    def test_combined_timeline_and_order_attention(self):
+        Order = main.creates_models[0]
+        main.db.session.add_all([
+            Order(first_name='Test', last_name='Client', email=self.account.email.upper(),
+                  address='', fulfilment='collection', items_json='[]', total=12),
+            Order(first_name='Private', last_name='Other', email='unrelated@example.com',
+                  address='', fulfilment='collection', items_json='[]', total=99)])
+        main.db.session.commit()
+        data=self.fixture.data(self.client,self.fixture.client_path,'Timeline unread message')
+        self.client.post(self.fixture.client_path,data=data)
+        path=self.path+'/timeline'
+        page=self.admin.get(path)
+        self.assertEqual(page.status_code,200)
+        self.assertIn(b'CL Creates order placed',page.data)
+        self.assertIn(b'Timeline unread message',page.data)
+        self.assertNotIn(b'99.00',page.data)
+        self.assertIsNone(main.BookingMessage.query.one().read_at)
+        self.assertIn('no-store',page.headers['Cache-Control'])
+        self.assertEqual(self.client.get(path).status_code,302)
+        dashboard=self.admin.get('/admin/dashboard')
+        self.assertIn(b'Review order and send invoice',dashboard.data)
+
+    def test_admin_navigation_browser(self):
+        browsers.NativeFormBrowserTest().browser(self.admin.get('/admin/clients').data, '''
+            const star=document.querySelector('.admin-pin');
+            assert(star,'tools have pin buttons');star.click();
+            assert(star.getAttribute('aria-pressed')==='true','pin saves favourite');
+            assert(document.querySelector('.admin-favourites a'),'favourite has a shortcut');
+            star.click();assert(!document.querySelector('.admin-favourites a'),'unpin removes favourite');
+            document.querySelector('[data-quick-actions]').click();
+            const dialog=document.getElementById('admin-quick-actions');
+            assert(dialog.open&&dialog.querySelectorAll('nav a').length===5,'quick actions open');
+            dialog.querySelector('[data-close-actions]').click();assert(!dialog.open,'quick actions close');
+            const menu=document.querySelector('.admin-menu-toggle');menu.click();
+            assert(document.querySelector('aside').classList.contains('admin-menu-open'),'mobile menu opens');
+            document.querySelector('aside').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+            assert(menu.getAttribute('aria-expanded')==='false','escape closes mobile menu');
+            const form=document.querySelector('form[method="get"]');
+            form.querySelector('[name="sort"]').value='newest';
+            form.addEventListener('submit',event=>event.preventDefault());
+            form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+            const saved=JSON.parse(localStorage.getItem('cl-admin-list:'+location.pathname));
+            assert(saved.sort==='newest','client sorting is remembered');
+            assert(!('q' in saved),'client search is not stored');
+        ''',width=390)
+
     def test_profile_search_tabs_and_record_isolation(self):
         self.fixture.fixture.fixture.booking('unrelated@example.com',event_type='Unrelated secret event')
         self.fixture.booking.email=self.account.email.upper()

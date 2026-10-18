@@ -1,4 +1,4 @@
-from flask import render_template, Response, url_for, redirect, request
+from flask import render_template, Response, url_for, redirect, request, abort
 from xml.sax.saxutils import escape
 
 
@@ -42,10 +42,16 @@ def register(app):
         'studio': ('/face-paint-studio', 'Face Paint Studio | CL Paints', 'Try face painting online with our creative studio. Choose a face, explore colours and create your own design.'),
     }
     def show(page):
+        if page != 'studio' and page not in app.extensions['website_pages']():
+            abort(404)
         return render_template('website/studio.html' if page=='studio' else 'website/page.html', page=page, seo_title=pages[page][1], seo_description=pages[page][2])
     for page, (path, _, _) in pages.items():
         app.add_url_rule(path, 'website_' + page, lambda page=page: show(page))
     @app.get('/sitemap.xml')
     def website_sitemap():
-        urls = ''.join('<url><loc>' + escape(public_url('website_' + page)) + '</loc></url>' for page in pages)
+        entries = app.extensions['website_pages']()
+        urls = ''.join('<url><loc>' + escape(public_url('website_custom_page', slug=entry['slug']) if entry.get('custom')
+                      else public_url('website_' + key)) + '</loc></url>' for key, entry in entries.items()
+                      if not entry.get('custom') or app.extensions['sqlalchemy'].session.get(app.extensions['sqlalchemy']._website_layout, key))
+        urls += '<url><loc>' + escape(public_url('website_studio')) + '</loc></url>'
         return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls + '</urlset>', mimetype='application/xml')
