@@ -409,13 +409,17 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
             'surname_asc': (Account.last_name, Account.first_name, False),
             'surname_desc': (Account.last_name, Account.first_name, True),
         }
-        if name_sort not in sort_columns:
-            abort(400)
-        primary, secondary, descending = sort_columns[name_sort]
-        ordering = [db.func.lower(db.func.trim(column)) for column in (primary, secondary)]
-        if descending:
-            ordering = [column.desc() for column in ordering]
-        pagination=account_query.order_by(*ordering,Account.id).paginate(page=max(1,request.args.get('page',1,type=int)),per_page=24,error_out=False)
+        if name_sort == 'newest':
+            ordering = [Account.created_at.desc(), Account.id.desc()]
+        else:
+            if name_sort not in sort_columns:
+                abort(400)
+            primary, secondary, descending = sort_columns[name_sort]
+            ordering = [db.func.lower(db.func.trim(column)) for column in (primary, secondary)]
+            if descending:
+                ordering = [column.desc() for column in ordering]
+            ordering.append(Account.id)
+        pagination=account_query.order_by(*ordering).paginate(page=max(1,request.args.get('page',1,type=int)),per_page=24,error_out=False)
         return render_template('admin_clients.html', clients=clients, client_rows=pagination.items,pagination=pagination,query=query,account_filter=account_filter,name_sort=name_sort,
                                enquiries=Enquiry.query.order_by(Enquiry.created_at.desc()).limit(5).all(),
                                accounts={a.id: a for a in clients}, owners=Owner.query.all(), client_csrf=csrf())

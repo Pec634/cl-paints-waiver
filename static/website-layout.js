@@ -17,7 +17,7 @@
  const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('wb-animated','wb-'+entry.target.dataset.wbAnimation);observer.unobserve(entry.target);}}));
  function decorate(n,e={}){
    const previous=decorated.get(n)||{},baseline=baselines.get(n)||{};
-   n.hidden=!!e.hidden;const p=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};
+   n.hidden=!!(e.hidden||e.deleted);const p=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};
    const originalPosition=originalPositions.get(n)||'static';n.style.position=originalPosition==='static'?'relative':originalPosition;
    n.style.left=p.x?p.x+'px':baseline.left||'';n.style.top=p.y?p.y+'px':baseline.top||'';n.style.width=p.width?p.width+'%':baseline.width||'';
    Object.keys(previous.style||{}).forEach(key=>{if(!(key in (e.style||{})))n.style[key]=baseline[key]||'';});
@@ -37,7 +37,7 @@
  function reconcile(parent,desired){let cursor=parent.firstElementChild;desired.forEach(node=>{if(node!==cursor)parent.insertBefore(node,cursor);cursor=node.nextElementSibling;});}
  function preserveImageSlot(n,e){
    const position=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};
-   const resized=!!position.width||!!e.style?.height;
+   const resized=!e.deleted&&(!!position.width||!!e.style?.height);
    if(!resized){const slot=imageSlots.get(n);if(slot){slot.parentElement.insertBefore(n,slot);slot.remove();imageSlots.delete(n);}return;}
    if(imageSlots.has(n)||['absolute','fixed'].includes(originalPositions.get(n)))return;
    const width=n.offsetWidth,height=n.offsetHeight;if(!width||!height)return;

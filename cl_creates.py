@@ -73,7 +73,7 @@ def define_models(db):
     return CreatesOrder, CreatesMessage, CreatesProduct, CreatesImage
 
 
-def register(app, db, models, Setting, admin_required, send_email):
+def register(app, db, models, Setting, admin_required, send_email, get_current_client=lambda: None):
     Order, Message, Product, LibraryImage = models
     defaults = {'price': '5.00', 'postage': '6.00', 'emails': True,
                 'subject': 'CL Creates {order_number}: {status}',
@@ -153,6 +153,18 @@ def register(app, db, models, Setting, admin_required, send_email):
     @app.route('/cl-creates', methods=['GET', 'POST'])
     def creates_shop():
         token = csrf()
+        account = get_current_client()
+        defaults = {}
+        if account:
+            defaults = {key: getattr(account, key) for key in ('first_name', 'last_name', 'email')}
+            billing = db.session.get(app.extensions['client_billing_address_model'], account.id)
+            if billing:
+                details = billing.details
+                defaults.update(address_line1=details.get('address_property', ''),
+                                address_line2=details.get('address_street', ''),
+                                town=details.get('address_city', ''), postcode=details.get('address_postcode', ''))
+        shop_context = dict(client_account=account, client_csrf=session.get('client_csrf', ''),
+                            shop_base='client/base.html' if account else 'base.html', defaults=defaults)
         config = settings()
         products = Product.query.filter_by(active=True).all()
         error = None
@@ -203,12 +215,12 @@ def register(app, db, models, Setting, admin_required, send_email):
                 db.session.commit()
                 session.pop('creates_submission', None)
                 status_email(order)
-                return render_template('creates_confirmation.html', order=order)
+                return render_template('creates_confirmation.html', order=order, **shop_context)
             except (ValueError, EmailNotValidError) as exc:
                 error = str(exc)
         session.setdefault('creates_submission', secrets.token_urlsafe(32))
         return render_template('creates_shop.html', products=products, config=config, csrf=token, error=error,
-                               gallery=LibraryImage.query.filter_by(visible=True).order_by(LibraryImage.id).all())
+                               gallery=LibraryImage.query.filter_by(visible=True).order_by(LibraryImage.id).all(), **shop_context)
 
     @app.get('/cl-creates/library/<int:image_id>')
     def creates_library_image(image_id):

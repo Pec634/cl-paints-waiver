@@ -59,6 +59,28 @@ class CreatesTest(unittest.TestCase):
         with self.admin.session_transaction() as session:
             return session['creates_csrf']
 
+    def test_portal_shop_prefills_signup_details_and_keeps_edits(self):
+        account = self.fixture.signup()
+        Address = main.app.extensions['client_billing_address_model']
+        main.db.session.add(Address(client_id=account.id, details={
+            'address_property': '42', 'address_street': 'Rainbow Road',
+            'address_city': 'Doncaster', 'address_postcode': 'DN1 1AA',
+            'address_country': 'United Kingdom'}))
+        main.db.session.commit()
+        page = self.client.get('/cl-creates')
+        for value in [b'Client navigation', b'>CL Creates</a>', b'value="Test"',
+                      b'value="client@example.com"', b'value="42"', b'value="Rainbow Road"',
+                      b'value="Doncaster"', b'value="DN1 1AA"', b'autocomplete="postal-code"']:
+            self.assertIn(value, page.data)
+        data = self.form()
+        data.update(address_line1='99 Changed Road', wording='')
+        invalid = self.client.post('/cl-creates', data=data)
+        self.assertIn(b'value="99 Changed Road"', invalid.data)
+        self.assertNotIn(b'value="42"', invalid.data)
+        anonymous = main.app.test_client().get('/cl-creates')
+        self.assertNotIn(b'value="Rainbow Road"', anonymous.data)
+        self.assertNotIn(b'aria-label="Client navigation"', anonymous.data)
+
     def test_order_totals_duplicate_and_private_details(self):
         data = self.form()
         data.update(product=[str(self.product.id)] * 2, wording=['HELLO WORLD', 'A B C'], quantity=['2', '3'])

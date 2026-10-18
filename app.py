@@ -2817,7 +2817,7 @@ register_wedding_followups(app, db, WeddingFollowup, native_form_models[1], mark
                           get_business_settings, lambda *args: send_client_email(*args), BusinessSetting, admin_required)
 
 from cl_creates import register as register_creates
-register_creates(app, db, creates_models, BusinessSetting, admin_required, lambda *args: send_client_email(*args))
+register_creates(app, db, creates_models, BusinessSetting, admin_required, lambda *args: send_client_email(*args), get_current_client)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

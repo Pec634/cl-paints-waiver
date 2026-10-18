@@ -271,6 +271,47 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(iframe.contentWindow.websiteEditor.nodes[0].hidden,'return to draft failed');
         ''')
 
+    def test_website_editor_delete_selected_fields(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const iframe=document.getElementById('builder-preview'),doc=iframe.contentDocument;
+            const layers=document.getElementById('builder-layers');
+            layers.querySelector('button').click();
+            document.getElementById('builder-lock').click();
+            assert(document.getElementById('builder-delete').disabled,'locked fields must not be deleted');
+            document.getElementById('builder-lock').click();
+            const count=layers.children.length;
+            document.getElementById('builder-delete').click();
+            assert(iframe.contentWindow.websiteEditor.nodes[0].hidden,'deleted field must disappear');
+            assert(layers.children.length===count-1,'deleted field must leave layers');
+            document.getElementById('builder-undo').click();
+            assert(!iframe.contentWindow.websiteEditor.nodes[0].hidden,'undo must restore field');
+            document.getElementById('builder-redo').click();
+            assert(iframe.contentWindow.websiteEditor.nodes[0].hidden,'redo must delete field again');
+            document.getElementById('builder-columns').value='2';
+            document.getElementById('builder-add').click();
+            document.getElementById('builder-delete').click();
+            assert(doc.querySelector('.wb-row').children.length===1,'delete must remove selected cell only');
+            doc.querySelector('[data-builder-cell]').click();
+            document.getElementById('builder-delete').click();
+            assert(!doc.querySelector('.wb-row'),'last cell deletion must remove empty row');
+            document.getElementById('builder-undo').click();
+            assert(doc.querySelector('.wb-row').children.length===1,'undo must restore removed row');
+        ''')
+
     def test_website_editor_mobile_layout_and_reduced_motion(self):
         browsers.NativeFormBrowserTest().browser(self.admin.get('/admin/website-builder').data, '''
             const source=document.getElementById('builder-upload-source'),upload=document.getElementById('builder-upload');

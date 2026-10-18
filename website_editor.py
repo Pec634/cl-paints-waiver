@@ -48,7 +48,7 @@ def item(raw, validate_photo):
             if style[key] not in choices: raise ValueError('Invalid style')
             safe[key]=style[key]
     result['style']=safe
-    for flag in ('hidden','locked'):
+    for flag in ('hidden','locked','deleted'):
         result[flag]=bool(raw.get(flag,False))
     animation=raw.get('animation',{})
     kind=animation.get('kind','none')

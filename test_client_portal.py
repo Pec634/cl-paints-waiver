@@ -64,6 +64,25 @@ class ClientPortalTest(unittest.TestCase):
         main.db.session.commit()
         return booking
 
+    def test_admin_clients_newest_joined_sort(self):
+        older = main.ClientAccount(email='older@example.com', first_name='Zoe', last_name='Older',
+                                   created_at=datetime(2025, 1, 1))
+        newer = main.ClientAccount(email='newer@example.com', first_name='Amy', last_name='Newer',
+                                   created_at=datetime(2026, 1, 1))
+        main.db.session.add_all([older, newer])
+        main.db.session.commit()
+        admin = main.app.test_client()
+        with admin.session_transaction() as session:
+            session['admin_authenticated'] = True
+        page = admin.get('/admin/clients?sort=newest')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'Newest joined', page.data)
+        self.assertLess(page.data.index(f'id="client-{newer.id}"'.encode()),
+                        page.data.index(f'id="client-{older.id}"'.encode()))
+        filtered = admin.get('/admin/clients?sort=newest&q=older@example.com')
+        self.assertIn(f'id="client-{older.id}"'.encode(), filtered.data)
+        self.assertNotIn(f'id="client-{newer.id}"'.encode(), filtered.data)
+
     def test_resend_countdown_enforcement_and_replacement(self):
         old_code = self.request_code()
         original = main.ClientLoginCode.query.one()
