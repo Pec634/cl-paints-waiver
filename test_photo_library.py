@@ -372,6 +372,60 @@ class PhotoLibraryTest(unittest.TestCase):
             assert(!document.getElementById('builder-multi-status').textContent,'Escape clears group selection');
         ''')
 
+    def test_website_editor_tidy_spacing_preview_and_undo(self):
+        import html
+        import re
+        from pathlib import Path
+        public=self.guest.get('/').text
+        public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
+        static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
+        public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        for name in ('website-layout.js','website.js'):
+            public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
+        public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
+        public=re.sub(r'<link\b[^>]*>','',public)
+        markup=self.admin.get('/admin/website-builder').text
+        markup=markup.replace('src="/"', 'srcdoc="'+html.escape(public,quote=True)+'"')
+        browsers.NativeFormBrowserTest().browser(markup.encode(), '''
+            await new Promise(resolve=>setTimeout(resolve,400));
+            const frame=document.getElementById('builder-preview'),doc=frame.contentDocument;
+            const get=id=>document.getElementById('builder-'+id);
+            get('columns').value='1';get('kind').value='text';get('add').click();
+            get('text').value='';input(get('text'));
+            get('add').click();
+            const padding=document.querySelector('[data-builder-style="padding"]');padding.value='100';input(padding);
+            const cells=()=>[...doc.querySelectorAll('.wb-cell')];
+            assert(cells()[1].style.padding==='100px','test starts with oversized spacing');
+            get('tidy').click();get('tidy-scope').value='section';change(get('tidy-scope'));
+            get('tidy-preview').click();
+            assert(cells()[1].style.padding==='24px','selected section spacing is previewed');
+            assert(doc.querySelectorAll('.wb-row').length===2,'other section remains unchanged');
+            get('tidy-close').click();await new Promise(resolve=>setTimeout(resolve,20));
+            assert(cells()[1].style.padding==='100px','cancel restores original spacing');
+            get('tidy').click();get('tidy-preview').click();get('tidy-apply').click();
+            await new Promise(resolve=>setTimeout(resolve,20));
+            assert(cells()[1].style.padding==='24px','apply keeps tidy spacing');
+            get('undo').click();assert(cells()[1].style.padding==='100px','Undo restores spacing');
+            get('redo').click();assert(cells()[1].style.padding==='24px','Redo restores tidy spacing');
+            cells()[0].click();get('tidy').click();get('tidy-preview').click();
+            assert(doc.querySelectorAll('.wb-row').length===1,'empty row disappears in preview');
+            get('tidy-apply').click();await new Promise(resolve=>setTimeout(resolve,20));
+            assert(doc.querySelectorAll('.wb-row').length===1,'empty row removal applies');
+            get('undo').click();assert(doc.querySelectorAll('.wb-row').length===2,'Undo restores empty row');
+            cells()[0].click();get('lock').click();
+            get('tidy').click();get('tidy-scope').value='page';change(get('tidy-scope'));get('tidy-preview').click();
+            assert(doc.querySelectorAll('.wb-row').length===2,'locked empty rows are preserved');
+            get('tidy-close').click();await new Promise(resolve=>setTimeout(resolve,20));
+            const editor=frame.contentWindow.websiteEditor,index=editor.nodes.findIndex(node=>node.tagName==='IMG'),image=editor.nodes[index],key=editor.keys[index];
+            editor.apply({[key]:{desktop:{width:50},style:{height:100}}},'desktop');
+            const slot=image.parentElement,ratio=slot.style.aspectRatio;
+            assert(slot.classList.contains('wb-image-slot'),'resized image has a reserved slot');
+            editor.apply({[key]:{desktop:{width:50},style:{height:100},compactImage:true}},'desktop');
+            assert(!image.parentElement.classList.contains('wb-image-slot'),'compact image releases reserved space');
+            editor.apply({[key]:{desktop:{width:50},style:{height:100}}},'desktop');
+            assert(image.parentElement.style.aspectRatio===ratio,'restoring slot preserves its original footprint');
+        ''')
+
     def test_website_editor_mobile_layout_and_reduced_motion(self):
         browsers.NativeFormBrowserTest().browser(self.admin.get('/admin/website-builder').data, '''
             const source=document.getElementById('builder-upload-source'),upload=document.getElementById('builder-upload');

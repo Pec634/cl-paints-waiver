@@ -11,7 +11,7 @@
  });
  let edits=JSON.parse(document.getElementById('website-layout').textContent),previewDevice;
  const applied=new WeakMap(),decorated=new WeakMap(),baselines=new WeakMap(),blockRows=[...extra.children];
- const imageSlots=new WeakMap(),originalPositions=new WeakMap(),blockImageHeights=new WeakMap();
+ const imageSlots=new WeakMap(),originalPositions=new WeakMap(),blockImageHeights=new WeakMap(),originalFootprints=new WeakMap(),sectionSpacing=new WeakMap();
  nodes.filter(node=>node.tagName==='IMG').forEach(node=>originalPositions.set(node,window.getComputedStyle?.(node).position||'static'));
  nodes.forEach((node,index)=>{const style=document.createElement('span').style;style.cssText=originals[index].style||'';baselines.set(node,style);});
  const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('wb-animated','wb-'+entry.target.dataset.wbAnimation);observer.unobserve(entry.target);}}));
@@ -37,12 +37,13 @@
  function reconcile(parent,desired){let cursor=parent.firstElementChild;desired.forEach(node=>{if(node!==cursor)parent.insertBefore(node,cursor);cursor=node.nextElementSibling;});}
  function preserveImageSlot(n,e){
    const position=e[previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]||e.desktop||{};
-   const resized=!e.deleted&&(!!position.width||!!e.style?.height);
+   const resized=!e.deleted&&!e.compactImage&&(!!position.width||!!e.style?.height);
    if(!resized){const slot=imageSlots.get(n);if(slot){slot.parentElement.insertBefore(n,slot);slot.remove();imageSlots.delete(n);}return;}
    if(imageSlots.has(n)||['absolute','fixed'].includes(originalPositions.get(n)))return;
-   const width=n.offsetWidth,height=n.offsetHeight;if(!width||!height)return;
+   const footprint=originalFootprints.get(n)||{width:n.offsetWidth,height:n.offsetHeight,parentWidth:n.parentElement.clientWidth};
+   const {width,height}=footprint;if(!width||!height)return;originalFootprints.set(n,footprint);
    const slot=document.createElement('div');slot.className='wb-image-slot';
-   const parentWidth=n.parentElement.clientWidth||width;
+   const parentWidth=footprint.parentWidth||width;
    slot.style.width='100%';slot.style.aspectRatio=parentWidth+' / '+height;slot.style.position='relative';slot.style.overflow='visible';
    n.parentElement.insertBefore(slot,n);slot.append(n);imageSlots.set(n,slot);
  }
@@ -80,6 +81,13 @@
    reconcile(extra,blockRows.filter((_,r)=>!(edits._blocks[r].before>=0&&sections[edits._blocks[r].before])));
  }
  function apply(){
+   sections.forEach((section,index)=>{
+     if(!sectionSpacing.has(section))sectionSpacing.set(section,{paddingTop:section.style.paddingTop,paddingBottom:section.style.paddingBottom,gap:section.style.gap});
+     const original=sectionSpacing.get(section),spacing=edits._spacing?.[index]||{};
+     section.style.paddingTop=spacing.padding!==undefined?spacing.padding+'px':original.paddingTop;
+     section.style.paddingBottom=spacing.padding!==undefined?spacing.padding+'px':original.paddingBottom;
+     section.style.gap=spacing.gap!==undefined?spacing.gap+'px':original.gap;
+   });
    nodes.forEach((n,i)=>{
      const original=originals[i],e=edits[keys[i]]||edits[i]||{},signature=JSON.stringify([e,previewDevice||(innerWidth<=700?'mobile':innerWidth<=1000?'tablet':'desktop')]),previous=applied.get(n);
      if(previous?.signature===signature)return;

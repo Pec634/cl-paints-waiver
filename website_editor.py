@@ -48,7 +48,7 @@ def item(raw, validate_photo):
             if style[key] not in choices: raise ValueError('Invalid style')
             safe[key]=style[key]
     result['style']=safe
-    for flag in ('hidden','locked','deleted'):
+    for flag in ('hidden','locked','deleted','compactImage'):
         result[flag]=bool(raw.get(flag,False))
     animation=raw.get('animation',{})
     kind=animation.get('kind','none')
@@ -60,7 +60,7 @@ def item(raw, validate_photo):
     return result
 
 def validate(raw, validate_photo):
-    if not isinstance(raw,dict) or len(raw)>203: raise ValueError('Invalid layout')
+    if not isinstance(raw,dict) or len(raw)>204: raise ValueError('Invalid layout')
     result={}
     for key,value in raw.items():
         if key.startswith('_'): continue
@@ -83,6 +83,12 @@ def validate(raw, validate_photo):
     sections=raw.get('_sections',[])
     if not isinstance(sections,list) or len(sections)>100 or any(not isinstance(i,int) or i<0 or i>100 for i in sections) or len(set(sections))!=len(sections): raise ValueError('Invalid section order')
     result['_sections']=sections
+    spacing=raw.get('_spacing',{})
+    if not isinstance(spacing,dict) or len(spacing)>100: raise ValueError('Invalid section spacing')
+    result['_spacing']={}
+    for index,values in spacing.items():
+        if not str(index).isdigit() or int(index)>100 or not isinstance(values,dict): raise ValueError('Invalid section spacing')
+        result['_spacing'][str(index)]={key:number(values[key],0,120) for key in ('padding','gap') if key in values}
     seo=raw.get('_seo',{})
     result['_seo']={key:text(seo.get(key,''),limit) for key,limit in [('title',150),('description',300)]}
     return result

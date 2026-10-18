@@ -21,7 +21,8 @@
  function checkpoint(){undo.push(clone(edits));if(undo.length>100)undo.shift();redo=[];dirty=true;field('undo').disabled=false;field('redo').disabled=true;field('status').textContent='Unsaved changes';}
  function current(){if(selected===null)return null;if(typeof selected==='number')return edits[editor().keys[selected]]??={};return selected.cell===undefined?edits._blocks[selected.row]:edits._blocks[selected.row].cells[selected.cell];}
  function enrich(item){if(item.photo){const option=[...field('photo').options].find(o=>o.value===item.photo);item.image=option?.dataset.src||'';item.alt=option?.dataset.alt||'';}}
- function apply(refreshLists=true){if(!editor())return;const data=clone(edits);Object.entries(data).forEach(([k,e])=>{if(!k.startsWith('_'))enrich(e);});data._blocks?.forEach(r=>r.cells.forEach(enrich));editor().apply(data,deviceName);if(refreshLists)renderLists();updateResizeHandle();}
+ function previewLayout(layout){const data=clone(layout);Object.entries(data).forEach(([k,e])=>{if(!k.startsWith('_'))enrich(e);});data._blocks?.forEach(r=>r.cells.forEach(enrich));editor().apply(data,deviceName);}
+ function apply(refreshLists=true){if(!editor())return;previewLayout(edits);if(refreshLists)renderLists();updateResizeHandle();}
  function button(label,fn){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=label;b.onclick=fn;return b;}
  function renderLists(){
    const list=field('rows');list.replaceChildren();edits._blocks.forEach((row,r)=>{const entry=document.createElement('div');entry.className='builder-row-actions';entry.append(button(`Row ${r+1}`,()=>choose({row:r})),button('↑',()=>moveRow(r,-1)),button('↓',()=>moveRow(r,1)),button('Duplicate',()=>{checkpoint();edits._blocks.splice(r+1,0,clone(row));apply();}),button('Remove',()=>{checkpoint();edits._blocks.splice(r,1);selected=null;field('controls').hidden=true;field('delete').disabled=true;apply();}));row.cells.forEach((cell,c)=>entry.append(button(`${c+1}: ${cell.kind}`,()=>choose({row:r,cell:c}))));const location=document.createElement('select');location.add(new Option('After existing sections','-1'));editor()?.sections.forEach((section,i)=>location.add(new Option('Before '+(section.querySelector('h1,h2')?.textContent||`section ${i+1}`).slice(0,50),i)));location.value=row.before??-1;location.setAttribute('aria-label',`Placement for row ${r+1}`);location.onchange=()=>{checkpoint();row.before=Number(location.value);apply();};entry.append(location);list.append(entry);});
@@ -269,4 +270,24 @@
  multiSelect=window.createBuilderMultiSelect({frame,field,editor,getEdits:()=>edits,device:()=>deviceName,checkpoint,apply,
    clearSingle(){selected=null;field('controls').hidden=true;field('delete').disabled=true;editor().nodes.forEach(node=>node.style.outline='');frame.contentDocument.querySelectorAll('[data-builder-cell]').forEach(node=>node.style.outline='');updateResizeHandle();}
  });
+ let tidyPlan=null;
+ const tidyDialog=field('tidy-dialog');
+ field('tidy').onclick=()=>{if(!editor())return;tidyPlan=null;field('tidy-changes').replaceChildren();field('tidy-status').textContent='Choose the area and changes, then preview.';field('tidy-apply').disabled=true;tidyDialog.showModal();};
+ function resetTidyPreview(){tidyPlan=null;field('tidy-apply').disabled=true;field('tidy-changes').replaceChildren();field('tidy-status').textContent='Preview again to see these options.';apply(false);}
+ ['scope','empty','gaps','images'].forEach(key=>field('tidy-'+key).onchange=resetTidyPreview);
+ field('tidy-preview').onclick=()=>{
+   apply(false);let scope=null;
+   if(field('tidy-scope').value==='section'){
+     if(selected===null){field('tidy-status').textContent='Close this dialog and select one field or row in the preview first.';return;}
+     if(typeof selected==='object')scope={row:selected.row};
+     else {const section=editor().sections.findIndex(section=>section.contains(selectedNode()));if(section<0){field('tidy-status').textContent='Select a field inside a section first.';return;}scope={section};}
+   }
+   tidyPlan=window.planBuilderTidy({layout:edits,editor:editor(),scope,empty:field('tidy-empty').checked,gaps:field('tidy-gaps').checked,images:field('tidy-images').checked,computedStyle:node=>frame.contentWindow.getComputedStyle(node)});
+   field('tidy-changes').replaceChildren();tidyPlan.changes.forEach(change=>{const row=document.createElement('li');row.textContent=change;field('tidy-changes').append(row);});
+   field('tidy-status').textContent=tidyPlan.changes.length?`${tidyPlan.changes.length} changes previewed. Close this dialog to keep your current layout, or apply to keep these changes.`:'No unused space found with these options.';
+   field('tidy-apply').disabled=!tidyPlan.changes.length;previewLayout(tidyPlan.layout);
+ };
+ field('tidy-apply').onclick=()=>{if(!tidyPlan?.changes.length)return;checkpoint();multiSelect?.clear();edits=tidyPlan.layout;selected=null;field('controls').hidden=true;field('delete').disabled=true;tidyPlan=null;initialise();apply();tidyDialog.close();field('status').textContent='Spacing tidied. Undo to restore; publish when ready.';};
+ field('tidy-close').onclick=()=>tidyDialog.close();
+ tidyDialog.addEventListener('close',()=>{tidyPlan=null;apply(false);});
 })();
