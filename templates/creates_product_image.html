@@ -1,0 +1,4 @@
+<form method="post" class="client-form">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="product_image"><input type="hidden" name="product_id" value="{{ product.id }}">
+<label>Replace or remove product image<select name="library_image"><option value="">Remove current image</option>{% for image in library %}<option value="{{ image.id }}">{{ image.name }}</option>{% endfor %}</select></label><button class="btn">Update product image</button>
+</form>

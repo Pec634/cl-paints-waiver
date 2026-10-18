@@ -7,6 +7,8 @@
     </div>
     <nav id="admin-tool-navigation" aria-label="Admin navigation">
         <a href="{{ url_for('admin_dashboard') }}" {% if request.endpoint == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
+        <a href="{{ url_for('creates_admin') }}" {% if (request.endpoint or '').startswith('creates_') %}class="active"{% endif %}>CL Creates</a>
+        {% if (request.endpoint or '').startswith('creates_') %}<a href="{{ url_for('admin_dashboard') }}">&larr; Back to admin portal</a>{% endif %}
         <hr class="admin-nav-divider">
         {% set current = request.endpoint or '' %}
         {% for endpoint, label, active in [
@@ -47,6 +49,11 @@
         {% for section, label in [('qr-generator','QR code generator'),('business','Business details & contact information'),('booking','Pricing & booking rules'),('travel','Travel charges'),('operations','Availability & travel buffer'),('account','Admin account & password'),('social','Social media & reviews'),('website_giveaway','Website giveaway announcements')] %}
         <span data-nav-group="System &amp; settings" hidden></span><a data-tool-search-only hidden href="{{ url_for('admin_settings', _anchor=section) }}">{{ label }}</a>
         {% endfor %}
+        <hr class="admin-nav-divider">
+        <span data-nav-group="CL Creates" hidden></span><a href="{{ url_for('creates_admin') }}" {% if request.endpoint == 'creates_admin' or request.endpoint == 'creates_order' %}class="active" aria-current="page"{% endif %}>CL Creates orders</a>
+        <span data-nav-group="CL Creates" hidden></span><a href="{{ url_for('creates_communications') }}" {% if request.endpoint == 'creates_communications' %}class="active" aria-current="page"{% endif %}>CL Creates communication history</a>
+        <span data-nav-group="CL Creates" hidden></span><a href="{{ url_for('creates_settings') }}" {% if request.endpoint == 'creates_settings' %}class="active" aria-current="page"{% endif %}>CL Creates settings &amp; showcase</a>
+        <span data-nav-group="CL Creates" hidden></span><a href="{{ url_for('creates_library') }}" {% if request.endpoint == 'creates_library' %}class="active" aria-current="page"{% endif %}>CL Creates image library</a>
         <hr class="admin-nav-divider">
         <a href="{{ url_for('admin_logout') }}">Logout</a>
     </nav>

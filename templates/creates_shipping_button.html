@@ -1,0 +1,3 @@
+{% if order.fulfilment == 'postage' %}
+<p><a class="btn" href="{{ url_for('creates_shipping_label', order_id=order.id) }}" target="_blank" rel="noopener">Print shipping address</a></p>
+{% endif %}

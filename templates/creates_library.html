@@ -1,0 +1,27 @@
+{% extends 'creates_base.html' %}
+{% block creates %}
+<h2>Image library</h2>
+<p>Upload headband examples, choose which appear in the public showcase, or delete images. Images can also be selected for products in <a href="{{ url_for('creates_settings') }}">settings &amp; showcase</a>.</p>
+<form method="post" enctype="multipart/form-data" class="client-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <input type="hidden" name="action" value="upload">
+  <label>Photos<input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple required></label>
+  <p>Upload up to 10 JPEG, PNG or WebP images at once, maximum 5 MB and 20 megapixels each. New uploads appear in the public showcase.</p>
+  <button class="btn primary">Upload images</button>
+</form>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-top:24px">
+{% for image in images %}
+<article class="panel">
+  <a href="{{ url_for('creates_library_image',image_id=image.id) }}" target="_blank" rel="noopener"><img src="{{ url_for('creates_library_image',image_id=image.id) }}" alt="{{ image.name }}" loading="lazy" style="width:100%;height:220px;object-fit:contain"></a>
+  <form method="post" class="client-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="update"><input type="hidden" name="image_id" value="{{ image.id }}">
+    <label>Caption / image description<input name="name" maxlength="150" value="{{ image.name }}" required></label>
+    <label><input type="checkbox" name="visible" {% if image.visible %}checked{% endif %}>Show in public example gallery</label>
+    <button class="btn">Save image details</button>
+  </form>
+  <details><summary>Delete image</summary><p>Permanently removes this image from the library, public showcase and any products using it. Products and existing orders are retained.</p>
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="image_id" value="{{ image.id }}"><button class="btn" type="submit">Permanently delete image</button></form></details>
+</article>
+{% else %}<p>No images yet. Upload your first headband photo above.</p>{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% if gallery %}
+<section aria-label="Headband examples"><h2>Made to celebrate</h2><p>Examples of our custom headbands. Choose your own wording in the order form.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px">
+{% for image in gallery %}<figure style="margin:0"><a href="{{ url_for('creates_library_image',image_id=image.id) }}" target="_blank" rel="noopener"><img src="{{ url_for('creates_library_image',image_id=image.id) }}" alt="{{ image.name }}" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:12px"></a><figcaption>{{ image.name }}</figcaption></figure>{% endfor %}
+</div></section>
+{% endif %}

@@ -571,8 +571,12 @@ app.extensions['profile_ethnicities'] = ETHNICITY_BREAKDOWNS
 def billing_address_context():
     return dict(billing_address_fields=BILLING_ADDRESS_FIELDS, profile_ethnicities=ETHNICITY_BREAKDOWNS)
 
+from cl_creates import define_models as define_creates_models, ensure_schema as ensure_creates_schema
+creates_models = define_creates_models(db)
+
 with app.app_context():
     db.create_all()
+    ensure_creates_schema(db)
     ensure_photo_library_schema(db)
     ensure_kiosk_schema(db)
     event_columns = {
@@ -2811,6 +2815,9 @@ register_enquiry_automation(app, db, website_enquiry_models[1], tool_models[3], 
 from wedding_followups import register as register_wedding_followups
 register_wedding_followups(app, db, WeddingFollowup, native_form_models[1], marketing_models[0],
                           get_business_settings, lambda *args: send_client_email(*args), BusinessSetting, admin_required)
+
+from cl_creates import register as register_creates
+register_creates(app, db, creates_models, BusinessSetting, admin_required, lambda *args: send_client_email(*args))
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

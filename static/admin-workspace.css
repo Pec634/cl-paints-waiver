@@ -1,4 +1,27 @@
 /* Shared management workspace, deliberately scoped away from public forms. */
+.admin main nav[aria-label="CL Creates navigation"] { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin: 18px 0 24px; }
+.admin main nav[aria-label="CL Creates navigation"] a.btn { flex: 0 0 auto; width: auto; min-height: 38px; padding: 8px 13px; border: 1px solid #10213f; border-radius: 8px; background: #10213f; color: #fff; font-size: .875rem; font-weight: 750; line-height: 1.4; }
+.admin main nav[aria-label="CL Creates navigation"] a.btn:hover { background: #243e65; border-color: #243e65; }
+.admin.creates-order-popup { grid-template-columns: minmax(0, 1fr); }
+.admin .creates-items-wrap { width: 100%; overflow-x: auto; margin: 20px 0; }
+.admin .creates-items-table { width: 100%; min-width: 520px; table-layout: fixed; border-collapse: collapse; background: white; line-height: 1.6; }
+.admin .creates-items-table th, .admin .creates-items-table td { border: 1px solid #aebbd0; padding: 16px 18px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.admin .creates-items-table th { background: #edf1f7; font-weight: 750; }
+.admin .creates-items-table td:nth-child(2) { white-space: pre-wrap; }
+.admin .creates-items-table th:nth-child(3), .admin .creates-items-table td:nth-child(3) { text-align: center; }
+.admin .creates-items-table th:nth-child(4), .admin .creates-items-table td:nth-child(4) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.admin .creates-orders-wrap { width: 100%; overflow-x: auto; margin: 24px 0; background: white; border: 1px solid var(--border); border-radius: 14px; }
+.admin .creates-orders-table { width: 100%; min-width: 1100px; border-collapse: collapse; font-size: 1rem; line-height: 1.6; }
+.admin .creates-orders-table th, .admin .creates-orders-table td { padding: 20px 22px; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--border); }
+.admin .creates-orders-table th { background: #edf1f7; font-weight: 750; white-space: nowrap; }
+.admin .creates-orders-table td:nth-child(3) { min-width: 240px; overflow-wrap: anywhere; }
+.admin .creates-orders-table td:nth-child(4), .admin .creates-orders-table td:nth-child(5) { white-space: nowrap; }
+.admin .creates-orders-table tbody tr:hover { background: #fafbfe; }
+.admin .creates-orders-table tbody tr:last-child td { border-bottom: 0; }
+.admin .creates-orders-table td > a { font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
+.admin .creates-orders-table form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 0; }
+.admin .creates-orders-table label { display: grid; gap: 6px; }
+.admin .creates-orders-table select { min-width: 185px; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: white; }
 .admin { --bg: #f4f6fa; --border: #dde3ec; --muted: #59677d; background: var(--bg); }
 .portal-high-contrast .admin { --muted: #334155; --border: #52637d; --pink: #aa0750; --green: #006d40; }
 .admin main { min-width: 0; padding: clamp(20px, 3vw, 40px); }

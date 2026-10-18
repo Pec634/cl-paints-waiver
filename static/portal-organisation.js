@@ -25,7 +25,9 @@
             groups.get(title).append(link);
             if (link.matches('[aria-current="page"]')) groups.get(title).open = true;
         }
-        for (const title of ['Bookings & events','Clients & rewards','Communications','Website & content','Finance & reports','System & settings']) {
+        const groupOrder = ['Bookings & events','Clients & rewards','Communications','CL Creates','Website & content','Finance & reports','System & settings'];
+        // Keep new sections visible even when they are not in the preferred order yet.
+        for (const title of new Set([...groupOrder, ...groups.keys()])) {
             const group = groups.get(title);
             if (group) markers[0].before(group);
         }
