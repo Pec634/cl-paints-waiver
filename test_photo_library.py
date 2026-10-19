@@ -153,6 +153,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
@@ -206,7 +207,7 @@ class PhotoLibraryTest(unittest.TestCase):
             document.getElementById('builder-snap').checked=false;
             sideHandle.onpointerdown({button:0,clientX:100,clientY:100,pointerId:2,preventDefault(){},stopPropagation(){}});
             sideHandle.onpointermove({clientX:120,clientY:100});sideHandle.onpointerup();
-            assert(parseFloat(resizedImage.style.width)<parseFloat(sideStartWidth),'left handle must reduce width when dragged right');
+            assert(parseFloat(iframe.contentWindow.getComputedStyle(resizedImage).width)<layoutStartWidth,'left handle must reduce rendered width when dragged right');
             assert(resizedImage.style.height===sideStartHeight,'side handle must preserve height');
             assert(parseFloat(resizedImage.style.left)>0,'left handle must shift image to keep opposite edge fixed');
             assert(Math.abs(parseFloat(iframe.contentWindow.getComputedStyle(resizedImage).width)-(layoutStartWidth-20))<1,'horizontal resizing must use layout width even inside a rotated parent');
@@ -231,7 +232,7 @@ class PhotoLibraryTest(unittest.TestCase):
             neighbour.remove();
             assert(dragImage.style.left==='40px'&&dragImage.style.top==='20px','image drag must update position live');
             document.getElementById('builder-undo').click();
-            assert(dragImage.style.left==='0px','undo must restore image position');
+            assert((parseFloat(dragImage.style.left)||0)===0,'undo must restore image position');
             const addedCell=doc.querySelector('[data-builder-cell]');
             addedCell.dispatchEvent(new iframe.contentWindow.PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:8,clientX:100,clientY:100}));
             doc.dispatchEvent(new iframe.contentWindow.PointerEvent('pointermove',{pointerId:8,clientX:130,clientY:150}));
@@ -279,6 +280,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
@@ -326,6 +328,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
@@ -380,6 +383,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
@@ -447,6 +451,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
@@ -489,6 +494,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
@@ -524,6 +530,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')
@@ -564,6 +571,7 @@ class PhotoLibraryTest(unittest.TestCase):
         public=public.replace('<head>','<head><script>window.onerror=(message)=>window.previewError=message;</script>',1)
         static=(Path(__file__).resolve().parent/'static').as_uri()+'/'
         public=public.replace('src="/static/','src="'+static).replace('href="/static/','href="'+static)
+        public=re.sub(r'srcset="([^"]+)"', lambda match: 'srcset="'+match.group(1).replace('/static/',static)+'"', public)
         for name in ('website-layout.js','website.js'):
             public=re.sub(r'<script src="[^"]*/'+re.escape(name)+r'" defer></script>',lambda match:'<script>'+ (Path(__file__).resolve().parent/'static'/name).read_text(encoding='utf-8')+'</script>',public)
         public=public.replace('</head>','<style>'+(Path(__file__).resolve().parent/'static'/'website-editor.css').read_text(encoding='utf-8')+'</style></head>')

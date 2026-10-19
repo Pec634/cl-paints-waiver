@@ -71,13 +71,16 @@ class WebsitePagesTest(unittest.TestCase):
             assert(!pane('design').hidden,'design tab opens');
             assert([...pane('design').querySelectorAll('details')].every(node=>!node.open),'advanced settings start collapsed');
             tab('design').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
-            assert(tab('pages').getAttribute('aria-selected')==='true','keyboard changes tabs');
+            assert(tab('sections').getAttribute('aria-selected')==='true','keyboard changes tabs');
+            assert(pane('sections').contains(document.getElementById('builder-sections')),'section controls have a dedicated panel');
             const divider=document.querySelector('.builder-divider');
             divider.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
             assert(divider.getAttribute('aria-valuenow')==='25','divider keyboard minimum');
             divider.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
             assert(divider.getAttribute('aria-valuenow')==='27','divider keyboard adjustment');
-            assert(getComputedStyle(document.querySelector('.builder-toolbar')).position==='sticky','toolbar remains accessible');
+            assert(getComputedStyle(document.querySelector('.builder-studio-main')).position==='fixed','editor fills the window');
+            assert(document.querySelector('.builder-toolbar').getBoundingClientRect().top===0,'toolbar remains at the top');
+            assert(document.querySelector('.builder-workspace').firstElementChild.classList.contains('builder-preview-scroll'),'canvas comes before the right settings panel');
             const tools=document.querySelector('.builder-tools');
             assert(getComputedStyle(tools).overflowY==='auto','editor scrolls independently');
         ''')

@@ -35,15 +35,22 @@ def item(raw, validate_photo):
         if parts.scheme!='https' or parts.hostname not in ('www.youtube-nocookie.com','www.youtube.com','player.vimeo.com') or not parts.path.startswith(('/embed/','/video/')): raise ValueError('Use a YouTube or Vimeo embed URL')
         result['video']=video
     for device in ('desktop','tablet','mobile'):
+        if device not in raw: continue
         position=raw.get(device,{})
         result[device]={key:number(position.get(key,0),0 if key=='width' else -2000,100 if key=='width' else 2000) for key in ('x','y','width')}
+        for key, limits in {'widthPx':(0,2400),'heightPx':(0,2400),'layer':(0,100),'gridColumn':(0,48),'gridRow':(0,200),'columnSpan':(1,48),'rowSpan':(1,200),'gridColumns':(0,48),'gridRowHeight':(0,240)}.items():
+            if key in position:
+                value=number(position[key],*limits)
+                if key in ('layer','gridColumn','gridRow','columnSpan','rowSpan','gridColumns') and value != int(value): raise ValueError('Use whole grid cells')
+                result[device][key]=value
     style=raw.get('style',{});safe={}
     for key in ('color','background','borderColor'):
         if style.get(key):
             if not re.fullmatch(r'#[0-9a-fA-F]{6}',style[key]): raise ValueError('Invalid colour')
             safe[key]=style[key]
-    for key,limits in {'fontSize':(0,120),'height':(0,1200),'padding':(0,120),'gap':(0,120),'borderRadius':(0,100),'borderWidth':(0,20)}.items():
+    for key,limits in {'fontSize':(0,120),'height':(0,1200),'padding':(0,120),'gap':(0,120),'borderRadius':(0,100),'borderWidth':(0,20),'columns':(1,48),'rowHeight':(1,240)}.items():
         if key in style: safe[key]=number(style[key],*limits)
+    if 'columns' in safe and safe['columns'] != int(safe['columns']): raise ValueError('Use whole grid columns')
     for key,choices in {'textAlign':('left','center','right'),'fontFamily':('inherit','Georgia','Arial','Verdana'),'objectFit':('cover','contain'),'objectPosition':('center','top','bottom','left','right')}.items():
         if key in style:
             if style[key] not in choices: raise ValueError('Invalid style')
@@ -89,7 +96,10 @@ def validate(raw, validate_photo):
     result['_spacing']={}
     for index,values in spacing.items():
         if not str(index).isdigit() or int(index)>100 or not isinstance(values,dict): raise ValueError('Invalid section spacing')
-        result['_spacing'][str(index)]={key:number(values[key],0,120) for key in ('padding','gap') if key in values}
+        result['_spacing'][str(index)]={key:number(values[key],0,high) for key,high in [('padding',120),('gap',120),('sidePadding',240),('minHeight',2400),('maxWidth',2400),('columns',48),('mobileColumns',48),('rowHeight',240)] if key in values}
+        for key in ('columns','mobileColumns'):
+            value=result['_spacing'][str(index)].get(key,0)
+            if value != int(value): raise ValueError('Use whole grid columns')
     seo=raw.get('_seo',{})
     result['_seo']={key:text(seo.get(key,''),limit) for key,limit in [('title',150),('description',300)]}
     return result
