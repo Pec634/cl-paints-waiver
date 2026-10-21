@@ -190,7 +190,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
                     end=datetime.fromisoformat(event['date']+'T'+event['finish_time'])
                 except (KeyError,ValueError,TypeError):
                     continue
-                rows.append(dict(booking=booking,label=booking.public_reference,start=start,end=end,
+                rows.append(dict(booking=booking,event=event,label=booking.public_reference,start=start,end=end,
                     occupied_start=start-timedelta(minutes=buffer),occupied_end=end+timedelta(minutes=buffer),day=index,conflicts=[]))
         for block in Block.query.all():
             rows.append(dict(booking=None,label=block.reason,start=block.starts_at,end=block.ends_at,

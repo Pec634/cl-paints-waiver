@@ -1,1 +1,94 @@
-{% extends 'rewards/base.html' %}{% block content %}<h1>Availability calendar</h1><p>UK local times. Accepted bookings and unavailable time reserve space; pending requests are shown for planning. Setup/travel buffers are configured in Settings.</p><section class="panel"><div class="actions"><a class="btn" href="{{ url_for('admin_calendar',month=previous) }}">Previous</a><h2>{{ month.strftime('%B %Y') }}</h2><a class="btn" href="{{ url_for('admin_calendar',month=next_month) }}">Next</a></div><div class="availability-month">{% for label in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<strong>{{ label }}</strong>{% endfor %}{% for week in weeks %}{% for cell in week %}<div class="availability-day{{ ' outside' if not cell.in_month else '' }}"><strong>{{ cell.date.day }}</strong>{% for item in cell["items"] %}{% if item.booking %}<a href="{{ url_for('admin_bookings') }}#booking-{{ item.booking.id }}" title="{{ item.label }} ! {{ item.booking.status }}">{{ item.start.strftime('%H:%M') }} {{ item.booking.first_name }}{% if item.conflicts %} !{% endif %}</a>{% else %}<span title="{{ item.label }}">Unavailable</span>{% endif %}{% endfor %}</div>{% endfor %}{% endfor %}</div></section><section class="panel"><h2>Schedule &amp; overlaps</h2>{% for row in rows %}<article class="client-record"><strong>{{ row.start.strftime('%d/%m/%Y %H:%M') }}–{{ row.end.strftime('%H:%M') }} · {{ row.label }}</strong>{% if row.booking %}<span>{{ row.booking.status }}</span><a class="client-text-link" href="{{ url_for('admin_bookings') }}#booking-{{ row.booking.id }}">Open booking</a>{% endif %}{% if row.conflicts %}<p class="booking-admin-error">Possible overlap: {{ row.conflicts|join(', ') }}</p>{% endif %}</article>{% else %}<p>No bookings or unavailable times yet.</p>{% endfor %}</section><form method="post" class="panel client-form"><h2>Block unavailable time</h2><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><label>Starts (UK time)<input type="datetime-local" name="starts_at" required></label><label>Ends (UK time)<input type="datetime-local" name="ends_at" required></label><label>Reason<input name="reason" maxlength="200" required></label><button class="btn primary">Add unavailable time</button></form><section class="panel"><h2>Unavailable periods</h2>{% for block in blocks %}<article class="client-record"><strong>{{ block.reason }}</strong><span>{{ block.starts_at }}–{{ block.ends_at }}</span><form method="post" action="{{ url_for('delete_availability_block',block_id=block.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn">Remove block</button></form></article>{% else %}<p>No unavailable periods.</p>{% endfor %}</section>{% endblock %}
+﻿{% extends 'rewards/base.html' %}
+{% block title %}Availability calendar | CL Paints{% endblock %}
+{% macro status_class(row) -%}{% if not row.booking %}unavailable{% elif row.booking.status == 'Accepted' %}accepted{% else %}review{% endif %}{%- endmacro %}
+{% macro event_title(row) -%}
+{{ row.booking.first_name }} {{ row.booking.last_name }} · {{ row.event.get('event_type') or row.booking.event_type }}{% if row.event.get('theme') or row.booking.theme %} — {{ row.event.get('theme') or row.booking.theme }}{% endif %}
+{%- endmacro %}
+{% macro details(row) %}
+{% if row.booking %}
+{% set booking = row.booking %}
+<p class="calendar-status calendar-status--{{ status_class(row) }}">{{ booking.status }}</p>
+<h3>{{ event_title(row) }}</h3>
+<dl class="calendar-details">
+  <dt>Reference</dt><dd>{{ booking.public_reference }}</dd>
+  <dt>Event date</dt><dd>{{ row.start.strftime('%A %d %B %Y') }}</dd>
+  <dt>Time (UK)</dt><dd>{{ row.start.strftime('%H:%M') }}–{{ row.end.strftime('%H:%M') }}</dd>
+  <dt>Event type</dt><dd>{{ row.event.get('event_type') or booking.event_type }}</dd>
+  <dt>Theme / event name</dt><dd>{{ row.event.get('theme') or booking.theme or 'Not specified' }}</dd>
+  {% set venue_address = row.event.get('event_address') or booking.event_address %}
+  <dt>Venue</dt><dd>{{ venue_address }}{% if venue_address and venue_address|trim %}
+    <a class="client-text-link" href="https://www.google.com/maps/search/?api=1&amp;query={{ venue_address|urlencode }}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
+  {% endif %}</dd>
+  <dt>Client</dt><dd>{{ booking.first_name }} {{ booking.last_name }}</dd>
+  <dt>Email</dt><dd>{{ booking.email }}</dd>
+  <dt>Phone</dt><dd>{{ booking.phone }}</dd>
+  <dt>Request type</dt><dd>{{ booking.request_type }}</dd>
+  <dt>Client type</dt><dd>{{ booking.client_type }}</dd>
+  <dt>Publicity</dt><dd>{{ row.event.get('publicity_type') or booking.publicity_type }}</dd>
+  <dt>Location type</dt><dd>{{ booking.location_type }}</dd>
+  <dt>Charge type</dt><dd>{{ booking.charge_type }}</dd>
+  <dt>Expected attendees</dt><dd>{{ booking.expected_attendees if booking.expected_attendees is not none else 'Not specified' }}</dd>
+  <dt>Pitch fee required</dt><dd>{{ 'Yes' if row.event.get('pitch_fee_required', booking.pitch_fee_required) else 'No' }}</dd>
+  <dt>Payment preference</dt><dd>{{ booking.payment_preference }}</dd>
+  <dt>Event cost (booking total)</dt><dd>£{{ '%.2f'|format(booking.total_event_cost) }}</dd>
+  <dt>Travel charge (booking total)</dt><dd>£{{ '%.2f'|format(booking.travel_charge) }}</dd>
+  <dt>Additional information</dt><dd>{{ booking.additional_info or 'None' }}</dd>
+  <dt>Internal notes</dt><dd>{{ booking.internal_notes or 'None' }}</dd>
+  <dt>Submitted</dt><dd>{{ booking.submitted_at.strftime('%d/%m/%Y %H:%M') }}</dd>
+  <dt>Setup / travel buffer</dt><dd>{{ row.occupied_start.strftime('%d/%m/%Y %H:%M') }}–{{ row.occupied_end.strftime('%d/%m/%Y %H:%M') }}</dd>
+</dl>
+<a class="btn" href="{{ url_for('admin_bookings') }}#booking-{{ booking.id }}">Open full booking</a>
+{% else %}
+<p class="calendar-status calendar-status--unavailable">Unavailable</p>
+<h3>{{ row.label }}</h3>
+<p>{{ row.start.strftime('%d/%m/%Y %H:%M') }}–{{ row.end.strftime('%d/%m/%Y %H:%M') }} (UK time)</p>
+{% endif %}
+{% if row.conflicts %}<p class="booking-admin-error">Possible overlap: {{ row.conflicts|join(', ') }}</p>{% endif %}
+{% endmacro %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin-calendar.css') }}">
+<h1>Availability calendar</h1>
+<p>UK local times. Accepted bookings and unavailable time reserve space; requests under review are shown for planning. Setup/travel buffers are configured in Settings.</p>
+<div class="calendar-legend" aria-label="Calendar colour key">
+  <span class="calendar-status calendar-status--review">Under Review</span>
+  <span class="calendar-status calendar-status--accepted">Accepted</span>
+  <span class="calendar-status calendar-status--unavailable">Unavailable</span>
+</div>
+<section class="panel">
+  <div class="actions"><a class="btn" href="{{ url_for('admin_calendar',month=previous) }}">Previous</a><h2>{{ month.strftime('%B %Y') }}</h2><a class="btn" href="{{ url_for('admin_calendar',month=next_month) }}">Next</a></div>
+  <p>Click an event to see its details. Declined, cancelled and completed bookings are excluded from this availability view.</p>
+  <div class="calendar-scroll" tabindex="0" role="region" aria-label="Monthly availability calendar">
+    <div class="availability-month">
+      {% for label in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<strong>{{ label }}</strong>{% endfor %}
+      {% for week in weeks %}{% for cell in week %}
+      <div class="availability-day{{ ' outside' if not cell.in_month else '' }}">
+        <strong>{{ cell.date.day }}</strong>
+        {% for item in cell["items"] %}
+        <a class="calendar-event calendar-event--{{ status_class(item) }}" href="#calendar-detail-{{ rows.index(item) }}" data-calendar-detail="calendar-detail-{{ rows.index(item) }}" aria-haspopup="dialog">
+          <span class="calendar-event-time">{{ item.start.strftime('%H:%M') }}–{{ item.end.strftime('%H:%M') }}</span>
+          <span>{{ event_title(item) if item.booking else item.label }}</span>
+          <span class="calendar-event-status">{{ item.booking.status if item.booking else 'Unavailable' }}{% if item.conflicts %} · Possible overlap{% endif %}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endfor %}{% endfor %}
+    </div>
+  </div>
+</section>
+<section class="panel">
+  <h2>Schedule &amp; overlaps</h2>
+  {% for row in rows %}
+  <details class="client-record calendar-schedule" id="calendar-detail-{{ loop.index0 }}">
+    <summary><span class="calendar-status calendar-status--{{ status_class(row) }}">{{ row.booking.status if row.booking else 'Unavailable' }}</span> {{ row.start.strftime('%d/%m/%Y %H:%M') }}–{{ row.end.strftime('%H:%M') }} · {{ event_title(row) if row.booking else row.label }}{% if row.conflicts %} · Possible overlap{% endif %}</summary>
+    <div class="calendar-detail-content">{{ details(row) }}</div>
+  </details>
+  {% else %}<p>No bookings or unavailable times yet.</p>{% endfor %}
+</section>
+<dialog id="calendar-event-dialog" class="booking-review-dialog calendar-event-dialog" aria-labelledby="calendar-dialog-title">
+  <div class="calendar-dialog-heading"><h2 id="calendar-dialog-title">Event details</h2><button type="button" class="btn" data-calendar-close autofocus>Close</button></div>
+  <div id="calendar-dialog-content"></div>
+</dialog>
+<form method="post" class="panel client-form"><h2>Block unavailable time</h2><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><label>Starts (UK time)<input type="datetime-local" name="starts_at" required></label><label>Ends (UK time)<input type="datetime-local" name="ends_at" required></label><label>Reason<input name="reason" maxlength="200" required></label><button class="btn primary">Add unavailable time</button></form>
+<section class="panel"><h2>Unavailable periods</h2>{% for block in blocks %}<article class="client-record"><strong>{{ block.reason }}</strong><span>{{ block.starts_at }}–{{ block.ends_at }}</span><form method="post" action="{{ url_for('delete_availability_block',block_id=block.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn">Remove block</button></form></article>{% else %}<p>No unavailable periods.</p>{% endfor %}</section>
+<script src="{{ url_for('static', filename='admin-calendar.js') }}" defer></script>
+{% endblock %}

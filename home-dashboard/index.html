@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f9">
+  <title>Hearth · Home overview</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#overview"><span class="brand-icon">⌂</span> hearth<span class="brand-dot">.</span></a>
+    <div class="house-label">YOUR SPACE</div>
+    <nav aria-label="Main navigation">
+      <a class="nav-item active" href="#overview"><span>▦</span> Overview</a>
+      <a class="nav-item" href="#cameras"><span>▣</span> Cameras</a>
+      <a class="nav-item" href="#calendar"><span>▤</span> Family calendar</a>
+      <button class="nav-item" id="settings-button"><span>⚙</span> Settings</button>
+    </nav>
+    <div class="sidebar-bottom"><div class="home-avatar">⌂</div><div><strong>Our home</strong><small>A little more connected</small></div></div>
+  </aside>
+  <main id="overview">
+    <header class="topbar"><div class="breadcrumb">Our home <span>/</span> Overview</div><div class="topbar-right"><span class="local-badge">◉ &nbsp; Personal dashboard</span><button class="avatar" id="profile-button" aria-label="Open home settings">H</button></div></header>
+    <section class="intro"><div><p class="eyebrow" id="today-label"></p><h1 id="greeting">Welcome home.</h1><p>Your home and your people. All in one place.</p></div><div class="clock"><strong id="clock"></strong><span>Home time · London</span></div></section>
+    <section class="summary" aria-label="Home summary">
+      <a class="summary-card" href="#cameras"><span class="tile-icon sage">▣</span><div><span>Cameras</span><strong id="camera-summary">Ready to connect</strong></div><span class="arrow">↗</span></a>
+      <a class="summary-card" href="#calendar"><span class="tile-icon lavender">▤</span><div><span>Family calendar</span><strong id="calendar-summary">Bring everyone together</strong></div><span class="arrow">↗</span></a>
+      <div class="summary-card"><span class="tile-icon peach">⌂</span><div><span>Your dashboard</span><strong>A space for the whole family</strong></div><span class="tiny-label">HOME</span></div>
+    </section>
+    <section class="section" id="cameras"><div class="section-heading"><div><h2>Around the house <span class="count" id="camera-count">0</span></h2><p>A quick look at the places that matter.</p></div><button class="button secondary" id="add-camera">＋ Add camera</button></div><div class="camera-grid" id="camera-grid"></div></section>
+    <section class="panel compatibility-panel" aria-labelledby="compatibility-title">
+      <h2 id="compatibility-title">Your GALAYOU cameras</h2>
+      <div class="compatibility-grid">
+        <div><h3>G2-5MP · Indoor</h3><p>RTSP / ONVIF supported. In Wansview Cloud, open Settings → Local Application to enable local access. A local video bridge is needed for dashboard playback.</p></div>
+        <div><h3>Y4 · Outdoor pair</h3><p>Check Local Application for RTSP / ONVIF. A local video bridge is needed to bring an RTSP feed into this dashboard.</p></div>
+        <div><h3>Battery outdoor pair</h3><p>Use Wansview Cloud for viewing. Manufacturer guidance excludes battery cameras from RTSP / ONVIF streaming; the exact model is still to be confirmed.</p></div>
+      </div>
+      <p class="field-help">Pan / tilt, two-way audio and recordings remain in Wansview Cloud. <a class="text-link" href="https://www.galayou-store.com/g25mp" target="_blank" rel="noopener noreferrer">G2-5MP support ↗</a> · <a class="text-link" href="https://www.galayou-store.com/y4" target="_blank" rel="noopener noreferrer">Y4 support ↗</a> · <a class="text-link" href="https://www.galayou-store.com/r2_4p" target="_blank" rel="noopener noreferrer">Battery camera guidance ↗</a></p>
+    </section>
+    <section class="lower-grid" id="calendar">
+      <div class="calendar-panel panel"><div class="section-heading"><div><div class="eyebrow">PLANS, BIG AND SMALL</div><h2>The family calendar</h2></div><a class="text-link" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noopener noreferrer">Open Google Calendar ↗</a></div><div id="calendar-content"></div></div>
+      <aside class="side-panels"><div class="panel month-panel"><div class="month-heading"><h3 id="month-label"></h3><div><button class="icon-button" id="previous-month" aria-label="Previous month">‹</button><button class="icon-button" id="next-month" aria-label="Next month">›</button></div></div><div class="weekdays" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div class="month-days" id="month-days"></div><button class="text-link today-button" id="this-month">Back to today</button></div><div class="home-note"><span>✧</span><h3>Less switching.<br>More being home.</h3><p>Your cameras and family plans, together in one quiet corner.</p></div></aside>
+    </section>
+    <footer>Made for everyday life.<span>Hearth · Your home overview</span></footer>
+  </main>
+  <dialog id="settings-dialog"><form id="settings-form"><div class="dialog-heading"><h2>Make yourself at home</h2><button type="button" class="icon-button close-dialog" aria-label="Close settings">×</button></div><p class="muted">Settings are saved in this browser on this device.</p><label>Home name<input name="homeName" maxlength="60" placeholder="Our home"></label><label>Google family calendar ID<input name="calendarId" placeholder="…@group.calendar.google.com" maxlength="300"></label><p class="field-help">Find this in Google Calendar → Settings → your family calendar → Integrate calendar. Calendar display requires permission for the signed-in Google account and may be blocked by third-party cookie settings. You do not need to make it public.</p><a class="text-link" href="https://support.google.com/calendar/answer/41207" target="_blank" rel="noopener noreferrer">Google’s calendar embedding guide ↗</a><div class="dialog-actions"><button type="button" class="button secondary close-dialog">Cancel</button><button class="button primary" type="submit">Save settings</button></div><p class="field-help">This uses Google’s live calendar view. Create and edit events in Google Calendar; changes appear in the embedded view when it refreshes. No Google password is stored here.</p></form></dialog>
+  <dialog id="camera-dialog"><form id="camera-form"><div class="dialog-heading"><h2 id="camera-dialog-title">Add a camera</h2><button type="button" class="icon-button close-dialog" aria-label="Close camera form">×</button></div><input type="hidden" name="cameraId"><label>Camera name<input name="cameraName" maxlength="60" placeholder="Front door" required></label><label>Wansview camera model <span class="optional">optional</span><input name="model" maxlength="60" placeholder="e.g. Q5"></label><label>Camera or viewer URL<input name="viewerUrl" type="url" placeholder="https://your-camera-viewer…" required></label><label>Browser-compatible video URL <span class="optional">optional</span><input name="streamUrl" type="url" placeholder="https://your-local-bridge/stream.mp4"></label><p class="field-help">Use a camera web page or your existing camera viewer for access. For inline video, use a browser-compatible MP4 or WebM stream from your local bridge. RTSP streams need a bridge such as go2rtc; browsers cannot play RTSP directly. Wansview Cloud support varies by model.</p><p class="field-help">Use URLs without embedded usernames, passwords, or access tokens. Keep your camera viewer protected on your home network.</p><div class="dialog-actions"><button type="button" class="button danger" id="delete-camera" hidden>Remove camera</button><button type="button" class="button secondary close-dialog">Cancel</button><button class="button primary" type="submit">Save camera</button></div><p class="form-error" id="camera-error" role="alert"></p></form></dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

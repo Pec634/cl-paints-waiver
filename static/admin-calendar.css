@@ -1,0 +1,25 @@
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.calendar-status { display: inline-block; border-radius: 6px; padding: 5px 9px; font-size: .8rem; font-weight: 700; }
+.calendar-status--review, .availability-day .calendar-event--review { background: #fff3ce; color: #704b00; border-color: #bb890e; }
+.calendar-status--accepted, .availability-day .calendar-event--accepted { background: #e0f3e7; color: #175735; border-color: #2e8754; }
+.calendar-status--unavailable, .availability-day .calendar-event--unavailable { background: #e9edf3; color: #394557; border-color: #758297; }
+.calendar-scroll { overflow-x: auto; }
+.calendar-scroll .availability-month { min-width: 770px; }
+.availability-day.outside { opacity: 1; background: #f3f4f6; }
+.availability-day.outside > strong { color: #767676; }
+.availability-day a.calendar-event { display: block; padding: 7px; border-left: 4px solid; margin-top: 8px; text-decoration: none; font-size: .75rem; line-height: 1.45; }
+.availability-day .calendar-event span { display: block; margin: 0; padding: 0; background: transparent; color: inherit; font-size: inherit; }
+.calendar-event-time { font-weight: 700; }
+.calendar-event-status { margin-top: 4px !important; font-size: .68rem !important; }
+.calendar-event:hover { filter: brightness(.96); text-decoration: underline !important; }
+.calendar-event:focus-visible, .calendar-schedule summary:focus-visible { outline: 3px solid #325cb0; outline-offset: 3px; }
+.calendar-schedule { display: block; }
+.calendar-schedule summary { cursor: pointer; line-height: 1.7; }
+.calendar-detail-content { padding-top: 16px; }
+.calendar-details { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr); gap: 8px 16px; }
+.calendar-details dt { font-weight: 700; }
+.calendar-details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.calendar-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.calendar-dialog-heading h2 { margin: 0; }
+.calendar-event-dialog { color: #263244; background: white; }
+@media (max-width: 650px) { .calendar-details { grid-template-columns: 1fr; gap: 4px; } .calendar-details dd { margin-bottom: 10px; } .calendar-event-dialog { padding: 16px; } }

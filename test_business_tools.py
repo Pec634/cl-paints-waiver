@@ -85,6 +85,45 @@ class BusinessToolsTest(unittest.TestCase):
         self.admin.post(f'/admin/calendar/blocks/{block.id}/delete',data={'csrf_token':'admin-token'})
         self.assertEqual(Block.query.count(),0)
 
+    def test_calendar_status_titles_date_specific_details_and_admin_access(self):
+        import json
+        self.booking.status = 'Under Review'
+        self.booking.first_name = 'Calendar'
+        self.booking.last_name = 'Client'
+        self.booking.internal_notes = 'ADMIN ONLY CALENDAR NOTE'
+        self.booking.event_schedule = json.dumps({'events': [
+            dict(date='2099-01-10', start_time='10:00', finish_time='11:00',
+                 event_type='Birthday', theme='Dinosaurs', event_address='First venue'),
+            dict(date='2099-01-11', start_time='14:00', finish_time='16:00',
+                 event_type='School fair', theme='<script>alert(1)</script>', event_address='Second venue'),
+        ]})
+        accepted = self.fixture.fixture.booking('calendar-accepted@example.com', status='Accepted')
+        declined = self.fixture.fixture.booking('calendar-declined@example.com', status='Declined')
+        main.db.session.add(Block(starts_at=datetime(2099, 1, 12, 9),
+                                  ends_at=datetime(2099, 1, 12, 12), reason='Unavailable calendar test'))
+        main.db.session.commit()
+        page = self.admin.get('/admin/calendar?month=2099-01')
+        self.assertEqual(page.status_code, 200)
+        for marker in [b'calendar-event--review', b'calendar-event--accepted',
+                       b'calendar-event--unavailable', b'Calendar Client', b'Birthday', b'Dinosaurs',
+                       b'10:00', b'11:00', b'School fair', b'14:00', b'16:00',
+                       b'First venue', b'Second venue', b'ADMIN ONLY CALENDAR NOTE',
+                       b'https://www.google.com/maps/search/?api=1&amp;query=First%20venue',
+                       b'https://www.google.com/maps/search/?api=1&amp;query=Second%20venue',
+                       b'Open in Google Maps', b'rel="noopener noreferrer"',
+                       b'data-calendar-detail=', b'id="calendar-event-dialog"',
+                       b'admin-calendar.js', accepted.public_reference.encode()]:
+            self.assertIn(marker, page.data)
+        self.assertIn(b'&lt;script&gt;alert(1)&lt;/script&gt;', page.data)
+        self.assertNotIn(b'<script>alert(1)</script>', page.data)
+        self.assertNotIn(declined.public_reference.encode(), page.data)
+        rows = [row for row in main.app.extensions['calendar_rows']() if row['booking'] == self.booking]
+        self.assertEqual([row['event']['event_address'] for row in rows], ['First venue', 'Second venue'])
+        for browser in [self.client, main.app.test_client()]:
+            response = browser.get('/admin/calendar?month=2099-01')
+            self.assertEqual(response.status_code, 302)
+            self.assertNotIn(b'ADMIN ONLY CALENDAR NOTE', response.data)
+
     def test_payments_overview_due_filters_and_access(self):
         today = datetime.now().date()
         main.db.session.add(Plan(booking_id=self.booking.id, deposit=Decimal('30'), deposit_due=today, balance_due=today-timedelta(days=1)))
