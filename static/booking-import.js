@@ -15,6 +15,17 @@
     el('import-errors').replaceChildren(...errors.map(text => {
       const li = document.createElement('li'); li.textContent = text; return li;
     }));
+    let saveFeedback = el('save-feedback');
+    if (!saveFeedback) {
+      saveFeedback = document.createElement('div');
+      saveFeedback.id = 'save-feedback';
+      saveFeedback.setAttribute('role', 'status');
+      saveFeedback.setAttribute('aria-live', 'polite');
+      el('save-button').parentElement.after(saveFeedback);
+    }
+    const saveText = document.createElement('p'); saveText.textContent = text;
+    const saveErrors = el('import-errors').cloneNode(true); saveErrors.removeAttribute('id');
+    saveFeedback.replaceChildren(saveText, saveErrors);
     if (reveal) {
       el('import-status').tabIndex = -1;
       el('import-status').focus({preventScroll: true});
