@@ -73,7 +73,14 @@
       const events = Array.isArray(parsed) ? parsed : parsed.events;
       if (!Array.isArray(events)) throw new Error('The event schedule must contain an events array.');
       if (events.length > 10) throw new Error('A booking can contain up to 10 dates.');
-      if (events.length) return events.map(day => ({...day, event_date: day.event_date || day.date || ''}));
+      if (events.length) return events.map(day => {
+        const result = {...day, event_date: day.event_date || day.date || ''};
+        ['start_time', 'finish_time'].forEach(field => {
+          const match = /(?:^|[T ])(\d{2}:\d{2}):00(?:\.0+)?$/.exec(String(result[field] || ''));
+          if (match) result[field] = match[1];
+        });
+        return result;
+      });
     }
     const days = [{...values}];
     for (let number = 2; number <= 10; number++) {
@@ -220,9 +227,10 @@
         const help = document.createElement('small'); help.className = 'import-field-help';
         const updateMissing = () => {
           const addressHasParts = field === 'event_address' && [...detail.querySelectorAll('[data-field^="event_address_"]')].some(control => control.value.trim());
-          const missing = required && !input.value.trim() && !addressHasParts;
+          const placeholderBirth = field === 'date_of_birth' && ['00/00/00', '00/00/0000', '0000-00-00'].includes(input.value.trim());
+          const missing = required && ((!input.value.trim() && !addressHasParts) || placeholderBirth);
           input.setAttribute('aria-invalid', String(missing));
-          help.textContent = missing ? (field === 'event_address' ? 'Enter the separate venue fields below or a full address here.' : 'Missing from file — enter this before importing.') : '';
+          help.textContent = placeholderBirth ? 'The source contains a placeholder birth date. Enter the correct date or remove this booking.' : missing ? (field === 'event_address' ? 'Enter the separate venue fields below or a full address here.' : 'Missing from file — enter this before importing.') : '';
         };
         input.addEventListener('input', () => { el('confirm-import').checked = false; updateMissing(); });
         wrapper.append(span, input, help); groups[group].append(wrapper);

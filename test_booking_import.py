@@ -129,6 +129,22 @@ class BookingImportTest(unittest.TestCase):
         self.assertIn('Event day 2', response.json['errors'][0])
         self.assertEqual(main.Booking.query.count(), count)
 
+    def test_legacy_datetime_times_are_normalized_before_length_validation(self):
+        columns = [column for column in main.Booking.__table__.columns if column.name != 'id']
+        for start, finish in [('2026-10-24 15:00:00', '2026-10-24 17:00:00'),
+                              ('15:00:00', '17:00:00'), ('3:00 PM', '5:00 PM')]:
+            values = convert_row(dict(self.row, start_time=start, finish_time=finish), columns)
+            self.assertEqual(values['start_time'], '15:00')
+            self.assertEqual(values['finish_time'], '17:00')
+        headers, rows = parse_file('legacy.csv', b'ClientDetails_Name_First,EventSectionForASingularDate_StartTime\nJane,2026-10-24 15:00:00\n')
+        self.assertEqual(rows[0][1], '15:00')
+
+    def test_placeholder_birth_date_is_explained_and_not_invented(self):
+        response = self.admin.post(self.path, headers=self.headers, json={'rows': [dict(self.row, date_of_birth='00/00/00')]})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('placeholder date', response.json['errors'][0])
+        self.assertIsNone(main.Booking.query.filter_by(email=self.row['email']).first())
+
     def test_excel_links_event_day_worksheet_by_parent_id(self):
         from openpyxl import Workbook
         book = Workbook()

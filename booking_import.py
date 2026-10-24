@@ -46,6 +46,27 @@ def excel_value(value):
     return str(value)
 
 
+def normalize_time(value):
+    """Legacy exports store time-only answers as full Excel datetimes."""
+    value = str(value).strip()
+    parsed = None
+    if ':' in value:
+        try:
+            parsed = datetime.fromisoformat(value).time()
+        except ValueError:
+            pass
+    if parsed is None:
+        for pattern in ('%H:%M', '%H:%M:%S', '%I:%M %p', '%I:%M%p', '%I %p'):
+            try:
+                parsed = datetime.strptime(value.upper(), pattern).time()
+                break
+            except ValueError:
+                pass
+    if parsed is None or parsed.second or parsed.microsecond:
+        raise ValueError('use HH:MM, HH:MM:00 or a time such as 2:30 PM (whole minutes).')
+    return parsed.strftime('%H:%M')
+
+
 def linked_excel_events(book):
     """Read legacy event-day worksheets using their explicit parent booking ID."""
     linked = {}
@@ -71,7 +92,13 @@ def linked_excel_events(book):
             parent = record.get('ClientBookingRequest_Id', '').strip()
             if not parent or not record.get('Date', '').strip():
                 continue
-            linked.setdefault(parent, []).append({dest: record.get(source, '') for source, dest in names.items()})
+            event = {dest: record.get(source, '') for source, dest in names.items()}
+            for field in ('start_time', 'finish_time'):
+                try:
+                    event[field] = normalize_time(event[field])
+                except ValueError:
+                    pass  # Preserve invalid source values for correction in preview.
+            linked.setdefault(parent, []).append(event)
             if len(linked[parent]) > MAX_EVENT_DAYS:
                 raise ValueError('A booking can include up to 10 event dates.')
     return linked
@@ -148,6 +175,15 @@ def parse_file(filename, data):
         raise ValueError('Column headings must be non-empty and unique.')
     if any(len(row) != len(headers) for row in values):
         raise ValueError('Each row must have the same number of columns as the headings.')
+    for index, header in enumerate(headers):
+        name = ''.join(character.lower() for character in header if character.isalnum()).rstrip('0123456789')
+        if name.endswith(('starttime', 'finishtime', 'endtime')):
+            for row in values:
+                if row[index].strip():
+                    try:
+                        row[index] = normalize_time(row[index])
+                    except ValueError:
+                        pass
     # Legacy form exports split addresses into separate columns. Offer the
     # assembled address as a mapping choice without removing the originals.
     for prefix, destination in (
@@ -255,6 +291,13 @@ def convert_row(row, columns):
         if not isinstance(value, (str, int, float, bool)) and value is not None:
             raise ValueError(f'{name}: use a text value.')
         value = str(value).strip() if value is not None else ''
+        if name in ('start_time', 'finish_time') and value:
+            try:
+                value = normalize_time(value)
+            except ValueError as exc:
+                raise ValueError(f'{name.replace("_", " ")}: {exc}') from exc
+        if name == 'date_of_birth' and value in ('00/00/00', '00/00/0000', '0000-00-00'):
+            raise ValueError('Date of birth is missing in the source file (placeholder date). Enter the correct date in Client details or remove this booking before importing.')
         if not value:
             if name in defaults:
                 result[name] = defaults[name]

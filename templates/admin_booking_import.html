@@ -19,5 +19,5 @@
 <section class="panel" id="review-panel" hidden><h2>3. Review and edit</h2><p>Expand each booking to edit any field. Remove rows you do not want to import. Going back to column matching rebuilds the preview and replaces your edits.</p><div id="preview"></div><label><input id="confirm-import" type="checkbox"> I have reviewed these bookings and want to create them.</label><p><button class="btn primary" id="save-button" type="button">Complete import</button></p></section>
 </main></div>
 <script id="import-config" type="application/json">{{ {'fields': fields, 'eventFields': event_fields, 'token': token}|tojson }}</script>
-<script src="{{ url_for('static', filename='booking-import.js', v='multiple-event-days-4') }}" defer></script>
+<script src="{{ url_for('static', filename='booking-import.js', v='excel-time-formats-5') }}" defer></script>
 {% endblock %}
