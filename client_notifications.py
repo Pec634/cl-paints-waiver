@@ -77,12 +77,31 @@ def booking_snapshot(booking, schedule):
         'Estimated event cost': f'£{booking.total_event_cost:.2f}',
         'Estimated total': f'£{booking.total_event_cost + booking.travel_charge:.2f}',
         'Payment preference': booking.payment_preference}
+    for field, label in [('client_type','Client type'), ('title','Title'), ('job_title','Job title'),
+                         ('first_name','First name'), ('last_name','Last name'), ('date_of_birth','Date of birth'),
+                         ('is_over_18','Age 18 or over'), ('ethnicity','Ethnicity'), ('ethnicity_detail','Ethnic background'),
+                         ('religion','Religion'), ('client_address','Client address'), ('phone','Phone'), ('email','Email')]:
+        value = getattr(booking, field)
+        result[label] = value.isoformat() if hasattr(value, 'isoformat') else str(value) if value is not None else 'Not provided'
     if current_app.extensions.get('payment_fields'):
         result.update(current_app.extensions['payment_fields'](booking))
     for index, event in enumerate(schedule(booking), 1):
         for field, label in [('date', 'Date'), ('start_time','Start time'), ('finish_time','Finish time'),
-                             ('event_address','Address'), ('event_type','Event type'), ('theme','Theme')]:
-            result[f'Event {index}: {label}'] = str(event.get(field, ''))
+                             ('event_address','Address'), ('event_type','Event type'), ('theme','Theme'),
+                             ('pitch_fee_required','Pitch fee required'), ('pitch_fee_amount','Pitch fee'),
+                             ('expected_attendees','Expected attendees'), ('publicity_type','Public/private'),
+                             ('location_type','Indoors/outdoors'), ('charge_type','Who pays'),
+                             ('revenue_share_percent','Revenue share'), ('celebrates_christmas_easter','Holiday preference'),
+                             ('additional_info','Additional information'), ('estimated_cost','Event estimate')]:
+            value = event.get(field, getattr(booking, field, None))
+            if field == 'estimated_cost' and value is None:
+                value = booking.total_event_cost if index == 1 else 0
+            if field in ('pitch_fee_amount', 'estimated_cost') and value not in (None, ''):
+                from decimal import Decimal
+                value = f'{Decimal(str(value)):.2f}'
+            if value is None:
+                value = ''
+            result[f'Event {index}: {label}'] = str(value)
     return result
 
 def render_notification(config, name, kind, reference, details, link, preview=False, layout=None,media_items=None):
@@ -120,7 +139,11 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         args = [email, subject, body + '\n\n' + link + '\n\n' + footer, message]
         if attachments:
             args.append(attachments)
-        notice.email_sent = send(*args) if enabled else False
+        try:
+            notice.email_sent = send(*args) if enabled else False
+        except Exception:
+            app.logger.exception('Client notification email failed; portal notification is saved')
+            notice.email_sent = False
         db.session.commit()
         return notice.email_sent if enabled else None
     def booking_updated(booking, before, schedule):

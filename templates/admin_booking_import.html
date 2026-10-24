@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}Import bookings | CL Paints{% endblock %}
+{% block title %}{{ 'Edit booking' if editing else 'Import bookings' }} | CL Paints{% endblock %}
 {% block body %}
 <div class="admin">{% include '_admin_sidebar.html' %}<main>
-<h1>Import bookings</h1>
+<h1>{{ 'Edit booking ' ~ editing.public_reference if editing else 'Import bookings' }}</h1>
 <link rel="stylesheet" href="{{ url_for('static', filename='booking-import.css') }}">
 <p><a href="{{ url_for('admin_bookings') }}">Back to bookings</a> · <a href="{{ url_for('admin_calendar') }}">Availability calendar</a></p>
-<p>Upload → review and edit → import. We match recognised columns automatically. Nothing is saved until you confirm.</p>
-<section class="panel">
+{% if editing %}<p>Edit this booking while it is Under Review. Saving updates the client portal with a record of the changes and attempts an email notification according to the client's preferences. Internal notes stay private.</p><p>Changing the email changes which client account can access this booking. Original signatures, consent and referral records are preserved.</p>{% else %}<p>Upload → review and edit → import. We match recognised columns automatically. Nothing is saved until you confirm.</p>{% endif %}
+<section class="panel" {% if editing %}hidden{% endif %}>
 <h2>1. Choose a file</h2>
 <p>CSV / TSV (UTF-8), Excel (.xlsx, first worksheet), or JSON (array of objects or a “bookings” array). Up to 200 bookings, 500 columns and 2 MB. Use one booking per row and headings in the first row.</p>
 <p>Dates: YYYY-MM-DD or DD/MM/YYYY. Times: HH:MM, UK local time. Required: first name, last name, email, and a date, start time, finish time and venue for each event day. Date of birth is required for private individuals and optional for business clients. Each booking can include up to 10 dates. Review, add or remove days before importing.</p>
@@ -16,8 +16,8 @@
 </section>
 <p id="import-status" role="status" aria-live="polite"></p><ul id="import-errors" role="alert"></ul>
 <details class="panel" id="mapping-panel" hidden><summary>Adjust automatic column matching (optional)</summary><p>Choose a different source column if needed. Extra spreadsheet columns are ignored. Changing matches only affects the preview when you rebuild it; rebuilding replaces any preview edits.</p><div id="mapping"></div><label><input id="keep-unmapped" type="checkbox"> Preserve unused columns in internal notes</label><p><button class="btn" id="review-button" type="button">Rebuild preview with these matches</button></p></details>
-<section class="panel" id="review-panel" hidden><h2>3. Review and edit</h2><p>Expand each booking to edit any field. Remove rows you do not want to import. Going back to column matching rebuilds the preview and replaces your edits.</p><div id="preview"></div><label><input id="confirm-import" type="checkbox"> I have reviewed these bookings and want to create them.</label><p><button class="btn primary" id="save-button" type="button">Complete import</button></p></section>
+<section class="panel" id="review-panel" hidden><h2>{{ 'Booking details' if editing else '3. Review and edit' }}</h2>{% if not editing %}<p>Expand each booking to edit any field. Remove rows you do not want to import. Going back to column matching rebuilds the preview and replaces your edits.</p>{% endif %}<div id="preview"></div><label><input id="confirm-import" type="checkbox"> {{ 'I have reviewed these changes and want to save them.' if editing else 'I have reviewed these bookings and want to create them.' }}</label><p><button class="btn primary" id="save-button" type="button">{{ 'Save booking changes' if editing else 'Complete import' }}</button></p></section>
 </main></div>
-<script id="import-config" type="application/json">{{ {'fields': fields, 'eventFields': event_fields, 'token': token}|tojson }}</script>
-<script src="{{ url_for('static', filename='booking-import.js', v='business-birth-dates-6') }}" defer></script>
+<script id="import-config" type="application/json">{{ {'fields': fields, 'eventFields': event_fields, 'token': token, 'editing': editing is defined and editing is not none, 'initialSource': initial_source|default(none), 'version': edit_version|default(none)}|tojson }}</script>
+<script src="{{ url_for('static', filename='booking-import.js', v='booking-editor-7') }}" defer></script>
 {% endblock %}

@@ -107,11 +107,14 @@
     return days;
   }
   function dayValues(card) {
-    return Object.fromEntries([...card.querySelectorAll('[data-day-field]')].map(input => [input.dataset.dayField, input.value]));
+    const values = Object.fromEntries([...card.querySelectorAll('[data-day-field]')].map(input => [input.dataset.dayField, input.value]));
+    if (card.dataset.originalIndex !== undefined) values._original_index = Number(card.dataset.originalIndex);
+    return values;
   }
   function addDay(container, values = {}) {
     if (container.children.length >= 10) { message('A booking can contain up to 10 event dates.', [], true); return; }
     const card = document.createElement('fieldset'); card.className = 'import-group import-event-day';
+    if (values._original_index !== undefined) card.dataset.originalIndex = values._original_index;
     const legend = document.createElement('legend'); card.append(legend);
     const renumber = () => [...container.children].forEach((day, index) => { day.querySelector('legend').textContent = `Event day ${index + 1}`; });
     config.eventFields.forEach(field => {
@@ -212,6 +215,7 @@
       const summary = document.createElement('summary'); summary.textContent = `Booking ${index + 1}: ${values.first_name || ''} ${values.last_name || ''} — ${values.event_date || 'date needed'}`;
       detail.append(summary);
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn'; remove.textContent = 'Remove this booking';
+      remove.hidden = Boolean(config.editing);
       remove.addEventListener('click', () => { detail.remove(); el('confirm-import').checked = false; }); detail.append(remove);
       const commonFields = config.fields.filter(field => !config.eventFields.includes(field));
       const previewFields = el('keep-unmapped').checked ? [...commonFields, 'internal_notes'] : commonFields;
@@ -263,12 +267,12 @@
       const add = document.createElement('button'); add.type = 'button'; add.className = 'btn'; add.textContent = 'Add another event date';
       add.addEventListener('click', () => {
         const previous = eventDays.lastElementChild;
-        addDay(eventDays, previous ? {...dayValues(previous), event_date: ''} : {});
+        addDay(eventDays, previous ? {...dayValues(previous), event_date: '', _original_index: undefined} : {});
       }); detail.append(add);
       el('preview').append(detail);
     });
     el('review-panel').hidden = false;
-    message(`${source.rows.length} bookings ready to review. Columns were matched automatically. Check the details and addresses below; use “Adjust automatic column matching” only if a match needs changing.`);
+    message(config.editing ? 'Edit the details below, review your changes, then save. Client-visible changes will appear in the portal.' : `${source.rows.length} bookings ready to review. Columns were matched automatically. Check the details and addresses below; use “Adjust automatic column matching” only if a match needs changing.`);
     el('review-panel').scrollIntoView({behavior: 'smooth'});
   });
   el('save-button').addEventListener('click', async () => {
@@ -282,9 +286,15 @@
     if (!rows.length) { message('There are no bookings to import.', [], true); return; }
     el('save-button').disabled = true;
     try {
-      message('Validating and saving bookings…'); const result = await send({rows}, true);
-      if (result) { location.assign('/admin/bookings?imported=' + result.imported); return; }
+      message('Validating and saving bookings…'); const result = await send({rows, version: config.version}, true);
+      if (result) { location.assign(result.redirect || '/admin/bookings?imported=' + result.imported); return; }
     } catch (_) { message('The result could not be confirmed. Check bookings before retrying; duplicate bookings will be rejected.', [], true); }
     finally { el('save-button').disabled = false; }
   });
+  if (config.initialSource) {
+    source = config.initialSource;
+    selectors = config.fields.map(field => ({value: String(source.headers.indexOf(field))}));
+    selectors.forEach(select => { if (select.value === '-1') select.value = ''; });
+    el('review-button').click();
+  }
 })();
