@@ -3,8 +3,9 @@
 {% block body %}
 <div class="admin">{% include '_admin_sidebar.html' %}<main>
 <h1>Import bookings</h1>
+<link rel="stylesheet" href="{{ url_for('static', filename='booking-import.css') }}">
 <p><a href="{{ url_for('admin_bookings') }}">Back to bookings</a> · <a href="{{ url_for('admin_calendar') }}">Availability calendar</a></p>
-<p>Upload → match columns → review and edit → import. Nothing is saved until you confirm.</p>
+<p>Upload → review and edit → import. We match recognised columns automatically. Nothing is saved until you confirm.</p>
 <section class="panel">
 <h2>1. Choose a file</h2>
 <p>CSV / TSV (UTF-8), Excel (.xlsx, first worksheet), or JSON (array of objects or a “bookings” array). Up to 200 bookings, 500 columns and 2 MB. Use one booking per row and headings in the first row.</p>
@@ -13,9 +14,9 @@
 <form id="upload-form"><label>Booking file <input type="file" id="import-file" accept=".csv,.tsv,.xlsx,.json" required></label> <button class="btn" type="submit">Read file</button></form>
 </section>
 <p id="import-status" role="status" aria-live="polite"></p><ul id="import-errors" role="alert"></ul>
-<section class="panel" id="mapping-panel" hidden><h2>2. Match booking form fields</h2><p>For each booking form field, choose the matching column from your file. Extra spreadsheet columns are ignored unless you choose to preserve them below. Your spreadsheet does not need the same number or order of columns as the booking form.</p><div id="mapping"></div><label><input id="keep-unmapped" type="checkbox"> Preserve unused columns in internal notes</label><p><button class="btn" id="review-button" type="button">Build editable preview</button></p></section>
+<details class="panel" id="mapping-panel" hidden><summary>Adjust automatic column matching (optional)</summary><p>Choose a different source column if needed. Extra spreadsheet columns are ignored. Changing matches only affects the preview when you rebuild it; rebuilding replaces any preview edits.</p><div id="mapping"></div><label><input id="keep-unmapped" type="checkbox"> Preserve unused columns in internal notes</label><p><button class="btn" id="review-button" type="button">Rebuild preview with these matches</button></p></details>
 <section class="panel" id="review-panel" hidden><h2>3. Review and edit</h2><p>Expand each booking to edit any field. Remove rows you do not want to import. Going back to column matching rebuilds the preview and replaces your edits.</p><div id="preview"></div><label><input id="confirm-import" type="checkbox"> I have reviewed these bookings and want to create them.</label><p><button class="btn primary" id="save-button" type="button">Complete import</button></p></section>
 </main></div>
 <script id="import-config" type="application/json">{{ {'fields': fields, 'token': token}|tojson }}</script>
-<script src="{{ url_for('static', filename='booking-import.js', v='save-feedback-2') }}" defer></script>
+<script src="{{ url_for('static', filename='booking-import.js', v='grouped-addresses-3') }}" defer></script>
 {% endblock %}

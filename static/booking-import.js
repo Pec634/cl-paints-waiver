@@ -2,7 +2,14 @@
   'use strict';
   const config = JSON.parse(document.getElementById('import-config').textContent);
   const el = id => document.getElementById(id);
-  const label = name => name.replaceAll('_', ' ');
+  const addressLabels = {property: 'House / flat / suite or address line 1', street: 'Street / address line 2',
+    city: 'City / town', state: 'County / state', postcode: 'Postcode', country: 'Country', country_code: 'Country code'};
+  const label = name => {
+    const address = /^(client|event)_address_(.*)$/.exec(name);
+    if (address) return addressLabels[address[2]];
+    if (name === 'client_address' || name === 'event_address') return 'Full address (used when separate fields are blank)';
+    return name.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase());
+  };
   const normal = name => name.toLowerCase().replace(/[^a-z0-9]/g, '');
   const aliases = {firstname: 'first_name', surname: 'last_name', lastname: 'last_name',
     emailaddress: 'email', telephone: 'phone', phonenumber: 'phone', mobile: 'phone',
@@ -45,6 +52,12 @@
   function columnMatch(field) {
     const exact = source.headers.findIndex(header => normal(header) === normal(field) || aliases[normal(header)] === field);
     if (exact >= 0) return exact;
+    const address = /^(client|event)_address_(.*)$/.exec(field);
+    if (address) {
+      const parts = {property: 'Line1', street: 'Line2', city: 'City', state: 'State', postcode: 'PostalCode', country: 'Country', country_code: 'CountryCode'};
+      const prefix = address[1] === 'client' ? 'ClientDetails_Address_' : 'EventSectionForASingularDate_Address_';
+      return source.headers.indexOf(prefix + parts[address[2]]);
+    }
     return source.headers.findIndex(header => header === legacyNames[field] ||
       ['ClientDetails_', 'EventSectionForASingularDate_', 'Payment_'].some(prefix =>
         header.startsWith(prefix) && normal(header.slice(prefix.length)) === normal(field)));
@@ -85,7 +98,8 @@
       el('mapping').replaceChildren(); selectors = [];
       config.fields.forEach(field => {
         const wrapper = document.createElement('label'); wrapper.style.display = 'block';
-        wrapper.append(document.createTextNode(`${label(field)} ← `));
+        const address = /^(client|event)_address/.exec(field);
+        wrapper.append(document.createTextNode(`${address ? `${address[1] === 'client' ? 'Client' : 'Event'} address: ` : ''}${label(field)} ← `));
         const select = document.createElement('select');
         select.append(new Option('Not in file / enter during review', ''));
         source.headers.forEach((header, index) => select.append(new Option(header, String(index))));
@@ -93,7 +107,9 @@
         select.value = match < 0 ? '' : String(match);
         wrapper.append(select); el('mapping').append(wrapper); selectors.push(select);
       });
-      el('mapping-panel').hidden = false; message(`Read ${source.rows.length} bookings. Check the column matches.`);
+      el('mapping-panel').hidden = false;
+      el('mapping-panel').open = false;
+      el('review-button').click();
     } catch (_) { message('Unable to read the file. Check your connection and admin session.'); }
     finally { button.disabled = false; }
   });
@@ -116,17 +132,42 @@
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn'; remove.textContent = 'Remove this booking';
       remove.addEventListener('click', () => { detail.remove(); el('confirm-import').checked = false; }); detail.append(remove);
       const previewFields = el('keep-unmapped').checked ? [...config.fields, 'internal_notes'] : config.fields;
+      const groups = {};
+      const groupName = field => {
+        if (field.startsWith('client_address')) return 'Client address';
+        if (field.startsWith('event_address')) return 'Event venue address';
+        if (['event_date', 'start_time', 'finish_time', 'event_type', 'theme', 'pitch_fee_required', 'expected_attendees', 'publicity_type', 'location_type', 'charge_type', 'celebrates_christmas_easter', 'additional_info'].includes(field)) return 'Event details';
+        if (['payment_preference', 'promo_code', 'signature', 'internal_notes'].includes(field)) return 'Payment and supporting information';
+        return 'Client details';
+      };
       previewFields.forEach(field => {
+        const group = groupName(field);
+        if (!groups[group]) {
+          const fieldset = document.createElement('fieldset'); fieldset.className = 'import-group';
+          const legend = document.createElement('legend'); legend.textContent = group; fieldset.append(legend);
+          groups[group] = fieldset; detail.append(fieldset);
+        }
         const wrapper = document.createElement('label'); wrapper.className = 'booking-field';
         const required = ['first_name', 'last_name', 'date_of_birth', 'email', 'event_date', 'start_time', 'finish_time', 'event_address'].includes(field);
         const span = document.createElement('span'); span.textContent = label(field) + (required ? ' (required)' : '');
         const input = document.createElement('textarea'); input.rows = 1; input.dataset.field = field; input.value = values[field] || '';
-        input.addEventListener('input', () => { el('confirm-import').checked = false; });
-        wrapper.append(span, input); detail.append(wrapper);
+        const help = document.createElement('small'); help.className = 'import-field-help';
+        const updateMissing = () => {
+          const addressHasParts = field === 'event_address' && [...detail.querySelectorAll('[data-field^="event_address_"]')].some(control => control.value.trim());
+          const missing = required && !input.value.trim() && !addressHasParts;
+          input.setAttribute('aria-invalid', String(missing));
+          help.textContent = missing ? (field === 'event_address' ? 'Enter the separate venue fields below or a full address here.' : 'Missing from file — enter this before importing.') : '';
+        };
+        input.addEventListener('input', () => { el('confirm-import').checked = false; updateMissing(); });
+        wrapper.append(span, input, help); groups[group].append(wrapper);
+        // Address components are added after their full-address fallback.
+        if (required) detail.addEventListener('input', updateMissing);
+        if (required) queueMicrotask(updateMissing);
       });
       el('preview').append(detail);
     });
-    el('review-panel').hidden = false; message('Preview ready. Review and edit before completing the import.');
+    el('review-panel').hidden = false;
+    message(`${source.rows.length} bookings ready to review. Columns were matched automatically. Check the details and addresses below; use “Adjust automatic column matching” only if a match needs changing.`);
     el('review-panel').scrollIntoView({behavior: 'smooth'});
   });
   el('save-button').addEventListener('click', async () => {

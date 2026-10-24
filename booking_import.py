@@ -13,12 +13,16 @@ from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric
 MAX_ROWS = 200
 MAX_COLUMNS = 500
 MAX_BYTES = 2 * 1024 * 1024
+ADDRESS_PARTS = ('property', 'street', 'city', 'state', 'postcode', 'country', 'country_code')
+ADDRESS_FIELDS = {kind: tuple(f'{kind}_address_{part}' for part in ADDRESS_PARTS)
+                  for kind in ('client', 'event')}
 # Import destinations follow the booking form, rather than every database column.
 FORM_FIELDS = (
     'client_type', 'title', 'job_title', 'first_name', 'last_name',
     'date_of_birth', 'is_over_18', 'ethnicity', 'ethnicity_detail', 'religion',
-    'client_address', 'phone', 'email', 'event_date', 'start_time', 'finish_time',
-    'event_address', 'event_type', 'theme', 'pitch_fee_required',
+    'phone', 'email', 'client_address', *ADDRESS_FIELDS['client'],
+    'event_date', 'start_time', 'finish_time',
+    'event_address', *ADDRESS_FIELDS['event'], 'event_type', 'theme', 'pitch_fee_required',
     'expected_attendees', 'publicity_type', 'location_type', 'charge_type',
     'celebrates_christmas_easter', 'additional_info', 'payment_preference',
     'promo_code', 'signature',
@@ -120,6 +124,19 @@ def parse_file(filename, data):
 
 
 def convert_row(row, columns):
+    row = dict(row)
+    for kind, fields in ADDRESS_FIELDS.items():
+        parts = []
+        for field in fields:
+            value = row.get(field, '')
+            if not isinstance(value, str):
+                raise ValueError(f'{field}: use a text value.')
+            if len(value) > 200:
+                raise ValueError(f'{field}: maximum 200 characters.')
+            if value.strip():
+                parts.append(value.strip())
+        if parts:
+            row[f'{kind}_address'] = '\n'.join(parts)
     defaults = dict(request_type='booking', client_type='individual', status='Under Review',
         ethnicity='Not provided', religion='Not provided', client_address='', phone='',
         publicity_type='', charge_type='', location_type='', event_type='', theme='',

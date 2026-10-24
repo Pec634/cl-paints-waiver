@@ -76,6 +76,23 @@ class BookingImportTest(unittest.TestCase):
         self.assertEqual(rows[0][0], 'Jane')
         self.assertEqual(len(headers), len(rows[0]))
 
+    def test_separate_address_fields_are_shown_and_saved(self):
+        from booking_import import FORM_FIELDS, ADDRESS_FIELDS
+        for fields in ADDRESS_FIELDS.values():
+            for field in fields:
+                self.assertIn(field, FORM_FIELDS)
+        row = dict(self.row, client_address_property='Flat 3', client_address_street='High Street',
+            client_address_city='London', client_address_state='Greater London',
+            client_address_postcode='SW1A 1AA', client_address_country='United Kingdom',
+            client_address_country_code='GB', event_address_property='Town Hall',
+            event_address_street='Market Road', event_address_city='London',
+            event_address_postcode='SW1A 2AA', event_address_country='United Kingdom')
+        response = self.admin.post(self.path, headers=self.headers, json={'rows': [row]})
+        self.assertEqual(response.status_code, 200)
+        booking = main.Booking.query.filter_by(email=row['email']).one()
+        self.assertEqual(booking.client_address, 'Flat 3\nHigh Street\nLondon\nGreater London\nSW1A 1AA\nUnited Kingdom\nGB')
+        self.assertEqual(booking.event_address, 'Town Hall\nMarket Road\nLondon\nSW1A 2AA\nUnited Kingdom')
+
     def test_supported_files_and_bad_headers(self):
         self.assertEqual(parse_file('test.csv', b'first_name;last_name\nJane;Smith')[1], [['Jane', 'Smith']])
         self.assertEqual(parse_file('test.tsv', b'first_name\tlast_name\nJane\tSmith')[0], ['first_name', 'last_name'])
