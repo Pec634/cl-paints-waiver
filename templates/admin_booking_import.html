@@ -9,7 +9,8 @@
 <section class="panel">
 <h2>1. Choose a file</h2>
 <p>CSV / TSV (UTF-8), Excel (.xlsx, first worksheet), or JSON (array of objects or a “bookings” array). Up to 200 bookings, 500 columns and 2 MB. Use one booking per row and headings in the first row.</p>
-<p>Dates: YYYY-MM-DD or DD/MM/YYYY. Times: HH:MM, UK local time. Required: first name, last name, date of birth, email, event date, start time, finish time and event address. Leave optional details blank when unknown. Import each event date separately.</p>
+<p>Dates: YYYY-MM-DD or DD/MM/YYYY. Times: HH:MM, UK local time. Required: first name, last name, date of birth, email, and a date, start time, finish time and venue for each event day. Each booking can include up to 10 dates. Review, add or remove days before importing.</p>
+<p>Multiple dates can come from an events array in JSON, numbered columns such as event_date_2 / start_time_2, an additional_event_dates column (same details as day 1), or linked EventDetails worksheets in the legacy Excel export. Separate booking rows stay separate bookings.</p>
 <p>New bookings default to Under Review. Consent and signatures are only recorded when supplied; imports do not send emails or create payment records. Existing bookings are never overwritten. Duplicate email, event date and start time combinations are rejected.</p>
 <form id="upload-form"><label>Booking file <input type="file" id="import-file" accept=".csv,.tsv,.xlsx,.json" required></label> <button class="btn" type="submit">Read file</button></form>
 </section>
@@ -17,6 +18,6 @@
 <details class="panel" id="mapping-panel" hidden><summary>Adjust automatic column matching (optional)</summary><p>Choose a different source column if needed. Extra spreadsheet columns are ignored. Changing matches only affects the preview when you rebuild it; rebuilding replaces any preview edits.</p><div id="mapping"></div><label><input id="keep-unmapped" type="checkbox"> Preserve unused columns in internal notes</label><p><button class="btn" id="review-button" type="button">Rebuild preview with these matches</button></p></details>
 <section class="panel" id="review-panel" hidden><h2>3. Review and edit</h2><p>Expand each booking to edit any field. Remove rows you do not want to import. Going back to column matching rebuilds the preview and replaces your edits.</p><div id="preview"></div><label><input id="confirm-import" type="checkbox"> I have reviewed these bookings and want to create them.</label><p><button class="btn primary" id="save-button" type="button">Complete import</button></p></section>
 </main></div>
-<script id="import-config" type="application/json">{{ {'fields': fields, 'token': token}|tojson }}</script>
-<script src="{{ url_for('static', filename='booking-import.js', v='grouped-addresses-3') }}" defer></script>
+<script id="import-config" type="application/json">{{ {'fields': fields, 'eventFields': event_fields, 'token': token}|tojson }}</script>
+<script src="{{ url_for('static', filename='booking-import.js', v='multiple-event-days-4') }}" defer></script>
 {% endblock %}

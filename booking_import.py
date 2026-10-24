@@ -16,15 +16,20 @@ MAX_BYTES = 2 * 1024 * 1024
 ADDRESS_PARTS = ('property', 'street', 'city', 'state', 'postcode', 'country', 'country_code')
 ADDRESS_FIELDS = {kind: tuple(f'{kind}_address_{part}' for part in ADDRESS_PARTS)
                   for kind in ('client', 'event')}
+MAX_EVENT_DAYS = 10
+EVENT_FIELDS = ('event_date', 'start_time', 'finish_time', 'event_address',
+    *ADDRESS_FIELDS['event'], 'event_type', 'theme', 'pitch_fee_required', 'pitch_fee_amount',
+    'expected_attendees', 'publicity_type', 'location_type', 'charge_type',
+    'revenue_share_percent', 'celebrates_christmas_easter', 'additional_info', 'estimated_cost')
 # Import destinations follow the booking form, rather than every database column.
 FORM_FIELDS = (
     'client_type', 'title', 'job_title', 'first_name', 'last_name',
     'date_of_birth', 'is_over_18', 'ethnicity', 'ethnicity_detail', 'religion',
     'phone', 'email', 'client_address', *ADDRESS_FIELDS['client'],
     'event_date', 'start_time', 'finish_time',
-    'event_address', *ADDRESS_FIELDS['event'], 'event_type', 'theme', 'pitch_fee_required',
+    'event_address', *ADDRESS_FIELDS['event'], 'event_type', 'theme', 'pitch_fee_required', 'pitch_fee_amount',
     'expected_attendees', 'publicity_type', 'location_type', 'charge_type',
-    'celebrates_christmas_easter', 'additional_info', 'payment_preference',
+    'celebrates_christmas_easter', 'additional_info', 'revenue_share_percent', 'estimated_cost', 'payment_preference',
     'promo_code', 'signature',
 )
 
@@ -39,6 +44,37 @@ def excel_value(value):
     if isinstance(value, date):
         return value.isoformat()
     return str(value)
+
+
+def linked_excel_events(book):
+    """Read legacy event-day worksheets using their explicit parent booking ID."""
+    linked = {}
+    names = {'Date': 'event_date', 'StartTime': 'start_time', 'FinishTime': 'finish_time',
+        'ChargeType': 'charge_type', 'PublicityType': 'publicity_type', 'IndoorsOutdoors': 'location_type',
+        'EventType': 'event_type', 'Theme': 'theme', 'IfYouKnowTheNumberOfPeopleAttendingEnterHere': 'expected_attendees',
+        'DoTheAttendeesCelebrateChristmasEaster': 'celebrates_christmas_easter',
+        'PercentageOfEarningsToShare': 'revenue_share_percent', 'AnyFutherAdditionalInformationThatMayBeHelpfulForUs': 'additional_info',
+        'DoCLPaintsNeedToPayAPitchFee': 'pitch_fee_required', 'CostOfPitchFee': 'pitch_fee_amount',
+        'TotalPayableForThisEvent': 'estimated_cost'}
+    names.update({f'Address_{source}': f'event_address_{dest}' for source, dest in
+        zip(('Line1', 'Line2', 'City', 'State', 'PostalCode', 'Country', 'CountryCode'), ADDRESS_PARTS)})
+    for sheet in book.worksheets[1:]:
+        sheet.reset_dimensions()
+        iterator = sheet.iter_rows(values_only=True)
+        headers = [excel_value(value) for value in next(iterator, ())]
+        if not {'ClientBookingRequest_Id', 'EventDetails_Id', 'Date'}.issubset(headers):
+            continue
+        for index, values in enumerate(iterator, 1):
+            if index > MAX_ROWS * MAX_EVENT_DAYS:
+                raise ValueError('The event-day worksheet is too large (maximum 2,000 rows).')
+            record = dict(zip(headers, map(excel_value, values)))
+            parent = record.get('ClientBookingRequest_Id', '').strip()
+            if not parent or not record.get('Date', '').strip():
+                continue
+            linked.setdefault(parent, []).append({dest: record.get(source, '') for source, dest in names.items()})
+            if len(linked[parent]) > MAX_EVENT_DAYS:
+                raise ValueError('A booking can include up to 10 event dates.')
+    return linked
 
 
 def parse_file(filename, data):
@@ -75,6 +111,12 @@ def parse_file(filename, data):
             if len(populated_columns) > MAX_COLUMNS:
                 raise ValueError(f'The booking table has more than {MAX_COLUMNS} populated columns. Keep only the columns you want to import.')
             rows = [[row[index] if index < len(row) else '' for index in populated_columns] for row in rows]
+            linked = linked_excel_events(book)
+            if rows and linked and 'ClientBookingRequest_Id' in rows[0]:
+                parent_index = rows[0].index('ClientBookingRequest_Id')
+                rows[0].append('events')
+                for row in rows[1:]:
+                    row.append(json.dumps(linked.get(row[parent_index].strip(), [])))
         finally:
             book.close()
         headers, values = (rows[0], rows[1:]) if rows else ([], [])
@@ -125,6 +167,69 @@ def parse_file(filename, data):
 
 def convert_row(row, columns):
     row = dict(row)
+    raw_events = row.pop('events', None)
+    if raw_events in (None, '') and row.get('event_schedule'):
+        raw_events = row.pop('event_schedule')
+    if isinstance(raw_events, str) and raw_events.strip():
+        try:
+            raw_events = json.loads(raw_events)
+        except ValueError:
+            raise ValueError('The event schedule must contain valid JSON.')
+    if isinstance(raw_events, dict):
+        raw_events = raw_events.get('events')
+    if raw_events == []:
+        raise ValueError('The event schedule must contain at least one event day.')
+    if raw_events:
+        if not isinstance(raw_events, list) or not 1 <= len(raw_events) <= MAX_EVENT_DAYS:
+            raise ValueError('A booking must contain between 1 and 10 event dates.')
+        normalized, first = [], None
+        for index, event in enumerate(raw_events, 1):
+            if not isinstance(event, dict):
+                raise ValueError(f'Event day {index}: invalid event details.')
+            base = {key: value for key, value in row.items() if key not in EVENT_FIELDS and key not in ('event_schedule', 'additional_event_dates')}
+            base.update({key: value for key, value in event.items() if key in EVENT_FIELDS})
+            base['event_date'] = event.get('event_date', event.get('date', ''))
+            base['single_date'] = True
+            try:
+                converted = convert_row(base, columns)
+            except ValueError as exc:
+                raise ValueError(f'Event day {index}: {exc}') from exc
+            if first is None:
+                first = converted
+            item = {key: converted.get(key) for key in EVENT_FIELDS if key in converted and key != 'event_date'}
+            item['date'] = converted['event_date'].isoformat()
+            item['duration_hours'] = str((datetime.strptime(converted['finish_time'], '%H:%M') - datetime.strptime(converted['start_time'], '%H:%M')).total_seconds() / 3600)
+            holiday = converted['celebrates_christmas_easter']
+            item['celebrates_christmas_easter'] = None if holiday is None else ('yes' if holiday else 'no')
+            for key in ('estimated_cost', 'pitch_fee_amount'):
+                raw = event.get(key, '')
+                if raw in ('', None):
+                    item[key] = '0.00' if key == 'estimated_cost' else None
+                else:
+                    try:
+                        amount = Decimal(str(raw).replace('£', '').replace(',', ''))
+                        if not amount.is_finite() or amount < 0 or amount > Decimal('99999999.99'):
+                            raise ValueError()
+                        item[key] = str(amount.quantize(Decimal('.01')))
+                    except (ValueError, InvalidOperation):
+                        raise ValueError(f'Event day {index}: {key} must be a valid non-negative amount.')
+            share = event.get('revenue_share_percent', '')
+            if share not in ('', None):
+                try:
+                    item['revenue_share_percent'] = int(share)
+                    if item['revenue_share_percent'] not in (5, 10, 15, 20, 25):
+                        raise ValueError()
+                except (ValueError, TypeError):
+                    raise ValueError(f'Event day {index}: choose a revenue share of 5, 10, 15, 20 or 25%.')
+            normalized.append(item)
+        first['single_date'] = len(normalized) == 1
+        first['additional_event_dates'] = ', '.join(item['date'] for item in normalized[1:]) or None
+        first['event_schedule'] = json.dumps({'same_details': False, 'events': normalized})
+        if any(event.get('estimated_cost') not in ('', None) for event in raw_events):
+            first['total_event_cost'] = sum(Decimal(item['estimated_cost']) for item in normalized)
+        if first['total_event_cost'] > Decimal('99999999.99'):
+            raise ValueError('The total event cost exceeds the booking amount limit.')
+        return first
     for kind, fields in ADDRESS_FIELDS.items():
         parts = []
         for field in fields:
@@ -218,7 +323,7 @@ def register(app, db, Booking, admin_required):
     def admin_import_bookings():
         if request.method == 'GET':
             token = session.setdefault('booking_import_token', secrets.token_urlsafe(32))
-            return render_template('admin_booking_import.html', fields=list(FORM_FIELDS), token=token)
+            return render_template('admin_booking_import.html', fields=list(FORM_FIELDS), event_fields=list(EVENT_FIELDS), token=token)
         if not secrets.compare_digest(session.get('booking_import_token', ''), request.headers.get('X-Import-Token', '')) or not session.get('booking_import_token'):
             abort(400)
         if request.content_length and request.content_length > 4 * MAX_BYTES:
@@ -240,10 +345,21 @@ def register(app, db, Booking, admin_required):
         for index, row in enumerate(rows, 1):
             try:
                 values = convert_row(row, columns)
-                key = (values['email'], values['event_date'], values['start_time'])
-                if key in seen or Booking.query.filter_by(email=key[0], event_date=key[1], start_time=key[2]).first():
-                    raise ValueError('A booking with this email, date and start time already exists.')
-                seen.add(key)
+                events = json.loads(values['event_schedule'])['events'] if values.get('event_schedule') else [dict(date=values['event_date'].isoformat(), start_time=values['start_time'])]
+                existing_keys = set()
+                for existing in Booking.query.filter_by(email=values['email']).all():
+                    existing_keys.add((existing.event_date.isoformat(), existing.start_time))
+                    try:
+                        saved = json.loads(existing.event_schedule or '{}')
+                        for item in saved.get('events', []) if isinstance(saved, dict) else saved:
+                            existing_keys.add((item.get('date'), item.get('start_time')))
+                    except (ValueError, TypeError, AttributeError):
+                        pass
+                for event in events:
+                    key = (values['email'], event['date'], event['start_time'])
+                    if key in seen or (key[1], key[2]) in existing_keys:
+                        raise ValueError(f'A booking with this email, date ({key[1]}) and start time already exists.')
+                    seen.add(key)
                 records.append(Booking(**values))
             except ValueError as exc:
                 errors.append(f'Booking {index}: {exc}')

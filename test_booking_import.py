@@ -93,6 +93,62 @@ class BookingImportTest(unittest.TestCase):
         self.assertEqual(booking.client_address, 'Flat 3\nHigh Street\nLondon\nGreater London\nSW1A 1AA\nUnited Kingdom\nGB')
         self.assertEqual(booking.event_address, 'Town Hall\nMarket Road\nLondon\nSW1A 2AA\nUnited Kingdom')
 
+    def test_multiple_event_days_save_as_one_booking_and_check_each_day(self):
+        first = dict(event_date='2027-11-01', start_time='10:00', finish_time='12:00',
+                     event_address_property='Town Hall', event_address_city='London', estimated_cost='100')
+        second = dict(first, event_date='2027-11-03', start_time='13:00', finish_time='16:00',
+                      event_address_property='School Hall', estimated_cost='150')
+        count = main.Booking.query.count()
+        response = self.admin.post(self.path, headers=self.headers, json={'rows': [dict(self.row, events=[first, second])]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(main.Booking.query.count(), count + 1)
+        booking = main.Booking.query.filter_by(email=self.row['email']).one()
+        self.assertFalse(booking.single_date)
+        self.assertEqual(booking.additional_event_dates, '2027-11-03')
+        self.assertEqual(booking.total_event_cost, 250)
+        schedule = json.loads(booking.event_schedule)['events']
+        self.assertEqual(len(schedule), 2)
+        self.assertEqual(schedule[1]['duration_hours'], '3.0')
+        self.assertEqual(schedule[1]['event_address'], 'School Hall\nLondon')
+        calendar_days = [row for row in main.app.extensions['calendar_rows']() if row['booking'] == booking]
+        self.assertEqual(len(calendar_days), 2)
+        self.assertEqual(self.admin.get('/admin/calendar?month=2027-11').status_code, 200)
+        self.assertEqual(self.admin.get('/admin/bookings').status_code, 200)
+        self.admin.get(self.path)
+        with self.admin.session_transaction() as session:
+            headers = {'X-Import-Token': session['booking_import_token']}
+        response = self.admin.post(self.path, headers=headers, json={'rows': [dict(self.row, events=[second])]})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('already exists', response.json['errors'][0])
+
+    def test_invalid_second_day_prevents_entire_import(self):
+        day = dict(event_date='2027-11-01', start_time='10:00', finish_time='12:00', event_address='Hall')
+        count = main.Booking.query.count()
+        response = self.admin.post(self.path, headers=self.headers, json={'rows': [dict(self.row, events=[day, dict(day, event_date='bad-date')])]})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Event day 2', response.json['errors'][0])
+        self.assertEqual(main.Booking.query.count(), count)
+
+    def test_excel_links_event_day_worksheet_by_parent_id(self):
+        from openpyxl import Workbook
+        book = Workbook()
+        book.active.append(['ClientBookingRequest_Id', 'first_name'])
+        book.active.append(['parent-1', 'Jane'])
+        book.active.append(['parent-2', 'John'])
+        days = book.create_sheet('EventDetails')
+        days.append(['ClientBookingRequest_Id', 'EventDetails_Id', 'Date', 'StartTime', 'FinishTime', 'Address_Line1'])
+        days.append(['parent-1', 'day-1', datetime(2027, 11, 1), time(10), time(12), 'Town Hall'])
+        days.append(['parent-1', 'day-2', datetime(2027, 11, 3), time(13), time(16), 'School Hall'])
+        days.append(['parent-2', 'day-3', datetime(2027, 11, 5), time(10), time(12), 'Other Hall'])
+        stream = io.BytesIO(); book.save(stream); book.close()
+        headers, rows = parse_file('bookings.xlsx', stream.getvalue())
+        first = json.loads(rows[0][headers.index('events')])
+        second = json.loads(rows[1][headers.index('events')])
+        self.assertEqual(len(first), 2)
+        self.assertEqual(first[1]['event_address_property'], 'School Hall')
+        self.assertEqual(len(second), 1)
+        self.assertEqual(second[0]['event_address_property'], 'Other Hall')
+
     def test_supported_files_and_bad_headers(self):
         self.assertEqual(parse_file('test.csv', b'first_name;last_name\nJane;Smith')[1], [['Jane', 'Smith']])
         self.assertEqual(parse_file('test.tsv', b'first_name\tlast_name\nJane\tSmith')[0], ['first_name', 'last_name'])

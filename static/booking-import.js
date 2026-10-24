@@ -62,6 +62,71 @@
       ['ClientDetails_', 'EventSectionForASingularDate_', 'Payment_'].some(prefix =>
         header.startsWith(prefix) && normal(header.slice(prefix.length)) === normal(field)));
   }
+  function importedDays(row, values) {
+    const read = name => {
+      const index = source.headers.findIndex(header => normal(header) === normal(name));
+      return index < 0 ? '' : row[index];
+    };
+    const schedule = read('events') || read('event_schedule');
+    if (schedule) {
+      const parsed = JSON.parse(schedule);
+      const events = Array.isArray(parsed) ? parsed : parsed.events;
+      if (!Array.isArray(events)) throw new Error('The event schedule must contain an events array.');
+      if (events.length > 10) throw new Error('A booking can contain up to 10 dates.');
+      if (events.length) return events.map(day => ({...day, event_date: day.event_date || day.date || ''}));
+    }
+    const days = [{...values}];
+    for (let number = 2; number <= 10; number++) {
+      const day = {...values}; let found = false;
+      config.eventFields.forEach(field => {
+        const index = source.headers.findIndex(header => [field + number, 'day' + number + field, 'event' + number + field, field === 'event_date' ? 'date' + number : ''].filter(Boolean).some(name => normal(name) === normal(header)));
+        if (index >= 0) { day[field] = row[index]; if (row[index]) found = true; }
+      });
+      if (found) days.push(day);
+    }
+    if (days.length === 1) {
+      const extra = read('additional_event_dates');
+      if (extra) extra.split(/[,;\n]+/).filter(date => date.trim()).forEach(date => days.push({...values, event_date: date.trim()}));
+    }
+    if (days.length > 10) throw new Error('A booking can contain up to 10 dates.');
+    return days;
+  }
+  function dayValues(card) {
+    return Object.fromEntries([...card.querySelectorAll('[data-day-field]')].map(input => [input.dataset.dayField, input.value]));
+  }
+  function addDay(container, values = {}) {
+    if (container.children.length >= 10) { message('A booking can contain up to 10 event dates.', [], true); return; }
+    const card = document.createElement('fieldset'); card.className = 'import-group import-event-day';
+    const legend = document.createElement('legend'); card.append(legend);
+    const renumber = () => [...container.children].forEach((day, index) => { day.querySelector('legend').textContent = `Event day ${index + 1}`; });
+    config.eventFields.forEach(field => {
+      const wrapper = document.createElement('label'); wrapper.className = 'booking-field';
+      const span = document.createElement('span'); span.textContent = label(field);
+      const input = document.createElement('textarea'); input.rows = 1; input.dataset.dayField = field;
+      let value = values[field];
+      if (typeof value === 'boolean') value = value ? 'Yes' : 'No';
+      input.value = value == null ? '' : String(value);
+      const help = document.createElement('small'); help.className = 'import-field-help';
+      const required = ['event_date', 'start_time', 'finish_time', 'event_address'].includes(field);
+      if (required) span.textContent += ' (required)';
+      const check = () => {
+        const addressParts = field === 'event_address' && [...card.querySelectorAll('[data-day-field^="event_address_"]')].some(control => control.value.trim());
+        const missing = required && !input.value.trim() && !addressParts;
+        input.setAttribute('aria-invalid', String(missing));
+        help.textContent = missing ? 'Enter this before importing (venue can use the separate address fields).' : '';
+      };
+      input.addEventListener('input', () => { el('confirm-import').checked = false; });
+      if (required) { card.addEventListener('input', check); queueMicrotask(check); }
+      wrapper.append(span, input, help); card.append(wrapper);
+    });
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn'; remove.textContent = 'Remove this day';
+    remove.addEventListener('click', () => {
+      if (container.children.length === 1) { message('Keep at least one event day for each booking.', [], true); return; }
+      card.remove(); renumber(); el('confirm-import').checked = false;
+    });
+    card.append(remove); container.append(card); renumber();
+    el('confirm-import').checked = false;
+  }
   async function send(body, json = false) {
     const response = await fetch(location.pathname, {method: 'POST',
       headers: {'X-Import-Token': config.token, 'Accept': 'application/json', ...(json ? {'Content-Type': 'application/json'} : {})},
@@ -131,7 +196,8 @@
       detail.append(summary);
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn'; remove.textContent = 'Remove this booking';
       remove.addEventListener('click', () => { detail.remove(); el('confirm-import').checked = false; }); detail.append(remove);
-      const previewFields = el('keep-unmapped').checked ? [...config.fields, 'internal_notes'] : config.fields;
+      const commonFields = config.fields.filter(field => !config.eventFields.includes(field));
+      const previewFields = el('keep-unmapped').checked ? [...commonFields, 'internal_notes'] : commonFields;
       const groups = {};
       const groupName = field => {
         if (field.startsWith('client_address')) return 'Client address';
@@ -164,6 +230,20 @@
         if (required) detail.addEventListener('input', updateMissing);
         if (required) queueMicrotask(updateMissing);
       });
+      const heading = document.createElement('h3'); heading.textContent = 'Event dates'; detail.append(heading);
+      const eventDays = document.createElement('div'); eventDays.className = 'import-event-days'; detail.append(eventDays);
+      try {
+        importedDays(row, values).forEach(day => addDay(eventDays, day));
+        summary.textContent = `Booking ${index + 1}: ${values.first_name || ''} ${values.last_name || ''} — ${eventDays.children.length} event day(s)`;
+      } catch (error) {
+        detail.dataset.scheduleError = error.message;
+        const warning = document.createElement('p'); warning.textContent = error.message; warning.className = 'import-field-help'; detail.append(warning);
+      }
+      const add = document.createElement('button'); add.type = 'button'; add.className = 'btn'; add.textContent = 'Add another event date';
+      add.addEventListener('click', () => {
+        const previous = eventDays.lastElementChild;
+        addDay(eventDays, previous ? {...dayValues(previous), event_date: ''} : {});
+      }); detail.append(add);
       el('preview').append(detail);
     });
     el('review-panel').hidden = false;
@@ -172,7 +252,12 @@
   });
   el('save-button').addEventListener('click', async () => {
     if (!el('confirm-import').checked) { message('Review the bookings and tick the confirmation box first. Editing any field clears this confirmation.', [], true); return; }
-    const rows = [...el('preview').children].map(detail => Object.fromEntries([...detail.querySelectorAll('[data-field]')].map(input => [input.dataset.field, input.value])));
+    const invalid = [...el('preview').children].find(detail => detail.dataset.scheduleError);
+    if (invalid) { message('An imported schedule could not be read. Correct that schedule in the source file and upload it again.', [invalid.dataset.scheduleError], true); return; }
+    const rows = [...el('preview').children].map(detail => ({
+      ...Object.fromEntries([...detail.querySelectorAll('[data-field]')].map(input => [input.dataset.field, input.value])),
+      events: [...detail.querySelector('.import-event-days').children].map(dayValues)
+    }));
     if (!rows.length) { message('There are no bookings to import.', [], true); return; }
     el('save-button').disabled = true;
     try {
