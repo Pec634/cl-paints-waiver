@@ -11,6 +11,7 @@ from flask import request, session, render_template, jsonify, abort
 from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric
 
 MAX_ROWS = 200
+MAX_COLUMNS = 500
 MAX_BYTES = 2 * 1024 * 1024
 
 
@@ -38,7 +39,7 @@ def parse_file(filename, data):
                 raise ValueError('The expanded workbook is too large.')
         book = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         try:
-            sheet = book.active
+            sheet = book.worksheets[0]
             # Excel's used range includes formatting, often thousands of empty
             # rows/columns. Read real cells rather than trusting that range.
             sheet.reset_dimensions()
@@ -56,10 +57,10 @@ def parse_file(filename, data):
                     raise ValueError('Import no more than 200 bookings at a time.')
             # Empty styled cells never count as fields. Keep genuinely populated
             # columns, including columns with missing headings, for validation.
-            width = max((len(row) for row in rows), default=0)
-            if width > 100:
-                raise ValueError('The booking table has more than 100 populated columns. Keep only the columns you want to import.')
-            rows = [row + [''] * (width - len(row)) for row in rows]
+            populated_columns = sorted({index for row in rows for index, value in enumerate(row) if value.strip()})
+            if len(populated_columns) > MAX_COLUMNS:
+                raise ValueError(f'The booking table has more than {MAX_COLUMNS} populated columns. Keep only the columns you want to import.')
+            rows = [[row[index] if index < len(row) else '' for index in populated_columns] for row in rows]
         finally:
             book.close()
         headers, values = (rows[0], rows[1:]) if rows else ([], [])
@@ -85,8 +86,8 @@ def parse_file(filename, data):
     values = [row for row in values if any(str(value).strip() for value in row)]
     if not headers or not values:
         raise ValueError('The file has no booking rows.')
-    if len(headers) > 100 or len(values) > MAX_ROWS:
-        raise ValueError('Use no more than 100 columns and 200 bookings.')
+    if len(headers) > MAX_COLUMNS or len(values) > MAX_ROWS:
+        raise ValueError(f'Use no more than {MAX_COLUMNS} columns and {MAX_ROWS} bookings.')
     if any(not header for header in headers) or len(set(headers)) != len(headers):
         raise ValueError('Column headings must be non-empty and unique.')
     if any(len(row) != len(headers) for row in values):

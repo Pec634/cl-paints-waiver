@@ -92,6 +92,31 @@ class BookingImportTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '200 bookings'):
             parse_file('bookings.xlsx', stream.getvalue())
 
+    def test_wide_booking_export_and_sparse_columns(self):
+        from openpyxl import Workbook
+        book = Workbook()
+        headers = [f'Field {index}' for index in range(104)]
+        book.active.append(headers)
+        book.active.append([f'Value {index}' for index in range(104)])
+        stream = io.BytesIO(); book.save(stream)
+        parsed_headers, rows = parse_file('bookings.xlsx', stream.getvalue())
+        self.assertEqual(parsed_headers, headers)
+        self.assertEqual(len(rows[0]), 104)
+        book.close()
+        book = Workbook()
+        book.active.cell(1, 600, 'Email')
+        book.active.cell(2, 600, 'client@example.com')
+        stream = io.BytesIO(); book.save(stream); book.close()
+        self.assertEqual(parse_file('bookings.xlsx', stream.getvalue()), (['Email'], [['client@example.com']]))
+
+    def test_excel_rejects_more_than_500_populated_columns(self):
+        from openpyxl import Workbook
+        book = Workbook(); book.active.append([f'Field {index}' for index in range(501)])
+        book.active.append(['value'] * 501)
+        stream = io.BytesIO(); book.save(stream); book.close()
+        with self.assertRaisesRegex(ValueError, '500 populated columns'):
+            parse_file('bookings.xlsx', stream.getvalue())
+
 
 if __name__ == '__main__':
     unittest.main()
