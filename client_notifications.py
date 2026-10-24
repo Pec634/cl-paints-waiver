@@ -92,6 +92,8 @@ def booking_snapshot(booking, schedule):
         saved = {}
     intake = saved.get('intake_options', {}) if isinstance(saved, dict) else {}
     saved_rules = saved.get('pricing_rules', {}) if isinstance(saved, dict) else {}
+    if isinstance(saved, dict) and isinstance(saved.get('on_behalf'), dict):
+        result['Client agreement'] = 'Awaiting client review and signature' if saved['on_behalf'].get('pending') else 'Signed by client'
     result['Hourly rate'] = f'£{Decimal(str(saved_rules["hourly_rate"])):.2f}' if saved_rules.get('hourly_rate') is not None else 'Not recorded'
     package = intake.get('package')
     result['Package'] = package.get('name', 'None') if isinstance(package, dict) else str(package or 'None')
@@ -220,6 +222,9 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         db.session.commit()
         return redirect(url_for('client.booking_detail', booking_id=booking_id))
     app.extensions['client_booking_updated'] = booking_updated
+    app.extensions['client_booking_review_requested'] = lambda booking: notify(booking.email, booking.first_name, 'booking', booking.public_reference,
+        'CL Paints has entered this booking on your behalf. Your signature and agreement are still required. Please sign in to your client portal, review the booking details, and complete the client agreement. This booking is Under Review and is not confirmed.',
+        url_for('client.booking_detail', booking_id=booking.id, _external=True), essential=True)
     app.extensions['client_reward_notice'] = reward
     app.extensions['client_reward_code_notice'] = reward_code
     return booking_updated, reward

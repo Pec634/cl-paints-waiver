@@ -320,7 +320,7 @@ def register(app,db,models,Booking,current_client,admin_required,available,recor
             for extra in intake.get('extras',[]): lines += [extra['name']+' - £'+extra['price']]
             if intake.get('travel_miles') and intake['travel_miles'] != '0':lines += ['Previously supplied one-way estimate: '+intake['travel_miles']]
             if intake.get('design_captions'):lines += ['Photo captions: '+intake['design_captions']]
-        lines+=['Terms accepted: '+str(booking.terms_accepted_at)+' (version '+booking.terms_version+')','Liability acknowledged: '+str(booking.liability_acknowledged),'', 'This is a copy of your request. Current status appears above; estimates remain subject to review.']
+        lines+=['Terms accepted: '+(str(booking.terms_accepted_at)+' (version '+booking.terms_version+')' if booking.liability_acknowledged else 'No - awaiting client agreement'),'Liability acknowledged: '+str(booking.liability_acknowledged),'', 'This is a copy of your request. Current status appears above; estimates remain subject to review.']
         return download(lines,'CL-Paints-'+booking.public_reference+'.pdf')
 
     api=dict(options=options,full=full,guard=guard,track=track,booking_check=booking_check)

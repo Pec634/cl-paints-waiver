@@ -16,10 +16,11 @@ Bookings | CL Paints
                 <p>Client requests submitted through the CL Paints booking form.</p>
             </div>
             <a class="btn" href="{{ url_for('admin_import_bookings') }}">Import bookings</a>
+            <a class="btn primary" href="{{ url_for('admin_booking_on_behalf') }}">Book on behalf of client</a>
             <a class="btn primary" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form</a>
         </div>
 
-        {% if request.args.get('imported') %}
+        {% if request.args.get('consent_pending') %}<p class="booking-admin-error" role="alert">The client must review and sign their portal agreement before this booking can be accepted.</p>{% elif request.args.get('created_on_behalf') %}<p class="booking-admin-notice" role="status">Booking created on behalf of the client. Their portal agreement and signature are pending.</p>{% elif request.args.get('imported') %}
         <p class="booking-admin-notice" role="status">Imported {{ request.args.get('imported') }} bookings.</p>
         {% elif request.args.get('updated') %}
         <p class="booking-admin-notice" role="status">Booking updated.</p>
@@ -97,7 +98,7 @@ Bookings | CL Paints
                             <td data-search-email>{{ booking.email }}</td>
                             <td data-search-event="{{ booking.event_type }} {{ booking.event_address }}">{{ booking.event_address }}</td>
                             <td>{{ booking.event_date.strftime("%d/%m/%Y") }}</td>
-                            <td>{% set badge_status = booking.status %}{% include '_status_badge.html' %}</td>
+                            <td>{% set badge_status = booking.status %}{% include '_status_badge.html' %}{% if booking_pending_agreement(booking) %}<p>Client signature pending</p>{% endif %}</td>
                             <td>
                                 <a class="btn small" href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Activity &amp; date changes</a>
                                 {% if booking.status == 'Under Review' %}<a class="btn small primary" href="{{ url_for('admin_edit_booking', booking_id=booking.id) }}">Edit booking details</a>{% endif %}

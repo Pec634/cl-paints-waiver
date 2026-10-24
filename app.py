@@ -1592,7 +1592,7 @@ def send_booking_request_confirmation(booking):
         "",
         "LIABILITY AND AGREEMENT",
         f"Liability statement acknowledged: {'Yes' if booking.liability_acknowledged else 'No'}",
-        f"Booking terms accepted: Yes (version {booking.terms_version})",
+        f"Booking terms accepted: {'Yes' if booking.liability_acknowledged else 'No - awaiting client agreement'} (version {booking.terms_version})",
         f"Client signature: {booking.signature}",
         "",
         "CL Paints",
@@ -1618,6 +1618,7 @@ def send_booking_request_confirmation(booking):
 
 @app.route("/booking", methods=["GET", "POST"])
 def booking_request():
+    on_behalf = request.endpoint == 'admin_booking_on_behalf' and bool(session.get('admin_authenticated'))
     from native_forms import available as native_available, answers as native_answers, design_uploads
     from native_form_records import read_form_files, upload_names, confirmation
     NativeForm = native_form_models[0]
@@ -1636,8 +1637,10 @@ def booking_request():
     offer = app.extensions['active_hourly_discount'](pricing_rules['hourly_rate'])
     if offer:
         pricing_rules.update(hourly_rate=offer['hourly_rate'], promotion=offer)
-    portal_account = get_current_client()
-    if portal_account and request.method == 'POST':
+    portal_account = None if on_behalf else get_current_client()
+    if on_behalf:
+        session.setdefault('client_csrf', secrets.token_urlsafe(32))
+    if (portal_account or on_behalf) and request.method == 'POST':
         import hmac
         if not session.get('client_csrf') or not hmac.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
             abort(400)
@@ -1689,12 +1692,16 @@ def booking_request():
             client_address = format_address(read_address(request.form))
             job_title = request.form.get("job_title", "").strip()
             signature = request.form.get("signature", "").strip()
+            if on_behalf:
+                signature = ''
+                if request.form.get('admin_authority') != 'yes':
+                    raise ValueError('Confirm you are authorised to enter this booking on behalf of the client.')
 
             if client_type not in {"individual", "business"}:
                 raise ValueError("Choose whether you are a private individual or a business.")
             if client_type == "business" and not job_title:
                 raise ValueError("Enter your job title for the business booking.")
-            if not all((first_name, last_name, email, phone, client_address, signature)):
+            if not all((first_name, last_name, email, phone, client_address)) or (not on_behalf and not signature):
                 raise ValueError("Complete all required client details.")
 
             try:
@@ -1712,7 +1719,7 @@ def booking_request():
             from booking_birth_dates import birth_date
             date_of_birth = birth_date(request.form.get('date_of_birth', ''), client_type)
 
-            if request.form.get("is_over_18") != "yes":
+            if not on_behalf and request.form.get("is_over_18") != "yes":
                 raise ValueError("The person making the booking must confirm they are 18 or over.")
             today = datetime.now().date()
             age = today.year - date_of_birth.year - (
@@ -1856,9 +1863,9 @@ def booking_request():
             payment_preference = request.form.get("payment_preference", "")
             if payment_preference not in {"Full payment", "50% deposit"}:
                 raise ValueError("Choose a payment preference.")
-            if request.form.get("liability_acknowledged") != "yes":
+            if not on_behalf and request.form.get("liability_acknowledged") != "yes":
                 raise ValueError("Read and acknowledge the liability statement.")
-            if request.form.get("terms_accepted") != "yes":
+            if not on_behalf and request.form.get("terms_accepted") != "yes":
                 raise ValueError("Accept the booking terms and conditions to continue.")
 
             promo_code = request.form.get("promo_code", "").strip() or None
@@ -1878,7 +1885,7 @@ def booking_request():
                 first_name=first_name,
                 last_name=last_name,
                 date_of_birth=date_of_birth,
-                is_over_18=True,
+                is_over_18=not on_behalf,
                 ethnicity=ethnicity,
                 ethnicity_detail=ethnicity_detail or None,
                 religion=religion,
@@ -1893,6 +1900,7 @@ def booking_request():
                     "intake_options": intake_options,
                     "seasonal_form": {'id': seasonal_form.id, 'title': seasonal_form.title, 'terms': seasonal_form.terms, 'answers': seasonal_answers, 'snapshot': app.extensions['native_form_records']['snapshot'](seasonal_form)} if seasonal_form else None,
                     "same_details": all_dates_same_details,
+                    "on_behalf": {'created_by': ADMIN_EMAIL or 'CL Paints admin', 'created_at': datetime.utcnow().isoformat(), 'pending': True} if on_behalf else None,
                     "events": normalized_schedule,
                 }),
                 start_time=first_event["start_time"],
@@ -1915,9 +1923,9 @@ def booking_request():
                 promo_code=promo_code,
                 referral_verified=referral_verified,
                 signature=signature,
-                liability_acknowledged=True,
-                terms_accepted_at=datetime.now(),
-                terms_version="2026-10-01",
+                liability_acknowledged=not on_behalf,
+                terms_accepted_at=datetime.min if on_behalf else datetime.now(),
+                terms_version='pending-client' if on_behalf else "2026-10-01",
                 total_event_cost=total_event_cost,
                 status="Under Review",
             )
@@ -1933,6 +1941,9 @@ def booking_request():
             db.session.commit()
             if seasonal_form:
                 session['native_booking_confirmation'] = {'reference': booking.public_reference, 'message': confirmation(app.extensions['native_form_records']['settings'](seasonal_form), first_name, seasonal_form.title, booking.public_reference).get('confirmation_text', '')}
+            if on_behalf:
+                email_sent = app.extensions['client_booking_review_requested'](booking)
+                return redirect(url_for('admin_bookings', created_on_behalf=booking.id, status_email='sent' if email_sent else 'failed'))
             email_sent = send_booking_request_confirmation(booking)
             if booking.promo_code and booking.referral_verified:
                 app.extensions['client_reward_code_notice'](booking.promo_code,
@@ -1961,8 +1972,15 @@ def booking_request():
         seasonal_confirmation=session.get('native_booking_confirmation', {}).get('message', '') if session.get('native_booking_confirmation', {}).get('reference') == request.args.get('submitted') else '',
         submitted=request.args.get("submitted"),
         portal_account=portal_account,
+        on_behalf=on_behalf,
         google_maps_api_key=GOOGLE_MAPS_API_KEY,
     )
+
+
+@app.route('/admin/bookings/new', methods=['GET', 'POST'])
+@admin_required
+def admin_booking_on_behalf():
+    return booking_request()
 
 
 def booking_schedule_events(booking):
@@ -2135,6 +2153,9 @@ def admin_manage_booking(booking_id):
     previous_snapshot = booking_snapshot(booking, booking_schedule_events)
     previous_status = booking.status
     action = request.form.get("action", "update")
+    from booking_on_behalf import pending_agreement
+    if pending_agreement(booking) and (action == 'accept' or (action == 'update' and request.form.get('status') == 'Accepted')):
+        return redirect(url_for('admin_bookings', consent_pending=booking.id))
     if action == "accept":
         booking.status = "Accepted"
     elif action == "decline":
@@ -2828,6 +2849,8 @@ from booking_import import register as register_booking_import
 register_booking_import(app, db, Booking, admin_required)
 from booking_edit import register as register_booking_edit
 register_booking_edit(app, db, Booking, Event, admin_required, booking_schedule_events, get_business_settings)
+from booking_on_behalf import register as register_booking_on_behalf
+register_booking_on_behalf(app, db, Booking, get_current_client, booking_schedule_events, get_business_settings)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

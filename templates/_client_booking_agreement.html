@@ -1,0 +1,16 @@
+{% if booking_pending_agreement(booking) %}
+<section class="panel" id="client-booking-agreement">
+<h2>Your review and signature are required</h2>
+<p>CL Paints entered this booking on your behalf. Review the dates, venue, costs and other booking details on this page before signing. Signing records your agreement; it does not confirm availability or take payment.</p>
+{% include '_booking_legal_text.html' %}
+<form method="post" action="{{ url_for('client_agree_booking', booking_id=booking.id) }}" data-warn-unsaved>
+<input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+<input type="hidden" name="booking_version" value="{{ agreement_version }}">
+<input type="hidden" name="terms_hash" value="{{ agreement_terms_hash }}">
+<p><label><input type="checkbox" name="is_over_18" value="yes" required> I confirm I am aged 18 or over and authorised to make this booking.</label></p>
+<p><label><input type="checkbox" name="liability_acknowledged" value="yes" required> I have read and acknowledge the liability statement.</label></p>
+<p><label><input type="checkbox" name="terms_accepted" value="yes" required> I agree to the CL Paints booking terms and conditions for this booking.</label></p>
+<p><label>Type your full name as your signature <input name="signature" maxlength="200" autocomplete="name" required></label></p>
+<button class="btn primary" type="submit">Sign and agree to this booking</button>
+</form></section>
+{% endif %}

@@ -122,6 +122,14 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
 
     def timeline(booking, admin=False):
         rows = [dict(at=booking.submitted_at, label='Booking request received', actor='Client', details='')]
+        try:
+            saved = json.loads(booking.event_schedule or '{}')
+            created = saved.get('on_behalf') if isinstance(saved, dict) else None
+        except (TypeError, ValueError):
+            created = None
+        if isinstance(created, dict):
+            rows[0].update(label='Booking entered on behalf of client', actor=created.get('created_by', 'CL Paints') if admin else 'CL Paints',
+                details='Client signature pending' if created.get('pending') else 'Client agreement received')
         audits = {a.change_id: a for a in Activity.query.filter_by(booking_id=booking.id).all() if a.change_id}
         for change in Change.query.filter_by(booking_id=booking.id).all():
             audit = audits.get(change.id)
