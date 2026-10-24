@@ -65,6 +65,17 @@ class BookingImportTest(unittest.TestCase):
         for internal in ('id', 'submitted_at', 'terms_accepted_at', 'referral_verified', 'event_schedule', 'company_signature', 'status'):
             self.assertNotIn(internal, config['fields'])
 
+    def test_legacy_export_assembles_addresses_without_losing_columns(self):
+        headers, rows = parse_file('legacy.csv', (
+            'ClientDetails_Name_First,ClientDetails_Address_Line1,ClientDetails_Address_City,'
+            'EventSectionForASingularDate_Address_Line1,EventSectionForASingularDate_Address_PostalCode\n'
+            'Jane,1 High Street,London,Town Hall,SW1A 1AA\n'
+        ).encode())
+        self.assertEqual(rows[0][headers.index('client_address')], '1 High Street, London')
+        self.assertEqual(rows[0][headers.index('event_address')], 'Town Hall, SW1A 1AA')
+        self.assertEqual(rows[0][0], 'Jane')
+        self.assertEqual(len(headers), len(rows[0]))
+
     def test_supported_files_and_bad_headers(self):
         self.assertEqual(parse_file('test.csv', b'first_name;last_name\nJane;Smith')[1], [['Jane', 'Smith']])
         self.assertEqual(parse_file('test.tsv', b'first_name\tlast_name\nJane\tSmith')[0], ['first_name', 'last_name'])

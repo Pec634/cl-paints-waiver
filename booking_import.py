@@ -102,6 +102,20 @@ def parse_file(filename, data):
         raise ValueError('Column headings must be non-empty and unique.')
     if any(len(row) != len(headers) for row in values):
         raise ValueError('Each row must have the same number of columns as the headings.')
+    # Legacy form exports split addresses into separate columns. Offer the
+    # assembled address as a mapping choice without removing the originals.
+    for prefix, destination in (
+        ('ClientDetails_Address_', 'client_address'),
+        ('EventSectionForASingularDate_Address_', 'event_address'),
+        ('CheckAvailabilitySingleDate_AddressOfEvent_', 'availability_event_address'),
+    ):
+        parts = [headers.index(prefix + part) for part in
+                 ('Line1', 'Line2', 'City', 'State', 'PostalCode', 'Country')
+                 if prefix + part in headers]
+        if parts and destination not in headers:
+            headers.append(destination)
+            for row in values:
+                row.append(', '.join(row[index].strip() for index in parts if row[index].strip()))
     return headers, values
 
 

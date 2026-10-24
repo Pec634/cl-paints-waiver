@@ -10,26 +10,55 @@
     venue: 'event_address', venueaddress: 'event_address', endtime: 'finish_time',
     notes: 'additional_info', cost: 'total_event_cost', postcodeaddress: 'client_address'};
   let source, selectors = [];
-  function message(text, errors = []) {
+  function message(text, errors = [], reveal = false) {
     el('import-status').textContent = text;
     el('import-errors').replaceChildren(...errors.map(text => {
       const li = document.createElement('li'); li.textContent = text; return li;
     }));
+    if (reveal) {
+      el('import-status').tabIndex = -1;
+      el('import-status').focus({preventScroll: true});
+      el('import-status').scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+  }
+  const legacyNames = {
+    title: 'ClientDetails_Name_Prefix', first_name: 'ClientDetails_Name_First', last_name: 'ClientDetails_Name_Last',
+    client_type: 'ClientDetails_AreYouAPrivateIndividualOrBusiness', is_over_18: 'ClientDetails_ICanConfirmIAmAged18OrOver',
+    location_type: 'EventSectionForASingularDate_LocationIndoorsOutdoors',
+    expected_attendees: 'EventSectionForASingularDate_IfYouKnowTheNumberOfPeopleAttendingEnterHere',
+    celebrates_christmas_easter: 'EventSectionForASingularDate_DoTheAttendeesTypicallyCelebrateChristmasEasterToYourUnderstanding',
+    additional_info: 'EventSectionForASingularDate_AnyFutherAdditionalInformationThatMayBeHelpfulForUs',
+    pitch_fee_required: 'EventSectionForASingularDate_DoCLPaintsNeedToPayAPitchFee',
+    payment_preference: 'Payment_PaymentOptions', promo_code: 'Payment_ReferAFriendPromoCode', signature: 'Payment_Signature'
+  };
+  function columnMatch(field) {
+    const exact = source.headers.findIndex(header => normal(header) === normal(field) || aliases[normal(header)] === field);
+    if (exact >= 0) return exact;
+    return source.headers.findIndex(header => header === legacyNames[field] ||
+      ['ClientDetails_', 'EventSectionForASingularDate_', 'Payment_'].some(prefix =>
+        header.startsWith(prefix) && normal(header.slice(prefix.length)) === normal(field)));
   }
   async function send(body, json = false) {
     const response = await fetch(location.pathname, {method: 'POST',
       headers: {'X-Import-Token': config.token, 'Accept': 'application/json', ...(json ? {'Content-Type': 'application/json'} : {})},
       body: json ? JSON.stringify(body) : body});
     if (response.redirected || response.status === 401) {
-      message('Your admin session has ended. Sign in again, then reopen Import bookings.'); return null;
+      message('Your admin session has ended. Sign in again, then reopen Import bookings.', [], true); return null;
     }
     if (!(response.headers.get('Content-Type') || '').includes('application/json')) {
       message(response.status === 413 ? 'The file is too large. Choose a file under 2 MB.' :
-        `The server could not process the upload (HTTP ${response.status}). Refresh this page and try again.`);
+        `The server could not process the upload (HTTP ${response.status}). Refresh this page and try again.`, [], true);
       return null;
     }
     const result = await response.json();
-    if (!response.ok) { message(result.error || 'Import failed.', result.errors); return null; }
+    if (!response.ok) {
+      const errors = result.errors || [];
+      for (const error of errors) {
+        const match = /^Booking (\d+):/.exec(error);
+        if (match && el('preview').children[Number(match[1]) - 1]) el('preview').children[Number(match[1]) - 1].open = true;
+      }
+      message(result.error || 'Import failed.', errors, true); return null;
+    }
     return result;
   }
   el('upload-form').addEventListener('submit', async event => {
@@ -49,7 +78,7 @@
         const select = document.createElement('select');
         select.append(new Option('Not in file / enter during review', ''));
         source.headers.forEach((header, index) => select.append(new Option(header, String(index))));
-        const match = source.headers.findIndex(header => normal(field) === normal(header) || aliases[normal(header)] === field);
+        const match = columnMatch(field);
         select.value = match < 0 ? '' : String(match);
         wrapper.append(select); el('mapping').append(wrapper); selectors.push(select);
       });
@@ -78,7 +107,8 @@
       const previewFields = el('keep-unmapped').checked ? [...config.fields, 'internal_notes'] : config.fields;
       previewFields.forEach(field => {
         const wrapper = document.createElement('label'); wrapper.className = 'booking-field';
-        const span = document.createElement('span'); span.textContent = label(field);
+        const required = ['first_name', 'last_name', 'date_of_birth', 'email', 'event_date', 'start_time', 'finish_time', 'event_address'].includes(field);
+        const span = document.createElement('span'); span.textContent = label(field) + (required ? ' (required)' : '');
         const input = document.createElement('textarea'); input.rows = 1; input.dataset.field = field; input.value = values[field] || '';
         input.addEventListener('input', () => { el('confirm-import').checked = false; });
         wrapper.append(span, input); detail.append(wrapper);
@@ -89,14 +119,14 @@
     el('review-panel').scrollIntoView({behavior: 'smooth'});
   });
   el('save-button').addEventListener('click', async () => {
-    if (!el('confirm-import').checked) { message('Review the bookings and tick the confirmation box first.'); return; }
+    if (!el('confirm-import').checked) { message('Review the bookings and tick the confirmation box first. Editing any field clears this confirmation.', [], true); return; }
     const rows = [...el('preview').children].map(detail => Object.fromEntries([...detail.querySelectorAll('[data-field]')].map(input => [input.dataset.field, input.value])));
-    if (!rows.length) { message('There are no bookings to import.'); return; }
+    if (!rows.length) { message('There are no bookings to import.', [], true); return; }
     el('save-button').disabled = true;
     try {
       message('Validating and saving bookings…'); const result = await send({rows}, true);
       if (result) { location.assign('/admin/bookings?imported=' + result.imported); return; }
-    } catch (_) { message('The result could not be confirmed. Check bookings before retrying; duplicate bookings will be rejected.'); }
+    } catch (_) { message('The result could not be confirmed. Check bookings before retrying; duplicate bookings will be rejected.', [], true); }
     finally { el('save-button').disabled = false; }
   });
 })();
