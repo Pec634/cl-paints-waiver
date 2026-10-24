@@ -7,6 +7,7 @@ from decimal import Decimal
 from flask import request, session, render_template, jsonify, url_for
 from booking_import import FORM_FIELDS, EVENT_FIELDS, convert_row
 from client_notifications import booking_snapshot
+from booking_pricing import calculate
 
 EDIT_FIELDS = tuple(field for field in FORM_FIELDS if field not in ('signature', 'promo_code')) + ('total_event_cost', 'travel_charge', 'internal_notes')
 
@@ -16,7 +17,7 @@ def version(booking):
     return hashlib.sha256(json.dumps(values, default=str, sort_keys=True).encode()).hexdigest()
 
 
-def register(app, db, Booking, Event, admin_required, schedule):
+def register(app, db, Booking, Event, admin_required, schedule, settings):
     @app.route('/admin/bookings/<int:booking_id>/edit', methods=['GET', 'POST'])
     @admin_required
     def admin_edit_booking(booking_id):
@@ -39,7 +40,8 @@ def register(app, db, Booking, Event, admin_required, schedule):
             row['events'] = json.dumps(events)
             initial = dict(headers=list(row), rows=[list(row.values())])
             return render_template('admin_booking_import.html', fields=list(EDIT_FIELDS), event_fields=list(EVENT_FIELDS),
-                token=token, editing=booking, initial_source=initial, edit_version=version(booking))
+                token=token, editing=booking, initial_source=initial, edit_version=version(booking),
+                pricing_enabled=True, edit_event_fields=list(EVENT_FIELDS) + ['travel_miles'])
         if not secrets.compare_digest(token, request.headers.get('X-Import-Token', '')):
             return jsonify(error='Your editing session has expired. Reload the editor.'), 400
         if request.content_length and request.content_length > 2 * 1024 * 1024:
@@ -61,11 +63,16 @@ def register(app, db, Booking, Event, admin_required, schedule):
         base.update({field: submitted[field] for field in EDIT_FIELDS if field in submitted})
         base['events'] = raw_events
         try:
-            columns = [column for column in Booking.__table__.columns if column.name != 'id']
-            values = convert_row(base, columns)
             data = json.loads(booking.event_schedule or '{}')
             if not isinstance(data, dict):
                 data = {}
+            raw_events, intake, rules, quote = calculate(booking, raw_events, original_events, data, settings(),
+                submitted.get('payment_preference', booking.payment_preference), app.extensions['payment_summary'](booking)['paid'])
+            if payload.get('action') == 'quote':
+                return jsonify(quote=quote)
+            base['events'] = raw_events
+            columns = [column for column in Booking.__table__.columns if column.name != 'id']
+            values = convert_row(base, columns)
             updated_events = json.loads(values['event_schedule'])['events']
             keys = [(event['date'], event['start_time']) for event in updated_events]
             if len(set(keys)) != len(keys):
@@ -75,6 +82,8 @@ def register(app, db, Booking, Event, admin_required, schedule):
                     raise ValueError('Another booking for this client already has this event date and start time.')
             used = set()
             for raw, updated in zip(raw_events, updated_events):
+                updated['travel_miles'] = raw['travel_miles']
+                updated['travel_charge'] = raw['travel_charge']
                 index = raw.get('_original_index')
                 if index is not None:
                     if type(index) is not int or index < 0 or index >= len(original_events) or index in used:
@@ -93,14 +102,10 @@ def register(app, db, Booking, Event, admin_required, schedule):
                 linked.booking_day_number = matching + 1
                 linked.event_date = date.fromisoformat(updated_events[matching]['date'])
                 linked.event_address = updated_events[matching]['event_address']
-            data.update(events=updated_events, same_details=False)
+            data.update(events=updated_events, same_details=False, intake_options=intake, pricing_rules=rules)
             values['event_schedule'] = json.dumps(data)
-            for field in ('total_event_cost', 'travel_charge'):
-                # Explicit booking totals take priority over event estimates.
-                amount = Decimal(str(submitted.get(field, getattr(booking, field))))
-                if not amount.is_finite() or amount < 0 or amount > Decimal('99999999.99'):
-                    raise ValueError('Enter valid non-negative booking totals.')
-                values[field] = amount.quantize(Decimal('.01'))
+            values['total_event_cost'] = Decimal(quote['event_total'])
+            values['travel_charge'] = Decimal(quote['travel'])
             for field in set(EDIT_FIELDS) | set(EVENT_FIELDS) | {'single_date', 'additional_event_dates', 'event_schedule'}:
                 if field in values and hasattr(booking, field):
                     setattr(booking, field, values[field])

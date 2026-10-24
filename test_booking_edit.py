@@ -1,5 +1,7 @@
 import json
 import unittest
+from decimal import Decimal
+from datetime import datetime, timedelta
 from unittest.mock import patch
 import test_business_tools as fixtures
 
@@ -105,4 +107,77 @@ class BookingEditTest(unittest.TestCase):
         self.assertEqual(event.event_address, 'Changed venue')
         result = json.loads(self.booking.event_schedule)
         self.assertEqual(result['intake_options'], {'package': 'Preserved package'})
-        self.assertEqual(result['events'][0]['travel_miles'], '24')
+        self.assertEqual(Decimal(result['events'][0]['travel_miles']), Decimal('24'))
+
+    def pricing_setup(self, intake=None):
+        saved = json.loads(self.booking.event_schedule or '{}')
+        if not isinstance(saved, dict):
+            saved = {'events': saved}
+        saved['pricing_rules'] = dict(hourly_rate='50', minimum_hours='2', free_miles='10', mile_rate='1', travel_cap='50')
+        if intake:
+            saved['intake_options'] = intake
+        self.booking.event_schedule = json.dumps(saved)
+        main.db.session.commit()
+
+    def test_live_quote_and_save_recalculate_time_and_ignore_posted_totals(self):
+        self.pricing_setup()
+        data, headers = self.payload()
+        day = data['rows'][0]['events'][0]
+        start = datetime.strptime(day['start_time'], '%H:%M')
+        day.update(finish_time=(start + timedelta(hours=3)).strftime('%H:%M'), charge_type='Client', pitch_fee_required='No', estimated_cost='0')
+        data['rows'][0].update(total_event_cost='0', travel_charge='9999')
+        quote = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
+        self.assertEqual(quote.status_code, 200, quote.json)
+        self.assertEqual(quote.json['quote']['event_total'], '150.00')
+        self.assertEqual(self.booking.total_event_cost, Decimal('100'))
+        self.assertEqual(main.notification_models[0].query.count(), 0)
+        with patch.object(main, 'send_client_email', return_value=True):
+            saved = self.admin.post(self.path, headers=headers, json=data)
+        self.assertEqual(saved.status_code, 200, saved.json)
+        self.assertEqual(self.booking.total_event_cost, Decimal('150'))
+        self.assertEqual(self.booking.travel_charge, Decimal('0'))
+        changes = main.notification_models[0].query.one().changes
+        self.assertIn('Estimated event cost', changes)
+
+    def test_charge_type_pitch_cost_and_travel_are_repriced(self):
+        self.pricing_setup()
+        data, headers = self.payload()
+        day = data['rows'][0]['events'][0]
+        day.update(charge_type='Customers', travel_miles='40')
+        response = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual(response.json['quote']['event_total'], '0.00')
+        self.assertEqual(response.json['quote']['travel'], '30.00')
+        day.update(charge_type='Client', pitch_fee_required='Yes', pitch_fee_amount='25')
+        response = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
+        self.assertEqual(response.json['quote']['event_total'], '0.00')
+        self.assertEqual(response.json['quote']['pitch_cost'], '25.00')
+        self.assertEqual(response.json['quote']['total'], '30.00')
+
+    def test_multi_day_travel_cap_and_incompatible_package_explanations(self):
+        self.pricing_setup({'package': dict(name='Party', hours='2', price='120'), 'extras': [dict(name='Extra', price='10')], 'extras_total': '10'})
+        data, headers = self.payload()
+        day = data['rows'][0]['events'][0]
+        day.update(travel_miles='40', charge_type='Client', pitch_fee_required='No')
+        second = dict(day, _original_index=None, event_date='2028-01-05')
+        data['rows'][0]['events'].append(second)
+        quote = self.admin.post(self.path, headers=headers, json=dict(data, action='quote')).json['quote']
+        self.assertEqual(quote['event_total'], '250.00')
+        self.assertEqual(quote['travel'], '50.00')
+        day['charge_type'] = 'Revenue sharing'
+        quote = self.admin.post(self.path, headers=headers, json=dict(data, action='quote')).json['quote']
+        self.assertEqual(quote['event_total'], '100.00')
+        self.assertTrue(any('package' in note for note in quote['notes']))
+        self.assertTrue(any('extras' in note for note in quote['notes']))
+
+    def test_existing_travel_is_retained_when_mileage_is_unknown(self):
+        self.booking.travel_charge = Decimal('17')
+        self.pricing_setup()
+        data, headers = self.payload()
+        day = data['rows'][0]['events'][0]
+        start = datetime.strptime(day['start_time'], '%H:%M')
+        day.update(finish_time=(start + timedelta(hours=3)).strftime('%H:%M'), charge_type='Client', pitch_fee_required='No')
+        day.pop('travel_miles', None)
+        result = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
+        self.assertEqual(result.json['quote']['travel'], '17.00')
+        self.assertEqual(result.json['quote']['total'], '167.00')

@@ -5,6 +5,8 @@
   const addressLabels = {property: 'House / flat / suite or address line 1', street: 'Street / address line 2',
     city: 'City / town', state: 'County / state', postcode: 'Postcode', country: 'Country', country_code: 'Country code'};
   const label = name => {
+    if (name === 'travel_miles') return 'One-way road miles';
+    if (name === 'estimated_cost' && config.pricing) return 'Calculated event cost (£)';
     const address = /^(client|event)_address_(.*)$/.exec(name);
     if (address) return addressLabels[address[2]];
     if (name === 'client_address' || name === 'event_address') return 'Full address (used when separate fields are blank)';
@@ -25,6 +27,65 @@
     venue: 'event_address', venueaddress: 'event_address', endtime: 'finish_time',
     notes: 'additional_info', cost: 'total_event_cost', postcodeaddress: 'client_address'};
   let source, selectors = [];
+  let quoteTimer, quoteSequence = 0;
+  function editorRows() {
+    return [...el('preview').children].map(detail => ({
+      ...Object.fromEntries([...detail.querySelectorAll('[data-field]')].map(input => [input.dataset.field, input.value])),
+      events: [...detail.querySelector('.import-event-days').children].map(dayValues)
+    }));
+  }
+  function refreshPricing() {
+    if (!config.pricing || !el('preview').children.length) return;
+    clearTimeout(quoteTimer);
+    const sequence = ++quoteSequence;
+    let summary = el('edit-price-summary');
+    if (!summary) {
+      summary = document.createElement('section'); summary.id = 'edit-price-summary'; summary.className = 'panel';
+      summary.setAttribute('aria-live', 'polite'); el('preview').after(summary);
+    }
+    summary.textContent = 'Updating costs…'; el('save-button').disabled = true;
+    quoteTimer = setTimeout(async () => {
+      try {
+        const response = await fetch(location.pathname, {method: 'POST', headers: {
+          'X-Import-Token': config.token, 'Accept': 'application/json', 'Content-Type': 'application/json'},
+          body: JSON.stringify({action: 'quote', rows: editorRows(), version: config.version})});
+        if (sequence !== quoteSequence) return;
+        const result = await response.json();
+        if (!response.ok) {
+          summary.textContent = [result.error, ...(result.errors || [])].filter(Boolean).join(' '); return;
+        }
+        const quote = result.quote;
+        const currency = value => new Intl.NumberFormat('en-GB', {style: 'currency', currency: 'GBP'}).format(Number(value));
+        const heading = document.createElement('h3'); heading.textContent = 'Updated booking costs';
+        const list = document.createElement('dl'); list.className = 'client-detail';
+        const entries = [['Event cost', quote.event_total], ['Travel charge', quote.travel], ['Booking total', quote.total],
+          ['Outstanding after recorded payments', quote.outstanding], ['CL Paints pitch costs (excluded from client total)', quote.pitch_cost]];
+        if (quote.deposit !== null) entries.push(['Estimated 50% deposit', quote.deposit]);
+        entries.forEach(([label, value]) => {
+          const term = document.createElement('dt'); term.textContent = label;
+          const description = document.createElement('dd'); description.textContent = currency(value); list.append(term, description);
+        });
+        summary.replaceChildren(heading, list);
+        quote.notes.forEach(text => { const note = document.createElement('p'); note.textContent = text; summary.append(note); });
+        const explanation = document.createElement('p');
+        explanation.textContent = `Hourly rate: ${currency(quote.rate)}. Customers pay, revenue sharing and pitch-fee events have no client event charge. Recorded payments and agreed payment schedules are unchanged.`;
+        summary.append(explanation);
+        [['total_event_cost', quote.event_total], ['travel_charge', quote.travel]].forEach(([field, value]) => {
+          const input = el('preview').querySelector(`[data-field="${field}"]`); if (input) input.value = value;
+        });
+        el('preview').querySelectorAll('.import-event-day').forEach((day, index) => {
+          const input = day.querySelector('[data-day-field="estimated_cost"]'); if (input) input.value = quote.days[index].cost;
+          let output = day.querySelector('.day-price-output');
+          if (!output) { output = document.createElement('p'); output.className = 'day-price-output'; day.append(output); }
+          output.textContent = `${Number(quote.days[index].hours).toFixed(2)} hours · Event cost ${currency(quote.days[index].cost)} · Travel ${currency(quote.days[index].travel)}`;
+        });
+        el('save-button').disabled = false;
+      } catch (_) {
+        if (sequence === quoteSequence) summary.textContent = 'Could not calculate costs. Check your connection and reload the editor if your session has expired.';
+      }
+    }, 300);
+  }
+  el('preview').addEventListener('input', refreshPricing);
   function message(text, errors = [], reveal = false) {
     el('import-status').textContent = text;
     el('import-errors').replaceChildren(...errors.map(text => {
@@ -120,12 +181,16 @@
     config.eventFields.forEach(field => {
       const wrapper = document.createElement('label'); wrapper.className = 'booking-field';
       const span = document.createElement('span'); span.textContent = label(field);
-      const input = document.createElement(field === 'event_date' ? 'input' : 'textarea');
+      const choices = config.pricing && (field === 'charge_type' ? ['Client', 'Customers', 'Revenue sharing'] : field === 'pitch_fee_required' ? ['Yes', 'No'] : null);
+      const input = document.createElement(choices ? 'select' : field === 'event_date' ? 'input' : 'textarea');
+      if (choices) { input.append(new Option('Choose…', '')); choices.forEach(choice => input.append(new Option(choice, choice))); }
       if (field === 'event_date') input.type = 'date'; else input.rows = 1;
       input.dataset.dayField = field;
       let value = values[field];
       if (typeof value === 'boolean') value = value ? 'Yes' : 'No';
       input.value = field === 'event_date' ? dateOnly(value) : value == null ? '' : String(value);
+      if (config.pricing && field === 'pitch_fee_required') input.value = ['yes','true','1'].includes(String(value || '').toLowerCase()) ? 'Yes' : 'No';
+      if (config.pricing && field === 'estimated_cost') input.readOnly = true;
       const help = document.createElement('small'); help.className = 'import-field-help';
       const required = ['event_date', 'start_time', 'finish_time', 'event_address'].includes(field);
       if (required) span.textContent += ' (required)';
@@ -142,10 +207,11 @@
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn'; remove.textContent = 'Remove this day';
     remove.addEventListener('click', () => {
       if (container.children.length === 1) { message('Keep at least one event day for each booking.', [], true); return; }
-      card.remove(); renumber(); el('confirm-import').checked = false;
+      card.remove(); renumber(); el('confirm-import').checked = false; refreshPricing();
     });
     card.append(remove); container.append(card); renumber();
     el('confirm-import').checked = false;
+    refreshPricing();
   }
   async function send(body, json = false) {
     const response = await fetch(location.pathname, {method: 'POST',
@@ -240,6 +306,7 @@
         const input = document.createElement(field === 'date_of_birth' ? 'input' : 'textarea');
         if (field === 'date_of_birth') input.type = 'date'; else input.rows = 1;
         input.dataset.field = field; input.value = field === 'date_of_birth' ? dateOnly(values[field]) : values[field] || '';
+        if (config.pricing && ['total_event_cost', 'travel_charge'].includes(field)) input.readOnly = true;
         const help = document.createElement('small'); help.className = 'import-field-help';
         const updateMissing = () => {
           const addressHasParts = field === 'event_address' && [...detail.querySelectorAll('[data-field^="event_address_"]')].some(control => control.value.trim());
@@ -274,15 +341,13 @@
     el('review-panel').hidden = false;
     message(config.editing ? 'Edit the details below, review your changes, then save. Client-visible changes will appear in the portal.' : `${source.rows.length} bookings ready to review. Columns were matched automatically. Check the details and addresses below; use “Adjust automatic column matching” only if a match needs changing.`);
     el('review-panel').scrollIntoView({behavior: 'smooth'});
+    refreshPricing();
   });
   el('save-button').addEventListener('click', async () => {
     if (!el('confirm-import').checked) { message('Review the bookings and tick the confirmation box first. Editing any field clears this confirmation.', [], true); return; }
     const invalid = [...el('preview').children].find(detail => detail.dataset.scheduleError);
     if (invalid) { message('An imported schedule could not be read. Correct that schedule in the source file and upload it again.', [invalid.dataset.scheduleError], true); return; }
-    const rows = [...el('preview').children].map(detail => ({
-      ...Object.fromEntries([...detail.querySelectorAll('[data-field]')].map(input => [input.dataset.field, input.value])),
-      events: [...detail.querySelector('.import-event-days').children].map(dayValues)
-    }));
+    const rows = editorRows();
     if (!rows.length) { message('There are no bookings to import.', [], true); return; }
     el('save-button').disabled = true;
     try {

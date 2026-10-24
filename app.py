@@ -2827,7 +2827,7 @@ register_client_timeline(app, db, ClientAccount, Booking, BookingMessage, Client
 from booking_import import register as register_booking_import
 register_booking_import(app, db, Booking, admin_required)
 from booking_edit import register as register_booking_edit
-register_booking_edit(app, db, Booking, Event, admin_required, booking_schedule_events)
+register_booking_edit(app, db, Booking, Event, admin_required, booking_schedule_events, get_business_settings)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

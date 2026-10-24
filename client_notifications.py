@@ -85,6 +85,14 @@ def booking_snapshot(booking, schedule):
         result[label] = value.isoformat() if hasattr(value, 'isoformat') else str(value) if value is not None else 'Not provided'
     if current_app.extensions.get('payment_fields'):
         result.update(current_app.extensions['payment_fields'](booking))
+    try:
+        saved = json.loads(booking.event_schedule or '{}')
+    except (ValueError, TypeError):
+        saved = {}
+    intake = saved.get('intake_options', {}) if isinstance(saved, dict) else {}
+    package = intake.get('package')
+    result['Package'] = package.get('name', 'None') if isinstance(package, dict) else str(package or 'None')
+    result['Extras'] = ', '.join(extra.get('name', '') for extra in intake.get('extras', []) if isinstance(extra, dict)) or 'None'
     for index, event in enumerate(schedule(booking), 1):
         for field, label in [('date', 'Date'), ('start_time','Start time'), ('finish_time','Finish time'),
                              ('event_address','Address'), ('event_type','Event type'), ('theme','Theme'),
