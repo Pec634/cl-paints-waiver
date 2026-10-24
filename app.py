@@ -2826,5 +2826,8 @@ from admin_client_timeline import register as register_client_timeline
 register_client_timeline(app, db, ClientAccount, Booking, BookingMessage, ClientEnquiry, BookingInvoice,
                          tool_models[1], creates_models[0], creates_models[1], admin_required)
 
+from booking_import import register as register_booking_import
+register_booking_import(app, db, Booking, admin_required)
+
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

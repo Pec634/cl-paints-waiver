@@ -15,10 +15,13 @@ Bookings | CL Paints
                 <h1>Bookings</h1><a class="client-text-link" href="{{ url_for('admin_calendar') }}">Check availability calendar &rarr;</a>
                 <p>Client requests submitted through the CL Paints booking form.</p>
             </div>
+            <a class="btn" href="{{ url_for('admin_import_bookings') }}">Import bookings</a>
             <a class="btn primary" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form</a>
         </div>
 
-        {% if request.args.get('updated') %}
+        {% if request.args.get('imported') %}
+        <p class="booking-admin-notice" role="status">Imported {{ request.args.get('imported') }} bookings.</p>
+        {% elif request.args.get('updated') %}
         <p class="booking-admin-notice" role="status">Booking updated.</p>
         {% elif request.args.get('referral_added') %}
         <p class="booking-admin-notice" role="status">Referral code {{ request.args.get('referral_added') }} is active.</p>

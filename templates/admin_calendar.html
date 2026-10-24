@@ -48,6 +48,7 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='admin-calendar.css') }}">
 <h1>Availability calendar</h1>
+<p><a class="btn" href="{{ url_for('admin_import_bookings') }}">Import bookings</a></p>
 <p>UK local times. Accepted bookings and unavailable time reserve space; requests under review are shown for planning. Setup/travel buffers are configured in Settings.</p>
 <div class="calendar-legend" aria-label="Calendar colour key">
   <span class="calendar-status calendar-status--review">Under Review</span>

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Import bookings | CL Paints{% endblock %}
+{% block body %}
+<div class="admin">{% include '_admin_sidebar.html' %}<main>
+<h1>Import bookings</h1>
+<p><a href="{{ url_for('admin_bookings') }}">Back to bookings</a> · <a href="{{ url_for('admin_calendar') }}">Availability calendar</a></p>
+<p>Upload → match columns → review and edit → import. Nothing is saved until you confirm.</p>
+<section class="panel">
+<h2>1. Choose a file</h2>
+<p>CSV / TSV (UTF-8), Excel (.xlsx, first worksheet), or JSON (array of objects or a “bookings” array). Up to 200 bookings and 2 MB. Use one booking per row and headings in the first row.</p>
+<p>Dates: YYYY-MM-DD or DD/MM/YYYY. Times: HH:MM, UK local time. Required: first name, last name, date of birth, email, event date, start time, finish time and event address. Leave optional details blank when unknown. Import each event date separately.</p>
+<p>New bookings default to Under Review. Consent and signatures are only recorded when supplied; imports do not send emails or create payment records. Existing bookings are never overwritten. Duplicate email, event date and start time combinations are rejected.</p>
+<form id="upload-form"><label>Booking file <input type="file" id="import-file" accept=".csv,.tsv,.xlsx,.json" required></label> <button class="btn" type="submit">Read file</button></form>
+</section>
+<p id="import-status" role="status" aria-live="polite"></p><ul id="import-errors" role="alert"></ul>
+<section class="panel" id="mapping-panel" hidden><h2>2. Match columns</h2><p>Check the suggested matches. Unmatched columns can be preserved in internal notes. Choose each destination only once.</p><div id="mapping"></div><label><input id="keep-unmapped" type="checkbox" checked> Preserve unmatched columns in internal notes</label><p><button class="btn" id="review-button" type="button">Build editable preview</button></p></section>
+<section class="panel" id="review-panel" hidden><h2>3. Review and edit</h2><p>Expand each booking to edit any field. Remove rows you do not want to import. Going back to column matching rebuilds the preview and replaces your edits.</p><div id="preview"></div><label><input id="confirm-import" type="checkbox"> I have reviewed these bookings and want to create them.</label><p><button class="btn primary" id="save-button" type="button">Complete import</button></p></section>
+</main></div>
+<script id="import-config" type="application/json">{{ {'fields': fields, 'token': token}|tojson }}</script>
+<script src="{{ url_for('static', filename='booking-import.js') }}" defer></script>
+{% endblock %}
