@@ -20,6 +20,14 @@
     const response = await fetch(location.pathname, {method: 'POST',
       headers: {'X-Import-Token': config.token, 'Accept': 'application/json', ...(json ? {'Content-Type': 'application/json'} : {})},
       body: json ? JSON.stringify(body) : body});
+    if (response.redirected || response.status === 401) {
+      message('Your admin session has ended. Sign in again, then reopen Import bookings.'); return null;
+    }
+    if (!(response.headers.get('Content-Type') || '').includes('application/json')) {
+      message(response.status === 413 ? 'The file is too large. Choose a file under 2 MB.' :
+        `The server could not process the upload (HTTP ${response.status}). Refresh this page and try again.`);
+      return null;
+    }
     const result = await response.json();
     if (!response.ok) { message(result.error || 'Import failed.', result.errors); return null; }
     return result;

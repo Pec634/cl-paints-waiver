@@ -3,7 +3,7 @@ import csv
 import io
 import json
 import secrets
-from datetime import datetime
+from datetime import datetime, date, time
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -12,6 +12,18 @@ from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric
 
 MAX_ROWS = 200
 MAX_BYTES = 2 * 1024 * 1024
+
+
+def excel_value(value):
+    if value is None:
+        return ''
+    if isinstance(value, time):
+        return value.strftime('%H:%M')
+    if isinstance(value, datetime):
+        return value.isoformat(sep=' ', timespec='seconds')
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
 
 
 def parse_file(filename, data):
@@ -27,13 +39,27 @@ def parse_file(filename, data):
         book = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         try:
             sheet = book.active
-            if sheet.max_column and sheet.max_column > 100:
-                raise ValueError('Use no more than 100 columns.')
+            # Excel's used range includes formatting, often thousands of empty
+            # rows/columns. Read real cells rather than trusting that range.
+            sheet.reset_dimensions()
             rows = []
-            for row in sheet.iter_rows(values_only=True):
-                rows.append(['' if value is None else str(value) for value in row])
+            for index, row in enumerate(sheet.iter_rows(values_only=True), 1):
+                if index > 10000:
+                    raise ValueError('The worksheet extends beyond 10,000 rows. Copy the booking table into a new worksheet and retry.')
+                values = [excel_value(value) for value in row]
+                while values and not values[-1].strip():
+                    values.pop()
+                if not any(value.strip() for value in values):
+                    continue
+                rows.append(values)
                 if len(rows) > MAX_ROWS + 1:
                     raise ValueError('Import no more than 200 bookings at a time.')
+            # Empty styled cells never count as fields. Keep genuinely populated
+            # columns, including columns with missing headings, for validation.
+            width = max((len(row) for row in rows), default=0)
+            if width > 100:
+                raise ValueError('The booking table has more than 100 populated columns. Keep only the columns you want to import.')
+            rows = [row + [''] * (width - len(row)) for row in rows]
         finally:
             book.close()
         headers, values = (rows[0], rows[1:]) if rows else ([], [])

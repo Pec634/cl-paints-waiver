@@ -1,7 +1,7 @@
 import io
 import json
 import unittest
-from datetime import datetime
+from datetime import datetime, time
 
 from booking_import import parse_file, convert_row
 import test_business_tools as fixtures
@@ -64,6 +64,33 @@ class BookingImportTest(unittest.TestCase):
         self.assertEqual(parse_file('test.xlsx', stream.getvalue())[1], [['Jane']])
         with self.assertRaises(ValueError):
             parse_file('test.csv', b'name,name\nJane,Smith')
+
+    def test_excel_ignores_formatted_empty_rows_and_columns(self):
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill
+        book = Workbook()
+        sheet = book.active
+        sheet.append([])
+        sheet.append(['first_name', 'start_time', 'event_date', 'notes'])
+        sheet.append(['Jane', time(10, 30), datetime(2027, 10, 25)])
+        sheet.append([])
+        sheet.append(['John', time(11), datetime(2027, 10, 26), 'Keep this'])
+        sheet.cell(500, 150).fill = PatternFill(fill_type='solid', fgColor='FFFF00')
+        stream = io.BytesIO(); book.save(stream); book.close()
+        headers, rows = parse_file('bookings.xlsx', stream.getvalue())
+        self.assertEqual(headers, ['first_name', 'start_time', 'event_date', 'notes'])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0], ['Jane', '10:30', '2027-10-25 00:00:00', ''])
+        self.assertEqual(rows[1][-1], 'Keep this')
+
+    def test_excel_limits_still_apply_to_real_bookings(self):
+        from openpyxl import Workbook
+        book = Workbook(); book.active.append(['first_name'])
+        for index in range(201):
+            book.active.append([f'Client {index}'])
+        stream = io.BytesIO(); book.save(stream); book.close()
+        with self.assertRaisesRegex(ValueError, '200 bookings'):
+            parse_file('bookings.xlsx', stream.getvalue())
 
 
 if __name__ == '__main__':
