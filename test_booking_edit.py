@@ -13,6 +13,11 @@ class BookingEditTest(unittest.TestCase):
         self.fixture = fixtures.BusinessToolsTest(); self.fixture.setUp()
         self.booking = self.fixture.booking
         self.booking.status = 'Under Review'
+        stored = json.loads(self.booking.event_schedule or '{}')
+        if not isinstance(stored, dict):
+            stored = {'events': stored}
+        stored['pricing_rules'] = dict(hourly_rate='50', minimum_hours='2', free_miles='10', mile_rate='1', travel_cap='50')
+        self.booking.event_schedule = json.dumps(stored)
         main.db.session.commit()
         self.admin = self.fixture.admin
         self.path = f'/admin/bookings/{self.booking.id}/edit'
@@ -90,7 +95,7 @@ class BookingEditTest(unittest.TestCase):
         saved = json.loads(self.booking.event_schedule or '{}')
         if not isinstance(saved, dict):
             saved = {'events': saved}
-        saved['intake_options'] = {'package': 'Preserved package'}
+        saved['intake_options'] = {'package': dict(name='Preserved package', price='100', hours='2')}
         original_days = main.booking_schedule_events(self.booking)
         original_days[0]['travel_miles'] = '24'
         saved['events'] = original_days
@@ -106,7 +111,7 @@ class BookingEditTest(unittest.TestCase):
         self.assertEqual(event.event_date.isoformat(), '2028-01-04')
         self.assertEqual(event.event_address, 'Changed venue')
         result = json.loads(self.booking.event_schedule)
-        self.assertEqual(result['intake_options'], {'package': 'Preserved package'})
+        self.assertEqual(result['intake_options']['package']['name'], 'Preserved package')
         self.assertEqual(Decimal(result['events'][0]['travel_miles']), Decimal('24'))
 
     def pricing_setup(self, intake=None):
@@ -181,3 +186,22 @@ class BookingEditTest(unittest.TestCase):
         result = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
         self.assertEqual(result.json['quote']['travel'], '17.00')
         self.assertEqual(result.json['quote']['total'], '167.00')
+
+    def test_unchanged_client_pays_booking_with_stale_zero_is_recalculated(self):
+        self.booking.total_event_cost = Decimal('0')
+        stored = json.loads(self.booking.event_schedule)
+        for event in stored.get('events', []):
+            event['estimated_cost'] = '0'
+        self.booking.event_schedule = json.dumps(stored)
+        main.db.session.commit()
+        data, headers = self.payload()
+        # No cost-driving field is edited: stale imported totals must still heal.
+        result = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
+        self.assertEqual(result.status_code, 200, result.json)
+        self.assertEqual(result.json['quote']['event_total'], '100.00')
+        self.assertEqual(result.json['quote']['days'][0]['cost'], '100.00')
+        self.assertEqual(self.booking.total_event_cost, Decimal('0'))
+        with patch.object(main, 'send_client_email', return_value=True):
+            saved = self.admin.post(self.path, headers=headers, json=data)
+        self.assertEqual(saved.status_code, 200, saved.json)
+        self.assertEqual(self.booking.total_event_cost, Decimal('100'))

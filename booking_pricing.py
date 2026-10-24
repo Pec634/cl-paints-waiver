@@ -68,45 +68,41 @@ def calculate(booking, raw_events, original_events, data, settings, payment_pref
         if day.get('event_address', '') != old.get('event_address', ''):
             notes.append(f'Day {index + 1}: venue changed; check the one-way travel miles.')
         events.append(day)
-    if changed:
-        for index, day in enumerate(events, 1):
-            if Decimal(day['duration_hours']) < Decimal(rules['minimum_hours']):
-                raise ValueError(f'Event day {index}: minimum booking duration is {rules["minimum_hours"]} hours.')
-            day['estimated_cost'] = str((Decimal(day['duration_hours']) * Decimal(rules['hourly_rate'])).quantize(Decimal('.01'))
-                if day['charge_type'] == 'Client' and not day['pitch_fee_required'] else Decimal('0.00'))
-        package = intake.get('package')
-        if package:
-            compatible = all(day['charge_type'] == 'Client' and not day['pitch_fee_required'] and Decimal(day['duration_hours']) == Decimal(package['hours']) for day in events)
-            if compatible:
-                for day in events:
-                    day['estimated_cost'] = str(money(package['price'], 'package price'))
-            else:
-                intake['package'] = None
-                notes.append('The package no longer matches these event details. Standard hourly pricing now applies.')
-        extras = intake.get('extras') or []
-        if extras and any(day['charge_type'] != 'Client' or day['pitch_fee_required'] for day in events):
-            extras = []; intake['extras'] = []
-            notes.append('Priced extras no longer apply because an event is not Client pays without a pitch fee.')
-        extras_total = sum((money(extra['price'], 'extra price') for extra in extras), Decimal(0))
-        intake['extras_total'] = str(extras_total)
-        event_total = sum((Decimal(day['estimated_cost']) for day in events), Decimal(0)) + extras_total
-        remaining = Decimal(rules['travel_cap']); travel = Decimal(0)
-        for day in events:
-            charge = min(max(Decimal(0), Decimal(day['travel_miles']) - Decimal(rules['free_miles'])) * Decimal(rules['mile_rate']), remaining)
-            charge = charge.quantize(Decimal('.01'))
-            day['travel_charge'] = str(charge); travel += charge; remaining -= charge
-        if not mileage_known:
-            travel = Decimal(booking.travel_charge)
-            for index, day in enumerate(events):
-                day['travel_charge'] = str(travel if index == 0 else Decimal(0))
-            if travel:
-                notes.append('Existing travel charge retained. Enter one-way mileage to recalculate travel.')
-    else:
-        event_total = Decimal(booking.total_event_cost); travel = Decimal(booking.travel_charge)
-        extras_total = money(intake.get('extras_total'), 'extras total')
+    # Calculate on every preview/save: an unchanged imported Client-pays row
+    # may still contain a stale zero estimate.
+    for index, day in enumerate(events, 1):
+        if Decimal(day['duration_hours']) < Decimal(rules['minimum_hours']):
+            raise ValueError(f'Event day {index}: minimum booking duration is {rules["minimum_hours"]} hours.')
+        day['estimated_cost'] = str((Decimal(day['duration_hours']) * Decimal(rules['hourly_rate'])).quantize(Decimal('.01'))
+            if day['charge_type'] == 'Client' and not day['pitch_fee_required'] else Decimal('0.00'))
+    package = intake.get('package')
+    if package:
+        compatible = all(day['charge_type'] == 'Client' and not day['pitch_fee_required'] and Decimal(day['duration_hours']) == Decimal(package['hours']) for day in events)
+        if compatible:
+            for day in events:
+                day['estimated_cost'] = str(money(package['price'], 'package price'))
+        else:
+            intake['package'] = None
+            notes.append('The package no longer matches these event details. Standard hourly pricing now applies.')
+    extras = intake.get('extras') or []
+    if extras and any(day['charge_type'] != 'Client' or day['pitch_fee_required'] for day in events):
+        extras = []; intake['extras'] = []
+        notes.append('Priced extras no longer apply because an event is not Client pays without a pitch fee.')
+    extras_total = sum((money(extra['price'], 'extra price') for extra in extras), Decimal(0))
+    intake['extras_total'] = str(extras_total)
+    event_total = sum((Decimal(day['estimated_cost']) for day in events), Decimal(0)) + extras_total
+    remaining = Decimal(rules['travel_cap']); travel = Decimal(0)
+    for day in events:
+        charge = min(max(Decimal(0), Decimal(day['travel_miles']) - Decimal(rules['free_miles'])) * Decimal(rules['mile_rate']), remaining)
+        charge = charge.quantize(Decimal('.01'))
+        day['travel_charge'] = str(charge); travel += charge; remaining -= charge
+    if not mileage_known:
+        travel = Decimal(booking.travel_charge)
         for index, day in enumerate(events):
-            day['estimated_cost'] = str(money(original_events[index].get('estimated_cost', event_total if index == 0 else 0), 'day estimate'))
-            day['travel_charge'] = str(money(original_events[index].get('travel_charge'), 'travel charge'))
+            day['travel_charge'] = str(travel if index == 0 else Decimal(0))
+        if travel:
+            notes.append('Existing travel charge retained. Enter one-way mileage to recalculate travel.')
+    changed = changed or event_total != Decimal(booking.total_event_cost) or travel != Decimal(booking.travel_charge)
     total = event_total + travel
     if not mileage_known:
         for day in events:
