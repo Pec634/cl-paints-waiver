@@ -43,13 +43,14 @@
       message('Reading file…'); source = await send(body);
       if (!source) return;
       el('mapping').replaceChildren(); selectors = [];
-      source.headers.forEach(header => {
+      config.fields.forEach(field => {
         const wrapper = document.createElement('label'); wrapper.style.display = 'block';
-        wrapper.append(document.createTextNode(`${header} → `));
+        wrapper.append(document.createTextNode(`${label(field)} ← `));
         const select = document.createElement('select');
-        select.append(new Option('Do not map', ''));
-        config.fields.forEach(field => select.append(new Option(label(field), field)));
-        select.value = config.fields.find(field => normal(field) === normal(header)) || aliases[normal(header)] || '';
+        select.append(new Option('Not in file / enter during review', ''));
+        source.headers.forEach((header, index) => select.append(new Option(header, String(index))));
+        const match = source.headers.findIndex(header => normal(field) === normal(header) || aliases[normal(header)] === field);
+        select.value = match < 0 ? '' : String(match);
         wrapper.append(select); el('mapping').append(wrapper); selectors.push(select);
       });
       el('mapping-panel').hidden = false; message(`Read ${source.rows.length} bookings. Check the column matches.`);
@@ -57,14 +58,16 @@
     finally { button.disabled = false; }
   });
   el('review-button').addEventListener('click', () => {
-    const selected = selectors.map(select => select.value).filter(Boolean);
-    if (new Set(selected).size !== selected.length) { message('Each destination field can only be matched once.'); return; }
     el('preview').replaceChildren(); el('confirm-import').checked = false;
+    const usedColumns = new Set(selectors.map(select => select.value).filter(value => value !== ''));
     source.rows.forEach((row, index) => {
       const values = {}, unmatched = [];
+      config.fields.forEach((field, fieldIndex) => {
+        const column = selectors[fieldIndex].value;
+        if (column !== '') values[field] = row[Number(column)];
+      });
       row.forEach((value, column) => {
-        if (selectors[column].value) values[selectors[column].value] = value;
-        else if (value) unmatched.push(`${source.headers[column]}: ${value}`);
+        if (!usedColumns.has(String(column)) && value) unmatched.push(`${source.headers[column]}: ${value}`);
       });
       if (el('keep-unmapped').checked && unmatched.length) values.internal_notes = [values.internal_notes, ...unmatched].filter(Boolean).join('\n');
       const detail = document.createElement('details'); detail.className = 'import-booking'; detail.open = index === 0;
@@ -72,7 +75,8 @@
       detail.append(summary);
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn'; remove.textContent = 'Remove this booking';
       remove.addEventListener('click', () => { detail.remove(); el('confirm-import').checked = false; }); detail.append(remove);
-      config.fields.forEach(field => {
+      const previewFields = el('keep-unmapped').checked ? [...config.fields, 'internal_notes'] : config.fields;
+      previewFields.forEach(field => {
         const wrapper = document.createElement('label'); wrapper.className = 'booking-field';
         const span = document.createElement('span'); span.textContent = label(field);
         const input = document.createElement('textarea'); input.rows = 1; input.dataset.field = field; input.value = values[field] || '';

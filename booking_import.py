@@ -13,6 +13,16 @@ from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric
 MAX_ROWS = 200
 MAX_COLUMNS = 500
 MAX_BYTES = 2 * 1024 * 1024
+# Import destinations follow the booking form, rather than every database column.
+FORM_FIELDS = (
+    'client_type', 'title', 'job_title', 'first_name', 'last_name',
+    'date_of_birth', 'is_over_18', 'ethnicity', 'ethnicity_detail', 'religion',
+    'client_address', 'phone', 'email', 'event_date', 'start_time', 'finish_time',
+    'event_address', 'event_type', 'theme', 'pitch_fee_required',
+    'expected_attendees', 'publicity_type', 'location_type', 'charge_type',
+    'celebrates_christmas_easter', 'additional_info', 'payment_preference',
+    'promo_code', 'signature',
+)
 
 
 def excel_value(value):
@@ -177,7 +187,7 @@ def register(app, db, Booking, admin_required):
     def admin_import_bookings():
         if request.method == 'GET':
             token = session.setdefault('booking_import_token', secrets.token_urlsafe(32))
-            return render_template('admin_booking_import.html', fields=[c.name for c in columns], token=token)
+            return render_template('admin_booking_import.html', fields=list(FORM_FIELDS), token=token)
         if not secrets.compare_digest(session.get('booking_import_token', ''), request.headers.get('X-Import-Token', '')) or not session.get('booking_import_token'):
             abort(400)
         if request.content_length and request.content_length > 4 * MAX_BYTES:

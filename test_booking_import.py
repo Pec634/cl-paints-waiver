@@ -55,6 +55,16 @@ class BookingImportTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 convert_row(dict(self.row, **changes), columns)
 
+    def test_mapping_uses_booking_form_fields(self):
+        from booking_import import FORM_FIELDS
+        page = self.admin.get(self.path).get_data(as_text=True)
+        config = json.loads(page.split('<script id="import-config" type="application/json">', 1)[1].split('</script>', 1)[0])
+        self.assertEqual(config['fields'], list(FORM_FIELDS))
+        self.assertIn('first_name', config['fields'])
+        self.assertIn('event_address', config['fields'])
+        for internal in ('id', 'submitted_at', 'terms_accepted_at', 'referral_verified', 'event_schedule', 'company_signature', 'status'):
+            self.assertNotIn(internal, config['fields'])
+
     def test_supported_files_and_bad_headers(self):
         self.assertEqual(parse_file('test.csv', b'first_name;last_name\nJane;Smith')[1], [['Jane', 'Smith']])
         self.assertEqual(parse_file('test.tsv', b'first_name\tlast_name\nJane\tSmith')[0], ['first_name', 'last_name'])
