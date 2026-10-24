@@ -203,6 +203,10 @@ def parse_file(filename, data):
 
 def convert_row(row, columns):
     row = dict(row)
+    from booking_birth_dates import client_kind, birth_date
+    row['client_type'] = client_kind(row.get('client_type') or 'individual')
+    born = birth_date(row.get('date_of_birth'), row['client_type'])
+    row['date_of_birth'] = born.isoformat() if born else ''
     raw_events = row.pop('events', None)
     if raw_events in (None, '') and row.get('event_schedule'):
         raw_events = row.pop('event_schedule')
@@ -296,8 +300,6 @@ def convert_row(row, columns):
                 value = normalize_time(value)
             except ValueError as exc:
                 raise ValueError(f'{name.replace("_", " ")}: {exc}') from exc
-        if name == 'date_of_birth' and value in ('00/00/00', '00/00/0000', '0000-00-00'):
-            raise ValueError('Date of birth is missing in the source file (placeholder date). Enter the correct date in Client details or remove this booking before importing.')
         if not value:
             if name in defaults:
                 result[name] = defaults[name]
@@ -341,7 +343,7 @@ def convert_row(row, columns):
             raise ValueError(f'{field}: use HH:MM (24-hour time).')
     if result['finish_time'] <= result['start_time']:
         raise ValueError('Finish time must be after start time.')
-    if result['date_of_birth'] > datetime.now().date():
+    if result['date_of_birth'] and result['date_of_birth'] > datetime.now().date():
         raise ValueError('Date of birth must not be in the future.')
     if result['liability_acknowledged'] and (not result['signature'] or result['terms_accepted_at'] == datetime.min or result['terms_version'] == 'import-unverified'):
         raise ValueError('Consent requires the original signature, terms acceptance timestamp and terms version. Otherwise leave liability acknowledged as No.')

@@ -219,6 +219,20 @@ class ClientPortalTest(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(main.Booking.query.one().email, 'client@example.com')
 
+    def test_business_booking_without_birth_date(self):
+        self.signup()
+        event = dict(date='2099-01-01', start_time='10:00', finish_time='12:00', event_address='Test venue',
+            event_type='Business event', theme='N/A', pitch_fee_required='no', publicity_type='Private', location_type='Indoors', charge_type='Client')
+        with patch.object(main, 'send_booking_request_confirmation', return_value=True):
+            response = self.client.post('/booking', data=dict(csrf_token=self.csrf(), request_type='booking', client_type='business',
+                job_title='Event manager', first_name='Test', last_name='Client', phone='+447911123456',
+                address_property='10', address_street='Abbey Road', address_city='London', address_postcode='NW10 7TR',
+                address_country='United Kingdom', signature='Test Client', date_of_birth='', is_over_18='yes',
+                ethnicity='Prefer not to say', religion='Prefer not to say', single_date='yes', payment_preference='Full payment',
+                liability_acknowledged='yes', terms_accepted='yes', event_schedule=json.dumps({'events': [event]})))
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(main.Booking.query.one().date_of_birth)
+
     def test_profile_and_contact_and_csrf(self):
         self.signup()
         self.assertEqual(self.client.post('/client/account', data={}).status_code, 400)

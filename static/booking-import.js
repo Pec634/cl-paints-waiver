@@ -11,6 +11,14 @@
     return name.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase());
   };
   const normal = name => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const dateOnly = value => {
+    const text = String(value || '').trim();
+    const iso = /^(\d{4}-\d{2}-\d{2})(?:[T ].*)?$/.exec(text);
+    if (iso) return iso[1];
+    const uk = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+    if (uk) return `${uk[3]}-${uk[2]}-${uk[1]}`;
+    return '';
+  };
   const aliases = {firstname: 'first_name', surname: 'last_name', lastname: 'last_name',
     emailaddress: 'email', telephone: 'phone', phonenumber: 'phone', mobile: 'phone',
     dob: 'date_of_birth', date: 'event_date', bookingdate: 'event_date',
@@ -109,10 +117,12 @@
     config.eventFields.forEach(field => {
       const wrapper = document.createElement('label'); wrapper.className = 'booking-field';
       const span = document.createElement('span'); span.textContent = label(field);
-      const input = document.createElement('textarea'); input.rows = 1; input.dataset.dayField = field;
+      const input = document.createElement(field === 'event_date' ? 'input' : 'textarea');
+      if (field === 'event_date') input.type = 'date'; else input.rows = 1;
+      input.dataset.dayField = field;
       let value = values[field];
       if (typeof value === 'boolean') value = value ? 'Yes' : 'No';
-      input.value = value == null ? '' : String(value);
+      input.value = field === 'event_date' ? dateOnly(value) : value == null ? '' : String(value);
       const help = document.createElement('small'); help.className = 'import-field-help';
       const required = ['event_date', 'start_time', 'finish_time', 'event_address'].includes(field);
       if (required) span.textContent += ' (required)';
@@ -222,13 +232,16 @@
         }
         const wrapper = document.createElement('label'); wrapper.className = 'booking-field';
         const required = ['first_name', 'last_name', 'date_of_birth', 'email', 'event_date', 'start_time', 'finish_time', 'event_address'].includes(field);
-        const span = document.createElement('span'); span.textContent = label(field) + (required ? ' (required)' : '');
-        const input = document.createElement('textarea'); input.rows = 1; input.dataset.field = field; input.value = values[field] || '';
+        const span = document.createElement('span'); span.textContent = label(field) + (field === 'date_of_birth' ? ' (optional for businesses)' : required ? ' (required)' : '');
+        const input = document.createElement(field === 'date_of_birth' ? 'input' : 'textarea');
+        if (field === 'date_of_birth') input.type = 'date'; else input.rows = 1;
+        input.dataset.field = field; input.value = field === 'date_of_birth' ? dateOnly(values[field]) : values[field] || '';
         const help = document.createElement('small'); help.className = 'import-field-help';
         const updateMissing = () => {
           const addressHasParts = field === 'event_address' && [...detail.querySelectorAll('[data-field^="event_address_"]')].some(control => control.value.trim());
-          const placeholderBirth = field === 'date_of_birth' && ['00/00/00', '00/00/0000', '0000-00-00'].includes(input.value.trim());
-          const missing = required && ((!input.value.trim() && !addressHasParts) || placeholderBirth);
+          const business = ['business', 'company', 'organisation', 'organization'].includes((detail.querySelector('[data-field="client_type"]')?.value || '').trim().toLowerCase());
+          const placeholderBirth = field === 'date_of_birth' && !business && !input.value && ['00/00/00', '00/00/0000', '0000-00-00'].includes(String(values[field] || '').trim());
+          const missing = required && !(field === 'date_of_birth' && business) && ((!input.value.trim() && !addressHasParts) || placeholderBirth);
           input.setAttribute('aria-invalid', String(missing));
           help.textContent = placeholderBirth ? 'The source contains a placeholder birth date. Enter the correct date or remove this booking.' : missing ? (field === 'event_address' ? 'Enter the separate venue fields below or a full address here.' : 'Missing from file — enter this before importing.') : '';
         };

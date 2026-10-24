@@ -7,7 +7,7 @@
 .import-group { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; border:1px solid #dbe3ec; border-radius:8px; padding:16px; margin:16px 0; min-width:0; }
 .import-group legend { font-weight:700; padding:0 8px; }
 .import-group .booking-field { display:flex; flex-direction:column; gap:6px; min-width:0; margin:0; }
-.import-group textarea { box-sizing:border-box; width:100%; padding:10px; min-height:44px; border:1px solid #aab8ca; border-radius:6px; font:inherit; resize:vertical; }
-.import-group textarea[aria-invalid=true] { border:2px solid #b42318; }
+.import-group textarea, .import-group input { box-sizing:border-box; width:100%; padding:10px; min-height:44px; border:1px solid #aab8ca; border-radius:6px; font:inherit; resize:vertical; }
+.import-group [aria-invalid=true] { border:2px solid #b42318; }
 .import-field-help { color:#b42318; font-size:.85rem; }
 #save-feedback { margin:12px 0; }

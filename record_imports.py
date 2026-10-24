@@ -22,7 +22,7 @@ CLIENT_FIELDS = [('email', 'Email', True), ('first_name', 'First name', True),
                  ('city', 'Town / city', False), ('county', 'County / region', False),
                  ('postcode', 'Postcode', False), ('country', 'Country', False)]
 BOOKING_FIELDS = CLIENT_FIELDS + [(name, label, required) for name, label, required in (
-    ('date_of_birth', 'Date of birth', True), ('event_date', 'Event date', True),
+    ('date_of_birth', 'Date of birth (optional for businesses)', False), ('event_date', 'Event date', True),
     ('start_time', 'Start time', True), ('finish_time', 'Finish time', True),
     ('event_address', 'Event venue/address', True), ('event_type', 'Event name/type', True),
     ('status', 'Status', False), ('publicity_type', 'Public/private', False),
@@ -168,8 +168,10 @@ def register(app, db, models, Account, Booking, current_client, admin_required):
             raise ValueError('A name, address, reference or other field exceeds its allowed length.')
         if kind == 'clients':
             return values
-        values['date_of_birth'] = parse_date(values['date_of_birth']).isoformat()
-        if parse_date(values['date_of_birth']) > date.today():
+        from booking_birth_dates import birth_date
+        born = birth_date(values.get('date_of_birth'), values.get('client_type') or 'individual')
+        values['date_of_birth'] = born.isoformat() if born else ''
+        if born and born > date.today():
             raise ValueError('Date of birth cannot be in the future.')
         values['event_date'] = parse_date(values['event_date']).isoformat()
         for key in ('start_time', 'finish_time'):
@@ -325,7 +327,7 @@ def register(app, db, models, Account, Booking, current_client, admin_required):
                             else:
                                 item = Booking(request_type='booking', client_type=values['client_type'],
                                     first_name=values['first_name'], last_name=values['last_name'], email=values['email'], phone=values['phone'],
-                                    client_address=values['address'], date_of_birth=parse_date(values['date_of_birth']), is_over_18=parse_date(values['date_of_birth']) <= date.today()-relativedelta(years=18),
+                                    client_address=values['address'], date_of_birth=parse_date(values['date_of_birth']) if values['date_of_birth'] else None, is_over_18=bool(values['date_of_birth']) and parse_date(values['date_of_birth']) <= date.today()-relativedelta(years=18),
                                     ethnicity='Not recorded', religion='Not recorded', event_date=parse_date(values['event_date']), single_date=True,
                                     start_time=values['start_time'], finish_time=values['finish_time'], event_address=values['event_address'],
                                     event_type=values['event_type'], theme=values['theme'], publicity_type=values['publicity_type'], charge_type='Client pays',

@@ -44,13 +44,12 @@ def profile_details(form, ethnicities):
         raise ValueError('Choose a valid title.')
     if len(values['job_title']) > 120 or (values['client_type'] == 'business' and not values['job_title']):
         raise ValueError('Enter your job title for a business profile (up to 120 characters).')
-    try:
-        born = datetime.strptime(values['date_of_birth'], '%Y-%m-%d').date()
-    except ValueError:
-        raise ValueError('Enter your date of birth.')
+    from booking_birth_dates import birth_date
+    born = birth_date(values['date_of_birth'], values['client_type'])
+    values['date_of_birth'] = born.isoformat() if born else ''
     today = datetime.now(ZoneInfo('Europe/London')).date()
-    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-    if age < 18 or age > 120:
+    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day)) if born else None
+    if age is not None and (age < 18 or age > 120):
         raise ValueError('The responsible client must be aged 18 or over; check your date of birth.')
     if values['ethnicity'] == 'Prefer not to say':
         values['ethnicity_detail'] = 'Prefer not to say'

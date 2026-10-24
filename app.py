@@ -267,7 +267,7 @@ class Booking(db.Model):
     job_title = db.Column(db.String(120), nullable=True)
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
-    date_of_birth = db.Column(db.Date, nullable=False)
+    date_of_birth = db.Column(db.Date, nullable=True)
     is_over_18 = db.Column(db.Boolean, nullable=False)
     ethnicity = db.Column(db.String(100), nullable=False)
     ethnicity_detail = db.Column(db.String(150), nullable=True)
@@ -576,6 +576,8 @@ creates_models = define_creates_models(db)
 
 with app.app_context():
     db.create_all()
+    from booking_birth_dates import ensure_nullable_dob
+    ensure_nullable_dob(db)
     ensure_creates_schema(db)
     ensure_photo_library_schema(db)
     ensure_kiosk_schema(db)
@@ -1547,7 +1549,7 @@ def send_booking_request_confirmation(booking):
         f"Name: {booking.title + ' ' if booking.title else ''}{booking.first_name} {booking.last_name}",
         f"Client type: {booking.client_type.title()}",
         f"Job title: {booking.job_title or 'Not provided'}",
-        f"Date of birth: {booking.date_of_birth.strftime('%d/%m/%Y')}",
+        f"Date of birth: {booking.date_of_birth.strftime('%d/%m/%Y') if booking.date_of_birth else 'Not provided'}",
         f"18 or over confirmed: {'Yes' if booking.is_over_18 else 'No'}",
         f"Ethnicity: {booking.ethnicity}{' / ' + booking.ethnicity_detail if booking.ethnicity_detail else ''}",
         f"Religion: {booking.religion}",
@@ -1707,20 +1709,16 @@ def booking_request():
             if not phonenumbers.is_valid_number(parsed_phone):
                 raise ValueError("Enter a valid phone number.")
 
-            try:
-                date_of_birth = datetime.strptime(
-                    request.form.get("date_of_birth", ""), "%Y-%m-%d"
-                ).date()
-            except ValueError:
-                raise ValueError("Enter a valid date of birth.")
+            from booking_birth_dates import birth_date
+            date_of_birth = birth_date(request.form.get('date_of_birth', ''), client_type)
 
             if request.form.get("is_over_18") != "yes":
                 raise ValueError("The person making the booking must confirm they are 18 or over.")
             today = datetime.now().date()
             age = today.year - date_of_birth.year - (
                 (today.month, today.day) < (date_of_birth.month, date_of_birth.day)
-            )
-            if age < 18:
+            ) if date_of_birth else None
+            if age is not None and age < 18:
                 raise ValueError("The person making the booking must be aged 18 or over.")
 
             ethnicity = request.form.get("ethnicity", "")

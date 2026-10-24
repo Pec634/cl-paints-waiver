@@ -142,8 +142,18 @@ class BookingImportTest(unittest.TestCase):
     def test_placeholder_birth_date_is_explained_and_not_invented(self):
         response = self.admin.post(self.path, headers=self.headers, json={'rows': [dict(self.row, date_of_birth='00/00/00')]})
         self.assertEqual(response.status_code, 400)
-        self.assertIn('placeholder date', response.json['errors'][0])
+        self.assertIn('required for private individuals', response.json['errors'][0])
         self.assertIsNone(main.Booking.query.filter_by(email=self.row['email']).first())
+
+    def test_business_import_allows_missing_or_placeholder_birth_date(self):
+        for value in ('', '00/00/00', '00/00/0000'):
+            columns = [column for column in main.Booking.__table__.columns if column.name != 'id']
+            converted = convert_row(dict(self.row, client_type='Business', date_of_birth=value), columns)
+            self.assertIsNone(converted['date_of_birth'])
+            self.assertEqual(converted['client_type'], 'business')
+        response = self.admin.post(self.path, headers=self.headers, json={'rows': [dict(self.row, client_type='Business', date_of_birth='')]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.admin.get('/admin/bookings').status_code, 200)
 
     def test_excel_links_event_day_worksheet_by_parent_id(self):
         from openpyxl import Workbook

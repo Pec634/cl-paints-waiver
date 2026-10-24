@@ -108,7 +108,8 @@ Client Booking Request | CL Paints
                 </label>
                 <label class="booking-field">
                     <span>Date of birth</span>
-                    <input type="date" name="date_of_birth" required value="{{ form_data.get('date_of_birth', '') }}">
+                    <input type="date" name="date_of_birth" {% if form_data.get('client_type') != 'business' %}required{% endif %} value="{{ form_data.get('date_of_birth', '') }}">
+                    <small>Optional when booking on behalf of a business.</small>
                 </label>
                 <fieldset class="booking-fieldset booking-field">
                     <legend>I confirm I am aged 18 or over.</legend>
@@ -536,6 +537,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isBusiness = businessType.value === "business";
         jobTitleField.hidden = !isBusiness;
         jobTitleInput.required = isBusiness;
+        form.querySelector('[name="date_of_birth"]').required = !isBusiness;
     }
 
     businessType.addEventListener("change", syncBusinessType);

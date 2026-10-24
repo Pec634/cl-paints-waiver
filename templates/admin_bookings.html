@@ -134,7 +134,7 @@ Bookings | CL Paints
                                         <dt>Referral status</dt><dd>{{ "Verified" if booking.referral_verified else ("Pending migration" if booking.promo_code and booking.referral_verified is none else ("Invalid" if booking.promo_code else "Not provided")) }}</dd>
                                         <dt>Ethnicity</dt><dd>{{ booking.ethnicity }}{% if booking.ethnicity_detail %} · {{ booking.ethnicity_detail }}{% endif %}</dd>
                                         <dt>Religion</dt><dd>{{ booking.religion }}</dd>
-                                        <dt>Date of birth</dt><dd>{{ booking.date_of_birth.strftime("%d/%m/%Y") }}</dd>
+                                        <dt>Date of birth</dt><dd>{{ booking.date_of_birth.strftime("%d/%m/%Y") if booking.date_of_birth else 'Not provided' }}</dd>
                                         <dt>Additional information</dt><dd>{{ booking.additional_info or "None" }}</dd>
                                         <dt>Client signature</dt><dd>{{ booking.signature }}</dd>
                                         <dt>CL Paints signature</dt><dd>{{ booking.company_signature or "Not signed" }}</dd>
