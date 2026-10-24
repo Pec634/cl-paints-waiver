@@ -5,6 +5,7 @@
   const addressLabels = {property: 'House / flat / suite or address line 1', street: 'Street / address line 2',
     city: 'City / town', state: 'County / state', postcode: 'Postcode', country: 'Country', country_code: 'Country code'};
   const label = name => {
+    if (name === 'booking_hourly_rate') return 'Hourly rate for this booking only (£)';
     if (name === 'travel_miles') return 'One-way road miles';
     if (name === 'estimated_cost' && config.pricing) return 'Calculated event cost (£)';
     const address = /^(client|event)_address_(.*)$/.exec(name);
@@ -290,7 +291,7 @@
         if (field.startsWith('client_address')) return 'Client address';
         if (field.startsWith('event_address')) return 'Event venue address';
         if (['event_date', 'start_time', 'finish_time', 'event_type', 'theme', 'pitch_fee_required', 'expected_attendees', 'publicity_type', 'location_type', 'charge_type', 'celebrates_christmas_easter', 'additional_info'].includes(field)) return 'Event details';
-        if (['payment_preference', 'promo_code', 'signature', 'internal_notes'].includes(field)) return 'Payment and supporting information';
+        if (['payment_preference', 'promo_code', 'signature', 'internal_notes', 'booking_hourly_rate', 'total_event_cost', 'travel_charge'].includes(field)) return 'Pricing, payment and supporting information';
         return 'Client details';
       };
       previewFields.forEach(field => {

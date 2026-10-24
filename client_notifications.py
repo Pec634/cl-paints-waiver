@@ -3,6 +3,7 @@ import html
 import json
 import re
 from datetime import datetime
+from decimal import Decimal
 from string import Formatter
 from flask import abort, current_app, redirect, request, session, url_for, has_app_context
 import secrets
@@ -90,6 +91,8 @@ def booking_snapshot(booking, schedule):
     except (ValueError, TypeError):
         saved = {}
     intake = saved.get('intake_options', {}) if isinstance(saved, dict) else {}
+    saved_rules = saved.get('pricing_rules', {}) if isinstance(saved, dict) else {}
+    result['Hourly rate'] = f'£{Decimal(str(saved_rules["hourly_rate"])):.2f}' if saved_rules.get('hourly_rate') is not None else 'Not recorded'
     package = intake.get('package')
     result['Package'] = package.get('name', 'None') if isinstance(package, dict) else str(package or 'None')
     result['Extras'] = ', '.join(extra.get('name', '') for extra in intake.get('extras', []) if isinstance(extra, dict)) or 'None'
@@ -105,7 +108,6 @@ def booking_snapshot(booking, schedule):
             if field == 'estimated_cost' and value is None:
                 value = booking.total_event_cost if index == 1 else 0
             if field in ('pitch_fee_amount', 'estimated_cost') and value not in (None, ''):
-                from decimal import Decimal
                 value = f'{Decimal(str(value)):.2f}'
             if value is None:
                 value = ''

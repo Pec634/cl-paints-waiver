@@ -5,7 +5,7 @@
 <h1>{{ 'Edit booking ' ~ editing.public_reference if editing else 'Import bookings' }}</h1>
 <link rel="stylesheet" href="{{ url_for('static', filename='booking-import.css') }}">
 <p><a href="{{ url_for('admin_bookings') }}">Back to bookings</a> · <a href="{{ url_for('admin_calendar') }}">Availability calendar</a></p>
-{% if editing %}<p>Edit this booking while it is Under Review. Saving updates the client portal with a record of the changes and attempts an email notification according to the client's preferences. Internal notes stay private.</p><p>Changing the email changes which client account can access this booking. Original signatures, consent and referral records are preserved.</p>{% else %}<p>Upload → review and edit → import. We match recognised columns automatically. Nothing is saved until you confirm.</p>{% endif %}
+{% if editing %}<p>Edit this booking while it is Under Review. Saving updates the client portal with a record of the changes and attempts an email notification according to the client's preferences. Internal notes stay private.</p><p>The hourly rate applies to this booking only. Use the rate originally agreed with the client for older bookings. Fixed-price packages keep their package price while applicable.</p><p>Changing the email changes which client account can access this booking. Original signatures, consent and referral records are preserved.</p>{% else %}<p>Upload → review and edit → import. We match recognised columns automatically. Nothing is saved until you confirm.</p>{% endif %}
 <section class="panel" {% if editing %}hidden{% endif %}>
 <h2>1. Choose a file</h2>
 <p>CSV / TSV (UTF-8), Excel (.xlsx, first worksheet), or JSON (array of objects or a “bookings” array). Up to 200 bookings, 500 columns and 2 MB. Use one booking per row and headings in the first row.</p>
@@ -19,5 +19,5 @@
 <section class="panel" id="review-panel" hidden><h2>{{ 'Booking details' if editing else '3. Review and edit' }}</h2>{% if not editing %}<p>Expand each booking to edit any field. Remove rows you do not want to import. Going back to column matching rebuilds the preview and replaces your edits.</p>{% endif %}<div id="preview"></div><label><input id="confirm-import" type="checkbox"> {{ 'I have reviewed these changes and want to save them.' if editing else 'I have reviewed these bookings and want to create them.' }}</label><p><button class="btn primary" id="save-button" type="button">{{ 'Save booking changes' if editing else 'Complete import' }}</button></p></section>
 </main></div>
 <script id="import-config" type="application/json">{{ {'fields': fields, 'eventFields': edit_event_fields|default(event_fields), 'token': token, 'editing': editing is defined and editing is not none, 'initialSource': initial_source|default(none), 'version': edit_version|default(none), 'pricing': pricing_enabled|default(false)}|tojson }}</script>
-<script src="{{ url_for('static', filename='booking-import.js', v='live-edit-pricing-8') }}" defer></script>
+<script src="{{ url_for('static', filename='booking-import.js', v='booking-hourly-rate-9') }}" defer></script>
 {% endblock %}

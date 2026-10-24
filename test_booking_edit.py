@@ -205,3 +205,30 @@ class BookingEditTest(unittest.TestCase):
             saved = self.admin.post(self.path, headers=headers, json=data)
         self.assertEqual(saved.status_code, 200, saved.json)
         self.assertEqual(self.booking.total_event_cost, Decimal('100'))
+
+    def test_booking_hourly_rate_override_is_previewed_saved_and_kept_local(self):
+        standard_rate = main.get_business_settings()['hourly_rate']
+        data, headers = self.payload()
+        data['rows'][0]['booking_hourly_rate'] = '35'
+        preview = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
+        self.assertEqual(preview.status_code, 200, preview.json)
+        self.assertEqual(preview.json['quote']['rate'], '35.00')
+        self.assertEqual(preview.json['quote']['event_total'], '70.00')
+        self.assertEqual(self.booking.total_event_cost, Decimal('100'))
+        with patch.object(main, 'send_client_email', return_value=True):
+            saved = self.admin.post(self.path, headers=headers, json=data)
+        self.assertEqual(saved.status_code, 200, saved.json)
+        self.assertEqual(json.loads(self.booking.event_schedule)['pricing_rules']['hourly_rate'], '35.00')
+        self.assertEqual(self.booking.total_event_cost, Decimal('70'))
+        self.assertEqual(main.get_business_settings()['hourly_rate'], standard_rate)
+        changes = main.notification_models[0].query.one().changes
+        self.assertEqual(changes['Hourly rate']['after'], '£35.00')
+        reopened, _ = self.payload()
+        self.assertEqual(reopened['rows'][0]['booking_hourly_rate'], '35.00')
+
+    def test_booking_hourly_rate_rejects_zero_negative_and_nonfinite(self):
+        data, headers = self.payload()
+        for value in ('0', '-35', 'NaN', 'Infinity'):
+            data['rows'][0]['booking_hourly_rate'] = value
+            response = self.admin.post(self.path, headers=headers, json=dict(data, action='quote'))
+            self.assertEqual(response.status_code, 400, response.json)

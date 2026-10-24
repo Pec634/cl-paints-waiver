@@ -9,7 +9,7 @@ from booking_import import FORM_FIELDS, EVENT_FIELDS, convert_row
 from client_notifications import booking_snapshot
 from booking_pricing import calculate
 
-EDIT_FIELDS = tuple(field for field in FORM_FIELDS if field not in ('signature', 'promo_code')) + ('total_event_cost', 'travel_charge', 'internal_notes')
+EDIT_FIELDS = tuple(field for field in FORM_FIELDS if field not in ('signature', 'promo_code')) + ('booking_hourly_rate', 'total_event_cost', 'travel_charge', 'internal_notes')
 
 
 def version(booking):
@@ -27,6 +27,9 @@ def register(app, db, Booking, Event, admin_required, schedule, settings):
         token = session.setdefault('client_csrf', secrets.token_urlsafe(32))
         if request.method == 'GET':
             row = {field: str(getattr(booking, field, '')) if getattr(booking, field, None) is not None else '' for field in EDIT_FIELDS if field not in EVENT_FIELDS}
+            stored = json.loads(booking.event_schedule or '{}')
+            saved_rules = stored.get('pricing_rules', {}) if isinstance(stored, dict) else {}
+            row['booking_hourly_rate'] = str(saved_rules.get('hourly_rate', settings()['hourly_rate']))
             events = []
             for index, original in enumerate(schedule(booking)):
                 day = dict(original, event_date=original['date'], _original_index=index)
@@ -66,6 +69,12 @@ def register(app, db, Booking, Event, admin_required, schedule, settings):
             data = json.loads(booking.event_schedule or '{}')
             if not isinstance(data, dict):
                 data = {}
+            if 'booking_hourly_rate' in submitted:
+                from booking_pricing import money
+                rate = money(submitted['booking_hourly_rate'], 'booking hourly rate')
+                if rate <= 0:
+                    raise ValueError('The booking hourly rate must be greater than zero.')
+                data['pricing_rules'] = dict(data.get('pricing_rules', {}), hourly_rate=str(rate))
             raw_events, intake, rules, quote = calculate(booking, raw_events, original_events, data, settings(),
                 submitted.get('payment_preference', booking.payment_preference), app.extensions['payment_summary'](booking)['paid'])
             if payload.get('action') == 'quote':
