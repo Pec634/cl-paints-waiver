@@ -2,6 +2,7 @@ import unittest
 from io import BytesIO
 from unittest.mock import patch
 import test_client_portal as fixtures
+import test_native_form_browser as browser_helpers
 
 main = fixtures.main
 
@@ -31,6 +32,7 @@ class CreatesSchemaTest(unittest.TestCase):
 
 
 class CreatesTest(unittest.TestCase):
+    browser = browser_helpers.NativeFormBrowserTest.browser
     def setUp(self):
         self.fixture = fixtures.ClientPortalTest()
         self.fixture.setUp()
@@ -83,6 +85,27 @@ class CreatesTest(unittest.TestCase):
         self.assertEqual(self.Message.query.filter_by(order_id=order_id).count(), 0)
         self.assertIsNotNone(main.db.session.get(self.Order, other_id))
         self.assertEqual(self.admin.get(path).status_code, 404)
+
+    @unittest.skipUnless(browser_helpers.EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_delete_order_layout_in_popup_and_standalone(self):
+        order = self.review_order()
+        for width, popup in ((1280, ''), (390, '?popup=1')):
+            page = self.admin.get(f'/admin/cl-creates/orders/{order.id}'+popup)
+            self.browser(page.data, '''
+                const section = document.querySelector('.creates-order-delete');
+                assert(!section.open, 'Delete section should start collapsed');
+                section.querySelector('summary').click();
+                const checkbox = section.querySelector('[name=confirm_delete]');
+                assert(checkbox.offsetWidth === 20 && checkbox.offsetHeight === 20, 'Checkbox should have normal dimensions');
+                const button = section.querySelector('button');
+                assert(button.offsetWidth < section.clientWidth, 'Delete button should be compact');
+                const bounds = button.getBoundingClientRect();
+                assert(bounds.left >= 0 && bounds.right <= innerWidth, 'Delete button should fit the viewport');
+                assert(!section.querySelector('form').checkValidity(), 'Confirmation must still be required');
+                checkbox.click();
+                assert(section.querySelector('form').checkValidity(), 'Checked confirmation should validate');
+                assert(section.querySelector('form').target === '_top', 'Popup deletion should return to full order list');
+            ''', width=width)
 
     def test_delete_requires_admin_csrf_confirmation_and_unpaid_review_status(self):
         order = self.review_order()

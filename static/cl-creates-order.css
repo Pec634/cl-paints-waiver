@@ -1,0 +1,13 @@
+.admin .creates-order-delete { margin-top: 20px; padding: 0; border-radius: 10px; overflow: hidden; }
+.creates-order-delete > summary { padding: 12px 16px; cursor: pointer; color: #9c2639; font-weight: 700; background: #fff7f8; }
+.creates-order-delete-body { padding: 14px 16px; overflow-wrap: anywhere; }
+.creates-order-delete-body > p { margin: 0; }
+.creates-order-delete .client-form { display: grid; gap: 14px; margin: 0; }
+.creates-order-delete .client-form p { margin: 0; line-height: 1.5; }
+.creates-order-delete .client-form .creates-delete-confirm { display: flex; align-items: start; gap: 10px; line-height: 1.5; font-weight: 500; }
+.creates-order-delete .creates-delete-confirm input[type="checkbox"] { flex: 0 0 20px; width: 20px; height: 20px; padding: 0; margin: 2px 0 0; accent-color: var(--pink); }
+.creates-delete-confirm span { min-width: 0; }
+.creates-delete-actions { display: flex; justify-content: flex-start; }
+.admin .creates-delete-actions .btn { width: auto; min-height: 38px; padding: 8px 12px; border-color: #d8a6ad; color: #9c2639; background: white; }
+.admin .creates-delete-actions .btn:hover { background: #fff0f2; border-color: #9c2639; }
+@media (max-width: 650px) { .admin .creates-delete-actions .btn { min-height: 44px; } }
