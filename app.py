@@ -2785,6 +2785,8 @@ from sumup_checkout import register as register_sumup_checkout
 register_sumup_checkout(app, db, SumupCheckout, Booking, tool_models[1], get_current_client, admin_required, get_business_settings)
 from sumup_invoice_sync import register as register_sumup_invoice_sync
 register_sumup_invoice_sync(app, db, BookingInvoice, Booking, tool_models[1], admin_required)
+from google_calendar_sync import register as register_google_calendar_sync
+register_google_calendar_sync(app, db, BusinessSetting, Booking, booking_schedule_events, get_business_settings, admin_required)
 from booking_cashup import register as register_booking_cashup
 register_booking_cashup(app, db, BookingCashup, Booking, booking_schedule_events, admin_required)
 from daily_handovers import register as register_daily_handovers

@@ -143,6 +143,17 @@ command output and alert on failures: review cases produce a nonzero exit code.
 Transactions without an attached invoice are counted as unmatched; attach their
 invoice and rerun. Sync does not create invoices, send emails or change SumUp.
 
+## Company Google Calendar
+
+Open **Availability calendar → Google Calendar sync** to preview or export
+Under Review, Awaiting Payment and Confirmed bookings. Multi-day bookings have
+one calendar entry per day. Date/status changes update existing entries;
+declined, cancelled and deleted bookings remove their exported entries.
+Requests are tentative/free, while confirmed bookings reserve time. This is a
+one-way export; Google events do not affect the app's availability. See
+[Google Calendar setup](GOOGLE_CALENDAR_SETUP.md) for company calendar sharing,
+server credentials and scheduling the sync every five minutes.
+
 ## Public-event waiver kiosk
 
 Open Dashboard ? Business Tools ? Event waiver kiosk, select an open public event

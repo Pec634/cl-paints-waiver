@@ -1,0 +1,16 @@
+{% extends 'rewards/base.html' %}
+{% block title %}Google Calendar sync | CL Paints{% endblock %}
+{% block content %}
+<p><a class="btn" href="{{ url_for('admin_calendar') }}">&larr; Availability calendar</a></p>
+<h1>Google Calendar sync</h1>
+<section class="panel"><h2>Company calendar</h2>
+<p>Under Review, Awaiting Payment and Confirmed bookings appear with their status in the title. Each event day has its own entry. Date and status changes update the same entry; entries for bookings outside these statuses or deleted requests are removed.</p>
+<p>Only confirmed bookings reserve time in Google. Requests appear as tentative and free. Edit bookings here in CL Paints; Google Calendar changes are overwritten by the next sync.</p>
+{% if ready %}<p>Calendar: <strong>{{ calendar_id }}</strong></p><form method="post" class="client-action-row"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn" name="action" value="preview">Preview changes</button><button class="btn primary" name="action" value="sync">Sync to Google Calendar now</button></form>
+{% else %}<p>Google Calendar is not connected yet. Sign in with the company Google account that can edit the CL Paints calendar.</p>{% endif %}
+{% if login_ready %}<form method="post" action="{{ url_for('google_calendar_connect') }}"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn" type="submit">{{ 'Reconnect Google Calendar' if ready else 'Connect Google Calendar' }}</button></form>
+{% if ready %}<form method="post" action="{{ url_for('google_calendar_disconnect') }}"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn" type="submit">Disconnect calendar sync</button></form>{% endif %}
+{% else %}<p>Google login needs a one-time administrator setup before the connection button is available.</p><details><summary>Connection setup</summary><p>Configure GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET, GOOGLE_CALENDAR_ID and a stable SECRET_KEY on the hosting server. See GOOGLE_CALENDAR_SETUP.md.</p>{% if callback_uri %}<p>Google authorised redirect URI: <code>{{ callback_uri }}</code></p>{% endif %}</details>{% endif %}
+{% if report %}<div role="status"><h3>{{ 'Sync complete' if report.applied else 'Preview — no Google events changed' }}</h3><p>Create: {{ report.create }} &middot; Update: {{ report.update }} &middot; Remove: {{ report.remove }} &middot; Unchanged: {{ report.unchanged }}</p></div>{% endif %}
+<p>Automatic syncing requires a schedule on the hosting server. This page does not start a schedule. Your unrelated Google events are kept separate.</p></section>
+{% endblock %}
