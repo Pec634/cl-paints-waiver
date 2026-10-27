@@ -98,5 +98,31 @@ class HistoricalFinancesTest(unittest.TestCase):
         self.assertEqual(main.BookingFinancialCorrection.query.count(),0)
         self.assertEqual(main.tool_models[1].query.count(),0)
 
+    def test_upcoming_import_with_45_deposit_and_90_price_owes_45_without_duplicate_payment(self):
+        self.booking.event_date=datetime.now(ZoneInfo('Europe/London')).date()+timedelta(days=18)
+        self.booking.terms_version='import-unverified'
+        main.db.session.add(main.tool_models[0](booking_id=self.booking.id,deposit=Decimal('45'),balance_due=self.booking.event_date))
+        main.db.session.add(main.tool_models[1](booking_id=self.booking.id,token='actual-45-deposit',amount=Decimal('45'),
+            kind='payment',method='SumUp',paid_date=datetime.now().date()))
+        main.db.session.commit()
+        self.assertEqual(main.app.extensions['payment_summary'](self.booking)['credit'],Decimal('45'))
+        data=self.data(event_cost='90',travel_charge='0',received_amount='0',reason='Restore missing imported booking price')
+        self.assertEqual(self.fixture.admin.post(self.path,data=data).status_code,302)
+        summary=main.app.extensions['payment_summary'](self.booking)
+        self.assertEqual(summary['total'],Decimal('90'))
+        self.assertEqual(summary['paid'],Decimal('45'))
+        self.assertEqual(summary['outstanding'],Decimal('45'))
+        self.assertEqual(summary['credit'],0)
+        self.assertEqual(summary['balance_due'],self.booking.event_date)
+        self.assertEqual(main.tool_models[1].query.count(),1)
+        self.assertEqual(self.booking.status,'Accepted')
+
+    def test_legacy_zero_price_with_payment_can_be_corrected_before_event(self):
+        self.booking.event_date=datetime.now(ZoneInfo('Europe/London')).date()+timedelta(days=18)
+        main.db.session.add(main.tool_models[1](booking_id=self.booking.id,token='legacy-receipt',amount=Decimal('45'),
+            kind='payment',method='Cash',paid_date=datetime.now().date()))
+        main.db.session.commit()
+        self.assertIn(b'Correct imported / historical',self.fixture.admin.get(self.page).data)
+
 
 if __name__=='__main__': unittest.main()

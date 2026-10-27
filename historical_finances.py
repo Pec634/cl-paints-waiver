@@ -46,11 +46,19 @@ def register(app,db,Correction,Booking,Entry,Change,Checkout,schedule,admin_requ
             entries=[(entry.id,str(entry.amount),entry.kind) for entry in summary['entries']],
             deposit=str(summary['deposit'])),sort_keys=True).encode()).hexdigest()
 
+    def correction_allowed(booking):
+        if historical(booking) or (booking.terms_version or '').startswith('import'):
+            return True
+        # Older imports may retain their original terms version. A zero-price
+        # booking with received money must also offer a way to repair its total.
+        payment=app.extensions['payment_summary'](booking)
+        return payment['total']==0 and payment['paid']>0
+
     @app.context_processor
     def context():
         if request.endpoint!='admin_payments': return {}
         booking=db.session.get(Booking,request.view_args['booking_id'])
-        if not booking or not historical(booking): return dict(historical_finances_available=False)
+        if not booking or not correction_allowed(booking): return dict(historical_finances_available=False)
         return dict(historical_finances_available=True,historical_finances_version=revision(booking),
             historical_finances_token=session.setdefault(f'historical_finances_{booking.id}',secrets.token_hex(24)),
             historical_corrections=Correction.query.filter_by(booking_id=booking.id).order_by(Correction.id.desc()).all())
@@ -75,7 +83,7 @@ def register(app,db,Correction,Booking,Entry,Change,Checkout,schedule,admin_requ
         expected=session.get(f'historical_finances_{booking.id}','')
         if not expected or not secrets.compare_digest(expected,token): abort(400)
         try:
-            if not historical(booking): raise ValueError('Historical corrections are available only after all booking dates have finished.')
+            if not correction_allowed(booking): raise ValueError('Financial corrections are available for imported or historical bookings, and zero-price bookings with recorded payments.')
             if request.form.get('version')!=revision(booking): raise ValueError('These booking or payment figures changed. Reload Payments and review the latest figures before correcting them.')
             reason=request.form.get('reason','').strip()
             if not reason or len(reason)>2000: raise ValueError('Enter a correction reason of up to 2,000 characters.')

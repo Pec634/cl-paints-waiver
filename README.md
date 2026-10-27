@@ -429,7 +429,8 @@ openings are not rewritten.
 
 ### Correcting imported historical finances
 
-For bookings whose event dates have all finished, open **Payments & deposit >
+For imported bookings (including upcoming events), bookings whose dates have all
+finished, or zero-price bookings with recorded payments, open **Payments & deposit >
 Correct imported / historical booking figures**. Enter the corrected event price
 and travel charge, then optionally add an **additional missing payment already
 received** with its original date, method (SumUp, Cash or Bank transfer) and receipt
