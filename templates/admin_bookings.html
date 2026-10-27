@@ -77,6 +77,7 @@ Bookings | CL Paints
                 <input id="bookingSearch" type="search" placeholder="Search booking requests" autocomplete="off">
             </div>
 
+            <div class="table-wrap booking-requests-scroll" role="region" aria-label="Booking requests" tabindex="0">
             <div class="booking-table booking-request-list" data-workspace-list>
                     {% for row in booking_rows %}
                         {% set booking = row.booking %}
@@ -158,6 +159,7 @@ Bookings | CL Paints
                     {% else %}
                         <p class="booking-empty">No bookings match this filter.</p>
                     {% endfor %}
+            </div>
             </div>
         </section>
     </main>
