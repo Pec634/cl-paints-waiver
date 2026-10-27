@@ -44,7 +44,7 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
         bookings = []
         for booking in Booking.query.filter_by(status='Accepted').all():
             for index, event in enumerate(schedule(booking)):
-                if event.get('date') == selected.isoformat():
+                if event.get('date') == selected.isoformat() and event.get('publicity_type') == 'Public':
                     cashup = Cashup.query.filter_by(booking_id=booking.id, event_index=index,
                         event_date=selected.isoformat()).order_by(Cashup.revision.desc()).first()
                     bookings.append(dict(booking=booking, event=event, index=index, cashup=cashup))

@@ -20,7 +20,7 @@ class BookingCashupTest(unittest.TestCase):
         self.booking.status = 'Accepted'
         self.date = (datetime.now(ZoneInfo('Europe/London')).date() - timedelta(days=1)).isoformat()
         self.booking.event_schedule = json.dumps(dict(events=[dict(date=self.date, start_time='09:00',
-            finish_time='17:00', event_type='Fair', event_address='Test venue', charge_type='Revenue sharing', revenue_share_percent='20')]))
+            finish_time='17:00', event_type='Fair', publicity_type='Public', event_address='Test venue', charge_type='Revenue sharing', revenue_share_percent='20')]))
         main.db.session.commit()
         self.admin = self.fixture.admin
         self.client = self.fixture.client

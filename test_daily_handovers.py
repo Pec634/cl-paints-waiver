@@ -175,10 +175,30 @@ class DailyHandoversTest(unittest.TestCase):
         booking=self.fixture.booking
         booking.status='Accepted'
         booking.event_schedule=json.dumps(dict(events=[dict(date=selected,start_time='09:00',
-            finish_time='17:00',event_type='Fair',event_address='Venue',charge_type='Revenue sharing',
+            finish_time='17:00',event_type='Fair',publicity_type='Public',event_address='Venue',charge_type='Revenue sharing',
             revenue_share_percent='20') for _ in range(count)]))
         main.db.session.commit()
         return selected,booking
+
+    def test_private_events_do_not_require_cashup(self):
+        selected, booking = self.prepare_event_day(count=2)
+        schedule = json.loads(booking.event_schedule)
+        schedule['events'][0]['publicity_type'] = 'Private'
+        booking.event_schedule = json.dumps(schedule)
+        main.db.session.commit()
+        status = self.admin.get(self.path+'?date='+selected+'&cashup_status=1').json
+        self.assertEqual(status['pending'], 1)
+        self.assertEqual([event['day'] for event in status['events']], [1])
+        schedule['events'][1]['publicity_type'] = 'Private'
+        booking.event_schedule = json.dumps(schedule)
+        main.db.session.commit()
+        self.assertEqual(self.admin.get(self.path+'?date='+selected+'&cashup_status=1').json,
+                         dict(pending=0, events=[]))
+        self.assertIn(b'No finished event days awaiting cash-up.', self.admin.get('/admin/dashboard').data)
+        self.assertEqual(self.admin.post(self.path, data=self.data(handover_date=selected, action='complete')).status_code, 302)
+        self.assertEqual(self.latest().details['cashups'], [])
+        self.assertEqual(self.admin.post(self.path, data=self.data(handover_date=selected,
+            action='acknowledge', acknowledged_by='Receiving manager')).status_code, 302)
 
     def test_event_handovers_require_each_cashup_and_ordinary_days_do_not(self):
         ordinary=self.admin.get(self.path+'?cashup_status=1')

@@ -402,13 +402,13 @@ needing change/top-ups, and remaining counted till cash. The target is the
 original opening mix. This is an allocation guide and does not automatically
 record a transfer or include cash already moved to the safe.
 
-The daily handover includes an **Event-day cash-up** section for confirmed
+The daily handover includes an **Event-day cash-up** section for confirmed public
 booking dates. Each event opens its existing cash-up inside the handover, with
 opening/closing checks, denomination counters and float-return advice. Cash-up
 saves do not navigate away from unsaved handover notes. A status refresh enables
-handover completion once every event's cash-up is closed; the server checks this
+handover completion once every public event's cash-up is closed; the server checks this
 again on completion and acknowledgement. Drafts remain available while cash-ups
-are in progress. Dates without confirmed booking events do not require cash-up.
+are in progress. Private events and dates without confirmed public booking events do not require cash-up.
 Saved handovers retain references to the cash-up revisions used at completion.
 
 In **Bookings > Manage request**, eligible unconfirmed requests have a **Delete
