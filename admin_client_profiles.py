@@ -51,7 +51,7 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
             if future: upcoming.append(dict(booking=booking,date=min(future)))
         summary=dict(bookings=len(bookings),confirmed=len(active),repeat=len(bookings)>=2,
             loyal=len(active)>=2,paid=sum(p['paid'] for p in payments.values()),
-            outstanding=sum(payments[b.id]['outstanding'] for b in active),unread=unread,
+            outstanding=sum(payments[b.id]['outstanding'] for b in bookings if b.status in ('Accepted', 'Awaiting Payment')),unread=unread,
             review=sum(b.status=='Under Review' for b in bookings))
         query=None
         if tab in ('bookings','payments'):
@@ -74,7 +74,7 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
             members=[dict(person=p,points=(db.session.get(Balance,p.id).points if db.session.get(Balance,p.id) else 0)) for p in rows]
         invoices=Invoice.query.filter(Invoice.booking_id.in_([b.id for b in rows])).order_by(Invoice.created_at.desc()).all() if tab=='payments' else []
         response=app.make_response(render_template('admin_client_profile.html',account=account,summary=summary,
-            tab=tab,rows=rows,pagination=pagination,payments=payments,invoices=invoices,members=members,
+            tab=tab,rows=rows,pagination=pagination,payments=payments,invoices=invoices,members=members,client_bookings=bookings,
             upcoming=sorted(upcoming,key=lambda row:row['date'])[:3],
             enquiries=Enquiry.query.filter_by(client_id=account.id).order_by(Enquiry.created_at.desc()).limit(5).all(),
             owners=Owner.query.filter_by(client_id=account.id).all(),today=today,client_csrf=csrf))

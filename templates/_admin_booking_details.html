@@ -1,0 +1,40 @@
+<h3>{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }}</h3><p>{{ booking.email }} &middot; {{ booking.phone }} &middot; {{ booking.status }}</p>
+                                    {% include '_booking_intake_details.html' %}
+                                    <p><a class="btn small" href="{{ url_for('admin_payments',booking_id=booking.id) }}">Payments &amp; deposit</a> {% if booking.status == 'Accepted' %}<a class="btn small" href="{{ url_for('connecteam_rota') }}">Staff rota</a>{% endif %}</p>
+                                    <dl class="calendar-details">
+                                        <dt>Internal notes</dt><dd>{{ booking.internal_notes or "None" }}</dd><dt>Request type</dt><dd>{{ "Availability" if booking.request_type == "availability" else "Booking" }}</dd>
+                                        <dt>Scheduled hours</dt><dd>{{ "%.2f"|format(row.total_hours) }} hours</dd>
+                                        {% for event in row.events %}
+                                        <dt>Venue</dt><dd>{{ event.event_address }}{% if event.event_address and event.event_address|trim %} <a class="client-text-link" href="https://www.google.com/maps/search/?api=1&amp;query={{ event.event_address|urlencode }}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>{% endif %}</dd>
+                                        <dt>Day {{ loop.index }}</dt><dd>{{ event.date }} · {{ event.start_time }}–{{ event.finish_time }} · {{ event.event_address }}</dd>
+                                        <dt>Event</dt><dd>{{ event.event_type }}: {{ event.theme }}</dd>
+                                        <dt>Pitch fee</dt><dd>{{ "Yes" if event.pitch_fee_required else "No" }}</dd>
+                                        {% if event.pitch_fee_required %}
+                                        <dt>CL Paints pitch cost</dt><dd>{% if event.get('pitch_fee_amount') is not none %}£{{ event.pitch_fee_amount }}{% else %}Not recorded{% endif %} (excluded from client event cost)</dd>
+                                        {% endif %}
+                                        <dt>Attendees</dt><dd>{{ event.expected_attendees or "Not provided" }}</dd>
+                                        <dt>Setting</dt><dd>{{ event.publicity_type }}</dd>
+                                        <dt>Painting location</dt><dd>{{ event.location_type }}</dd>
+                                        <dt>Who pays</dt><dd>{{ event.charge_type }}{% if event.revenue_share_percent %} · {{ event.revenue_share_percent }}% to the organiser{% endif %}</dd>
+                                        <dt>Christmas/Easter</dt><dd>{{ event.celebrates_christmas_easter or "Not provided" }}</dd>
+                                        <dt>Additional information</dt><dd>{{ event.additional_info or "None" }}</dd>
+                                        {% endfor %}
+                                        <dt>Same details each date</dt><dd>{{ "Yes" if row.same_details else "No" }}</dd>
+                                        <dt>Client type</dt><dd>{{ booking.client_type|title }}</dd>
+                                        <dt>Job title</dt><dd>{{ booking.job_title or "Not provided" }}</dd>
+                                        <dt>Client address</dt><dd>{{ booking.client_address }}</dd>
+                                        <dt>Event estimate</dt><dd>£{{ "%.2f"|format(booking.total_event_cost) }}</dd>
+                                        <dt>Travel charge</dt><dd>£{{ "%.2f"|format(booking.travel_charge) }}</dd>
+                                        <dt>Current total</dt><dd>£{{ "%.2f"|format(row.final_total) }}</dd>
+                                        <dt>Payment preference</dt><dd>{{ booking.payment_preference }}</dd>
+                                        <dt>Referral code</dt><dd>{% if booking.promo_code %}<a href="{{ url_for('rewards.dashboard', q=booking.promo_code) }}">{{ booking.promo_code }}</a>{% else %}None{% endif %}</dd>
+                                        <dt>Referral status</dt><dd>{{ "Verified" if booking.referral_verified else ("Pending migration" if booking.promo_code and booking.referral_verified is none else ("Invalid" if booking.promo_code else "Not provided")) }}</dd>
+                                        <dt>Ethnicity</dt><dd>{{ booking.ethnicity }}{% if booking.ethnicity_detail %} · {{ booking.ethnicity_detail }}{% endif %}</dd>
+                                        <dt>Religion</dt><dd>{{ booking.religion }}</dd>
+                                        <dt>Date of birth</dt><dd>{{ booking.date_of_birth.strftime("%d/%m/%Y") if booking.date_of_birth else 'Not provided' }}</dd>
+                                        <dt>Additional information</dt><dd>{{ booking.additional_info or "None" }}</dd>
+                                        <dt>Client signature</dt><dd>{{ booking.signature }}</dd>
+                                        <dt>CL Paints signature</dt><dd>{{ booking.company_signature or "Not signed" }}</dd>
+                                    </dl>
+{% set booking_invoices = invoice_links(booking) %}{% include '_booking_invoices.html' %}
+{% include '_booking_cashup_summary.html' %}

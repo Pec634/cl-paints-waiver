@@ -168,7 +168,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
         totals = dict(received=Decimal(0), outstanding=Decimal(0), deposits=Decimal(0), overdue=Decimal(0))
         for booking in Booking.query.order_by(Booking.submitted_at.desc()).all():
             payment = summary(booking)
-            active = booking.status in ('Accepted', 'Under Review')
+            active = booking.status in ('Accepted', 'Under Review', 'Awaiting Payment')
             remaining = min(payment['outstanding'], max(Decimal(0), payment['deposit']-payment['paid'])) if active else Decimal(0)
             deposit_due = bool(remaining and payment['deposit_due'] and payment['deposit_due'] <= today)
             overdue = active and payment['outstanding'] > 0 and bool(payment['balance_due']) and payment['balance_due'] < today
@@ -183,7 +183,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
     def calendar_rows():
         buffer = int(settings().get('calendar_buffer_minutes','60'))
         rows=[]
-        for booking in Booking.query.filter(Booking.status.in_(['Accepted','Under Review'])).all():
+        for booking in Booking.query.filter(Booking.status.in_(['Accepted','Under Review','Awaiting Payment'])).all():
             for index, event in enumerate(schedule(booking),1):
                 try:
                     start=datetime.fromisoformat(event['date']+'T'+event['start_time'])
@@ -196,7 +196,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
             rows.append(dict(booking=None,label=block.reason,start=block.starts_at,end=block.ends_at,
                 occupied_start=block.starts_at,occupied_end=block.ends_at,day=None,conflicts=[]))
         for row in rows:
-            if row['booking'] and row['booking'].status=='Under Review':
+            if row['booking'] and row['booking'].status in ('Under Review', 'Awaiting Payment'):
                 others=[other for other in rows if not other['booking'] or other['booking'].status=='Accepted']
             else:
                 others=rows

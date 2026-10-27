@@ -1,0 +1,3 @@
+<section class="panel"><h2>Invoice documents</h2>
+{% for document in invoice_documents(booking) %}<p><a class="btn" href="{{ url_for('invoice_document',document_id=document.id) }}">Download {{ document.filename }}</a></p>{% else %}<p>No invoice documents uploaded.</p>{% endfor %}
+</section>

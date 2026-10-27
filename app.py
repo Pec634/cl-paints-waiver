@@ -513,6 +513,12 @@ from business_tools import define_models as define_tool_models
 tool_models = define_tool_models(db)
 from sumup_invoices import define_model as define_invoice_model
 BookingInvoice = define_invoice_model(db)
+from invoice_documents import define_model as define_invoice_document_model
+InvoiceDocument = define_invoice_document_model(db)
+from booking_cashup import define_model as define_cashup_model
+BookingCashup = define_cashup_model(db)
+from daily_handovers import define_model as define_handover_model
+DailyHandover = define_handover_model(db)
 from booking_requests import define_model as define_booking_request_model
 BookingRequest = define_booking_request_model(db)
 from booking_messages import define_model as define_booking_message_model
@@ -668,7 +674,8 @@ def generate_customer_number():
 @admin_required
 def admin_dashboard():
     from rewards import fetch_one
-    today = datetime.now().date()
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo('Europe/London')).date()
     tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
     expiry_limit = tomorrow + timedelta(days=30)
     # Include waivers valid through today, matching booking code date semantics.
@@ -2075,7 +2082,7 @@ def admin_bookings():
     bookings = Booking.query.order_by(Booking.submitted_at.desc()).all()
     from zoneinfo import ZoneInfo
     today = datetime.now(ZoneInfo('Europe/London')).date()
-    filters = [('all','All bookings'),('review','Awaiting review'),('confirmed','All time bookings confirmed'),
+    filters = [('all','All bookings'),('review','Awaiting review'),('payment','Reviewed — awaiting payment'),('confirmed','All time bookings confirmed'),
                ('declined','Declined'),('cancelled','Cancelled'),
                ('upcoming','Future bookings confirmed'),('requests','Change / cancellation requests'),
                ('deposit','Deposits due'),('balance','Balances outstanding')]
@@ -2109,8 +2116,8 @@ def admin_bookings():
         for event in events:
             try: dates.append(datetime.strptime(event.get('date',''), '%Y-%m-%d').date())
             except (ValueError,TypeError): pass
-        active = booking.status in ('Accepted','Under Review')
-        flags = dict(all=True, review=booking.status == 'Under Review', confirmed=booking.status == 'Accepted',
+        active = booking.status in ('Accepted','Under Review','Awaiting Payment')
+        flags = dict(all=True, review=booking.status == 'Under Review', payment=booking.status == 'Awaiting Payment', confirmed=booking.status == 'Accepted',
             upcoming=booking.status == 'Accepted' and any(date >= today for date in dates),
             deposit=active and payment['deposit'] > payment['paid'] and bool(payment['deposit_due']) and payment['deposit_due'] <= today,
             balance=active and payment['outstanding'] > 0,
@@ -2154,15 +2161,19 @@ def admin_manage_booking(booking_id):
     previous_status = booking.status
     action = request.form.get("action", "update")
     from booking_on_behalf import pending_agreement
-    if pending_agreement(booking) and (action == 'accept' or (action == 'update' and request.form.get('status') == 'Accepted')):
+    if pending_agreement(booking) and (action in ('accept', 'request_payment') or (action == 'update' and request.form.get('status') in ('Accepted', 'Awaiting Payment'))):
         return redirect(url_for('admin_bookings', consent_pending=booking.id))
     if action == "accept":
         booking.status = "Accepted"
     elif action == "decline":
         booking.status = "Declined"
+    elif action == 'request_payment':
+        if booking.status not in ('Under Review', 'Awaiting Payment', 'Accepted'):
+            return redirect(url_for('admin_bookings', payment_error='review'))
+        booking.status = 'Awaiting Payment'
     elif action == "update":
         requested_status = request.form.get("status", booking.status)
-        if requested_status in {"Under Review", "Accepted", "Declined"}:
+        if requested_status in {"Under Review", "Awaiting Payment", "Accepted", "Declined"}:
             booking.status = requested_status
     else:
         return redirect(url_for("admin_bookings"))
@@ -2218,6 +2229,11 @@ def admin_manage_booking(booking_id):
             return redirect(url_for("admin_bookings", update_error="signature"))
         booking.company_signature = company_signature
 
+    from payment_workflow import confirmation_ready
+    if booking.status == 'Accepted' and previous_status != 'Accepted':
+        if previous_status != 'Awaiting Payment' or not confirmation_ready(booking):
+            db.session.rollback()
+            return redirect(url_for('admin_bookings', payment_error='confirmation'))
     db.session.commit()
     status_email_sent = None
     status_email_sent = app.extensions['client_booking_updated'](booking, previous_snapshot, booking_schedule_events)
@@ -2761,8 +2777,16 @@ register_tools(app, db, tool_models, Booking, ClientAccount, ClientEnquiry, Part
 
 from sumup_invoices import register as register_sumup_invoices
 register_sumup_invoices(app, db, BookingInvoice, Booking, admin_required, get_current_client, booking_schedule_events)
+from invoice_documents import register as register_invoice_documents
+register_invoice_documents(app, db, InvoiceDocument, BookingInvoice, Booking, ClientAccount, admin_required, get_current_client)
 from sumup_checkout import register as register_sumup_checkout
 register_sumup_checkout(app, db, SumupCheckout, Booking, tool_models[1], get_current_client, admin_required, get_business_settings)
+from booking_cashup import register as register_booking_cashup
+register_booking_cashup(app, db, BookingCashup, Booking, booking_schedule_events, admin_required)
+from daily_handovers import register as register_daily_handovers
+register_daily_handovers(app, db, DailyHandover, Booking, booking_schedule_events, admin_required, BookingCashup)
+from daily_operations import register as register_daily_operations
+register_daily_operations(app, db, Booking, DailyHandover, BookingCashup, booking_schedule_events)
 
 from booking_requests import register as register_booking_requests
 register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_current_client,

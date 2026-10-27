@@ -49,12 +49,12 @@ class NotificationsTest(unittest.TestCase):
 
     def test_status_updates_and_failed_email_preserve_booking(self):
         with patch.object(main, 'send_client_email', return_value=False):
-            response = self.update(action='accept')
+            response = self.update(action='request_payment')
         self.assertIn('status_email=failed', response.location)
-        self.assertEqual(self.booking.status, 'Accepted')
+        self.assertEqual(self.booking.status, 'Awaiting Payment')
         self.assertFalse(Notice.query.one().email_sent)
         self.assertIn('Status', Change.query.one().changes)
-        self.assertIn(b'Confirmed', self.client.get(f'/client/bookings/{self.booking.id}').data)
+        self.assertIn(b'Reviewed &amp; awaiting payment', self.client.get(f'/client/bookings/{self.booking.id}').data)
         self.update(action='decline')
         self.assertIn(b'Unable to confirm', self.client.get(f'/client/bookings/{self.booking.id}').data)
         self.assertEqual(Notice.query.count(), 2)

@@ -1,4 +1,4 @@
-﻿{% extends 'rewards/base.html' %}
+{% extends 'rewards/base.html' %}
 {% block title %}Availability calendar | CL Paints{% endblock %}
 {% macro status_class(row) -%}{% if not row.booking %}unavailable{% elif row.booking.status == 'Accepted' %}accepted{% else %}review{% endif %}{%- endmacro %}
 {% macro event_title(row) -%}
@@ -9,35 +9,7 @@
 {% set booking = row.booking %}
 <p class="calendar-status calendar-status--{{ status_class(row) }}">{{ booking.status }}</p>
 <h3>{{ event_title(row) }}</h3>
-<dl class="calendar-details">
-  <dt>Reference</dt><dd>{{ booking.public_reference }}</dd>
-  <dt>Event date</dt><dd>{{ row.start.strftime('%A %d %B %Y') }}</dd>
-  <dt>Time (UK)</dt><dd>{{ row.start.strftime('%H:%M') }}–{{ row.end.strftime('%H:%M') }}</dd>
-  <dt>Event type</dt><dd>{{ row.event.get('event_type') or booking.event_type }}</dd>
-  <dt>Theme / event name</dt><dd>{{ row.event.get('theme') or booking.theme or 'Not specified' }}</dd>
-  {% set venue_address = row.event.get('event_address') or booking.event_address %}
-  <dt>Venue</dt><dd>{{ venue_address }}{% if venue_address and venue_address|trim %}
-    <a class="client-text-link" href="https://www.google.com/maps/search/?api=1&amp;query={{ venue_address|urlencode }}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>
-  {% endif %}</dd>
-  <dt>Client</dt><dd>{{ booking.first_name }} {{ booking.last_name }}</dd>
-  <dt>Email</dt><dd>{{ booking.email }}</dd>
-  <dt>Phone</dt><dd>{{ booking.phone }}</dd>
-  <dt>Request type</dt><dd>{{ booking.request_type }}</dd>
-  <dt>Client type</dt><dd>{{ booking.client_type }}</dd>
-  <dt>Publicity</dt><dd>{{ row.event.get('publicity_type') or booking.publicity_type }}</dd>
-  <dt>Location type</dt><dd>{{ booking.location_type }}</dd>
-  <dt>Charge type</dt><dd>{{ booking.charge_type }}</dd>
-  <dt>Expected attendees</dt><dd>{{ booking.expected_attendees if booking.expected_attendees is not none else 'Not specified' }}</dd>
-  <dt>Pitch fee required</dt><dd>{{ 'Yes' if row.event.get('pitch_fee_required', booking.pitch_fee_required) else 'No' }}</dd>
-  <dt>Payment preference</dt><dd>{{ booking.payment_preference }}</dd>
-  <dt>Event cost (booking total)</dt><dd>£{{ '%.2f'|format(booking.total_event_cost) }}</dd>
-  <dt>Travel charge (booking total)</dt><dd>£{{ '%.2f'|format(booking.travel_charge) }}</dd>
-  <dt>Additional information</dt><dd>{{ booking.additional_info or 'None' }}</dd>
-  <dt>Internal notes</dt><dd>{{ booking.internal_notes or 'None' }}</dd>
-  <dt>Submitted</dt><dd>{{ booking.submitted_at.strftime('%d/%m/%Y %H:%M') }}</dd>
-  <dt>Setup / travel buffer</dt><dd>{{ row.occupied_start.strftime('%d/%m/%Y %H:%M') }}–{{ row.occupied_end.strftime('%d/%m/%Y %H:%M') }}</dd>
-</dl>
-<a class="btn" href="{{ url_for('admin_bookings') }}#booking-{{ booking.id }}">Open full booking</a>
+<p>{{ row.start.strftime('%A %d %B %Y %H:%M') }}–{{ row.end.strftime('%H:%M') }} (UK time)</p><p>Setup / travel buffer: {{ row.occupied_start.strftime('%d/%m/%Y %H:%M') }}–{{ row.occupied_end.strftime('%d/%m/%Y %H:%M') }}</p>{% with row=admin_booking_detail_row(booking) %}{% include '_admin_booking_details.html' %}{% endwith %}
 {% else %}
 <p class="calendar-status calendar-status--unavailable">Unavailable</p>
 <h3>{{ row.label }}</h3>
@@ -52,6 +24,7 @@
 <p>UK local times. Accepted bookings and unavailable time reserve space; requests under review are shown for planning. Setup/travel buffers are configured in Settings.</p>
 <div class="calendar-legend" aria-label="Calendar colour key">
   <span class="calendar-status calendar-status--review">Under Review</span>
+  <span class="calendar-status calendar-status--review">Reviewed — awaiting payment</span>
   <span class="calendar-status calendar-status--accepted">Accepted</span>
   <span class="calendar-status calendar-status--unavailable">Unavailable</span>
 </div>

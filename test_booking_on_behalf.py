@@ -64,7 +64,7 @@ class OnBehalfTest(unittest.TestCase):
         bad = self.form(); bad['csrf_token'] = 'invalid'
         self.assertEqual(self.admin.post(self.path, data=bad).status_code, 400)
 
-    def test_client_signs_in_portal_and_admin_can_then_accept(self):
+    def test_client_signs_in_portal_before_admin_requests_payment(self):
         booking = self.create()
         self.admin.post(f'/admin/bookings/{booking.id}/manage', data={'action': 'accept'})
         self.assertEqual(booking.status, 'Under Review')
@@ -88,8 +88,8 @@ class OnBehalfTest(unittest.TestCase):
         self.client.post(path, data=data)
         self.assertEqual(main.notification_models[0].query.filter_by(booking_id=booking.id).count(), 1)
         with patch.object(main, 'send_client_email', return_value=True):
-            self.admin.post(f'/admin/bookings/{booking.id}/manage', data={'action': 'accept'})
-        self.assertEqual(booking.status, 'Accepted')
+            self.admin.post(f'/admin/bookings/{booking.id}/manage', data={'action': 'request_payment'})
+        self.assertEqual(booking.status, 'Awaiting Payment')
 
     def test_stale_or_missing_consent_does_not_sign(self):
         booking = self.create()

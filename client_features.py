@@ -92,7 +92,7 @@ def register(app, db, Preference, Booking, Invoice, BookingRequest, current_clie
             booking = owned(account).filter_by(id=request.view_args['booking_id']).first()
             return dict(booking_checklist=checklist(account, booking)) if booking else {}
         bookings = owned(account).order_by(Booking.submitted_at.desc()).all()
-        active = [b for b in bookings if b.status in ('Accepted', 'Under Review')]
+        active = [b for b in bookings if b.status in ('Accepted', 'Under Review', 'Awaiting Payment')]
         upcoming = []
         today = datetime.now(ZoneInfo('Europe/London')).date()
         for booking in active:

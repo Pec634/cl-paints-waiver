@@ -1,0 +1,10 @@
+{% macro counter(field, label, locked=false) %}
+{% set counts=values.get('denominations',{}).get(field,{}) %}
+{% set enabled=counts or (not latest and field=='opening_till') or (latest and field=='closing_till' and values.get('denominations',{}).get('opening_till')) %}
+{% if request.method=='POST' and not locked %}{% set enabled=request.form.get('count_' ~ field)=='yes' %}{% endif %}
+<fieldset class="denomination-counter" data-denomination-counter="{{ field }}"><legend>{{ label }}</legend>
+<label class="sheet-check"><input type="checkbox" name="count_{{ field }}" value="yes" data-count-toggle {% if enabled %}checked{% endif %} {% if locked %}disabled{% endif %}> Count individual notes &amp; coins</label>
+<p>Enter the number of each note or coin, not its monetary value.</p>
+<div class="denomination-grid">{% for pence,label in cashup_denominations %}<label>{{ '&pound;'|safe ~ (pence//100) if pence>=100 else label }}<input type="number" min="0" max="999999" step="1" inputmode="numeric" name="denom_{{ field }}_{{ pence }}" data-pence="{{ pence }}" value="{{ request.form.get('denom_' ~ field ~ '_' ~ pence,0) if request.method=='POST' and enabled and not locked else counts.get(pence|string,0) }}" {% if locked %}readonly{% endif %}><output data-denomination-subtotal>&pound;0.00</output></label>{% endfor %}</div>
+<p><strong>Counted total: <output data-denomination-total>&pound;{{ values[field] }}</output></strong></p></fieldset>
+{% endmacro %}

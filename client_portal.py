@@ -262,7 +262,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                         upcoming.append(dict(booking=booking, event=event, days_until=(event_date - today).days))
         upcoming.sort(key=lambda item: (item['event']['date'], item['event'].get('start_time', '')))
         return render_template('client/dashboard.html', bookings=bookings[:3], upcoming=upcoming[:3],
-                               pending=sum(b.status == 'Under Review' for b in bookings), rewards=owned_rewards(account))
+                               pending=sum(b.status in ('Under Review', 'Awaiting Payment') for b in bookings), rewards=owned_rewards(account))
 
     @portal.get('/face-paint-studio')
     def studio():

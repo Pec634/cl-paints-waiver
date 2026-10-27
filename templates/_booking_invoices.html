@@ -6,5 +6,6 @@
 {% for invoice in booking_invoices %}
 <article class="client-record"><strong>{{ invoice.purpose }} · {{ invoice.reference }}</strong>
 <p>£{{ '%.2f'|format(invoice.amount) }} · Due {{ invoice.due_date.strftime('%d/%m/%Y') }}</p>
-<a class="btn" href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">View invoice in SumUp</a></article>
+{% if booking_payments_allowed(booking) or request.endpoint.startswith("admin_") %}<a class="btn" href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">View invoice in SumUp</a>{% else %}<p>Invoice payment is available after CL Paints reviews your booking and requests payment.</p>{% endif %}</article>
 {% else %}<p>No SumUp invoices attached.</p>{% endfor %}</section>
+{% include '_invoice_documents.html' %}

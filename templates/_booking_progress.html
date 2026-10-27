@@ -1,6 +1,13 @@
 <section class="panel"><h2>Your booking journey</h2>
-{% if booking.status == 'Cancelled' %}<p class="booking-admin-notice">Your booking has been cancelled by CL Paints. See the decision below for any payment or refund arrangements.</p>{% else %}<ol class="client-booking-progress" aria-label="Booking progress">
-    <li class="complete"><span aria-hidden="true">✓</span>Request received</li>
-    <li class="{{ 'current' if booking.status == 'Under Review' else 'complete' }}" {% if booking.status == 'Under Review' %}aria-current="step"{% endif %}><span aria-hidden="true">{{ '2' if booking.status == 'Under Review' else '✓' }}</span>Under review</li>
-    <li class="{{ 'complete' if booking.status == 'Accepted' else ('declined' if booking.status == 'Declined' else '') }}" {% if booking.status in ['Accepted', 'Declined'] %}aria-current="step"{% endif %}><span aria-hidden="true">{{ '✓' if booking.status == 'Accepted' else ('×' if booking.status == 'Declined' else '3') }}</span>{{ 'Unable to confirm' if booking.status == 'Declined' else 'Confirmed' }}</li>
-</ol><p>{{ 'Your booking is confirmed. We look forward to bringing the colour!' if booking.status == 'Accepted' else ('We could not confirm this request. Contact us to discuss another date or option.' if booking.status == 'Declined' else 'Your request is with us. We will check availability and contact you with the next steps.') }}</p>{% endif %}</section>
+{% if booking.status == 'Cancelled' %}<p class="booking-admin-notice">Your booking has been cancelled by CL Paints. See the decision below for any payment or refund arrangements.</p>
+{% elif booking.status == 'Declined' %}<p>Unable to confirm this request. Contact us to discuss another date or option.</p>
+{% else %}<ol class="client-booking-progress" aria-label="Booking progress">
+    <li class="complete"><span aria-hidden="true">&#10003;</span>Request received</li>
+    <li class="{{ 'current' if booking.status == 'Under Review' else 'complete' }}" {% if booking.status == 'Under Review' %}aria-current="step"{% endif %}><span aria-hidden="true">2</span>Under review</li>
+    <li class="{{ 'current' if booking.status == 'Awaiting Payment' else ('complete' if booking.status == 'Accepted' else '') }}" {% if booking.status == 'Awaiting Payment' %}aria-current="step"{% endif %}><span aria-hidden="true">3</span>Reviewed &amp; awaiting payment</li>
+    <li class="{{ 'complete' if booking.status == 'Accepted' else '' }}" {% if booking.status == 'Accepted' %}aria-current="step"{% endif %}><span aria-hidden="true">4</span>Confirmed</li>
+</ol>
+{% if booking.status == 'Awaiting Payment' %}<p>CL Paints has reviewed your request. Pay the requested deposit, or full amount if no deposit is set, so CL Paints can confirm your booking. If you have already paid, your booking is awaiting confirmation by CL Paints.</p>
+{% elif booking.status == 'Accepted' %}<p>Your booking is confirmed. We look forward to bringing the colour!</p>
+{% else %}<p>Your request is with us. We will check availability and pricing before requesting payment. Your booking is not yet confirmed.</p>{% endif %}
+{% endif %}</section>

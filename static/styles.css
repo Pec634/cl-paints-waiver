@@ -2565,7 +2565,7 @@ label.moodboard-admin-card > div {
 .client-countdown { background: linear-gradient(120deg, #fff0cf, #ffe7f0); margin-bottom: 24px; }
 .client-countdown small { font-weight: 800; color: #973565; letter-spacing: .06em; }
 .client-countdown h2 { font-size: clamp(1.8rem, 5vw, 2.4rem); margin: 14px 0; }
-.client-booking-progress { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 0; gap: 16px; }
+.client-booking-progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; padding: 0; gap: 16px; }
 .client-booking-progress li { display: grid; justify-items: start; gap: 12px; padding: 16px 0; border-top: 4px solid var(--border); color: var(--muted); font-weight: 700; }
 .client-booking-progress li span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #edf0f6; }
 .client-booking-progress .complete { border-color: #18a566; color: #14794e; }

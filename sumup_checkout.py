@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from flask import abort, flash, jsonify, redirect, request, session, url_for
 from sqlalchemy.exc import IntegrityError
 from sumup_invoices import validate_link
+from payment_workflow import payments_allowed
 
 
 def define_model(db):
@@ -80,7 +81,7 @@ def register(app,db,Checkout,Booking,Entry,current_client,admin_required,setting
         return True
     def create(booking,purpose):
         if not configured():raise ValueError('Online payments have not been enabled yet. Please contact CL Paints to arrange payment.')
-        if booking.status!='Accepted':raise ValueError('The booking must be accepted before requesting online payment.')
+        if not payments_allowed(booking):raise ValueError('CL Paints must review this booking and mark it Awaiting Payment before online payment is available.')
         summary=app.extensions['payment_summary'](booking)
         amount=min(summary['outstanding'],max(Decimal(0),summary['deposit']-summary['paid'])) if purpose=='Deposit' else summary['outstanding']
         if amount<=0:raise ValueError('No payment is due for this option. Set the deposit arrangement first, if needed.')
@@ -112,11 +113,12 @@ def register(app,db,Checkout,Booking,Entry,current_client,admin_required,setting
 
     @app.context_processor
     def context():
-        if request.endpoint not in ('admin_payments','client.booking_detail'):return {}
+        base_context = dict(booking_payments_allowed=payments_allowed)
+        if request.endpoint not in ('admin_payments','client.booking_detail'):return base_context
         booking=db.session.get(Booking,request.view_args['booking_id'])
         if not booking:return {}
         if request.endpoint=='client.booking_detail' and not owned(booking):return {}
-        return dict(sumup_online_ready=configured(),sumup_checkouts=Checkout.query.filter_by(booking_id=booking.id).order_by(Checkout.id.desc()).all())
+        return dict(base_context,sumup_online_ready=configured(),sumup_payment_allowed=payments_allowed(booking),sumup_checkouts=Checkout.query.filter_by(booking_id=booking.id).order_by(Checkout.id.desc()).all())
 
     @app.post('/client/bookings/<int:booking_id>/pay')
     def client_booking_pay(booking_id):

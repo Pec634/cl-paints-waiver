@@ -15,6 +15,7 @@
             ('admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages']),
             ('admin_calendar', 'Availability calendar', current == 'admin_calendar'),
             ('event_day_dashboard', 'Event-day tools', current in ['event_day_dashboard','kiosk_setup']),
+            ('admin_daily_handovers', 'Daily handovers', current == 'admin_daily_handovers'),
             ('connecteam_rota', 'Staff rota', current == 'connecteam_rota'),
             ('forms_offers', 'Forms & seasonal offers', current == 'forms_offers'),
             ('admin_clients', 'Clients', current in ['admin_clients','admin_client_profile']),
@@ -43,7 +44,7 @@
             ('backups', 'Backup & recovery', current == 'backups'),
             ('admin_website_report', 'Website report', current == 'admin_website_report')
         ] %}
-        {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard','admin_calendar','event_day_dashboard','connecteam_rota','forms_offers'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards','loyalty.check_in'] else ('Communications' if endpoint in ['admin_notification_centre','communications_messages','communications_public_enquiries','communications_history','communications_templates','communications_configuration','wedding_followup_settings','marketing_dashboard'] else ('Website & content' if endpoint in ['admin_website_builder','admin_website_stories','admin_photo_library','studio_gallery_admin','admin_website_report'] else ('Finance & reports' if endpoint in ['payments_overview','admin_reports','admin_qr_analytics'] else 'System & settings')))) %}
+        {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard','admin_calendar','event_day_dashboard','admin_daily_handovers','connecteam_rota','forms_offers'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards','loyalty.check_in'] else ('Communications' if endpoint in ['admin_notification_centre','communications_messages','communications_public_enquiries','communications_history','communications_templates','communications_configuration','wedding_followup_settings','marketing_dashboard'] else ('Website & content' if endpoint in ['admin_website_builder','admin_website_stories','admin_photo_library','studio_gallery_admin','admin_website_report'] else ('Finance & reports' if endpoint in ['payments_overview','admin_reports','admin_qr_analytics'] else 'System & settings')))) %}
         <span data-nav-group="{{ group }}" hidden></span><a href="{{ url_for(endpoint, view='all') if endpoint == 'communications_messages' else url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
         {% for section, label in [('qr-generator','QR code generator'),('business','Business details & contact information'),('booking','Pricing & booking rules'),('travel','Travel charges'),('operations','Availability & travel buffer'),('account','Admin account & password'),('social','Social media & reviews'),('website_giveaway','Website giveaway announcements')] %}

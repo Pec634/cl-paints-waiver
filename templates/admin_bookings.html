@@ -4,7 +4,7 @@
 Bookings | CL Paints
 {% endblock %}
 
-{% block body %}
+{% block body %}<link rel="stylesheet" href="{{ url_for('static',filename='admin-calendar.css') }}">
 <div class="admin">
     {% include '_admin_sidebar.html' %}
 
@@ -36,6 +36,7 @@ Bookings | CL Paints
 
         {% if request.args.get('status_email') == 'sent' %}<p class="booking-admin-notice">The client has been emailed about the booking update.</p>{% elif request.args.get('status_email') == 'failed' %}<p class="booking-admin-error">The booking is saved, but its update email could not be sent. Contact the client to let them know.</p>{% endif %}
 
+        {% if request.args.get('payment_error') %}<p class="booking-admin-error" role="alert">Review the booking and mark it Awaiting Payment first. Confirmation requires the recorded deposit, or full payment if no deposit is set. Set the payment schedule on the booking's Payments page.</p>{% endif %}
         <section class="stats">
             <article>
                 <span>Total requests</span>
@@ -85,7 +86,7 @@ Bookings | CL Paints
                             <th>Event address</th>
                             <th>Event date</th>
                             <th>Status</th>
-                            <th>Details</th>
+                            <th>Invoices</th><th>Details</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -99,56 +100,20 @@ Bookings | CL Paints
                             <td data-search-event="{{ booking.event_type }} {{ booking.event_address }}">{{ booking.event_address }}</td>
                             <td>{{ booking.event_date.strftime("%d/%m/%Y") }}</td>
                             <td>{% set badge_status = booking.status %}{% include '_status_badge.html' %}{% if booking_pending_agreement(booking) %}<p>Client signature pending</p>{% endif %}</td>
+                            <td>{% include '_invoice_documents.html' %}{% for invoice in invoice_links(booking) %}<p><a href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">Invoice {{ invoice.reference }}</a></p>{% endfor %}</td>
                             <td>
                                 <a class="btn small" href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Activity &amp; date changes</a>
                                 {% if booking.status == 'Under Review' %}<a class="btn small primary" href="{{ url_for('admin_edit_booking', booking_id=booking.id) }}">Edit booking details</a>{% endif %}
                                 <a class="btn small" href="{{ url_for('admin_booking_messages', booking_id=booking.id) }}">Messages{% if booking_message_counts.get(booking.id) %} &middot; {{ booking_message_counts[booking.id] }} unread{% endif %}</a>
                                 <details class="booking-detail">
-                                    <summary>View</summary>
-                                    {% include '_booking_intake_details.html' %}
-                                    <p><a class="btn small" href="{{ url_for('admin_payments',booking_id=booking.id) }}">Payments &amp; deposit</a> {% if booking.status == 'Accepted' %}<a class="btn small" href="{{ url_for('connecteam_rota') }}">Staff rota</a>{% endif %}</p>
-                                    <dl>
-                                        <dt>Request type</dt><dd>{{ "Availability" if booking.request_type == "availability" else "Booking" }}</dd>
-                                        <dt>Scheduled hours</dt><dd>{{ "%.2f"|format(row.total_hours) }} hours</dd>
-                                        {% for event in row.events %}
-                                        <dt>Day {{ loop.index }}</dt><dd>{{ event.date }} · {{ event.start_time }}–{{ event.finish_time }} · {{ event.event_address }}</dd>
-                                        <dt>Event</dt><dd>{{ event.event_type }}: {{ event.theme }}</dd>
-                                        <dt>Pitch fee</dt><dd>{{ "Yes" if event.pitch_fee_required else "No" }}</dd>
-                                        {% if event.pitch_fee_required %}
-                                        <dt>CL Paints pitch cost</dt><dd>{% if event.get('pitch_fee_amount') is not none %}£{{ event.pitch_fee_amount }}{% else %}Not recorded{% endif %} (excluded from client event cost)</dd>
-                                        {% endif %}
-                                        <dt>Attendees</dt><dd>{{ event.expected_attendees or "Not provided" }}</dd>
-                                        <dt>Setting</dt><dd>{{ event.publicity_type }}</dd>
-                                        <dt>Painting location</dt><dd>{{ event.location_type }}</dd>
-                                        <dt>Who pays</dt><dd>{{ event.charge_type }}{% if event.revenue_share_percent %} · {{ event.revenue_share_percent }}% to the organiser{% endif %}</dd>
-                                        <dt>Christmas/Easter</dt><dd>{{ event.celebrates_christmas_easter or "Not provided" }}</dd>
-                                        <dt>Additional information</dt><dd>{{ event.additional_info or "None" }}</dd>
-                                        {% endfor %}
-                                        <dt>Same details each date</dt><dd>{{ "Yes" if row.same_details else "No" }}</dd>
-                                        <dt>Client type</dt><dd>{{ booking.client_type|title }}</dd>
-                                        <dt>Job title</dt><dd>{{ booking.job_title or "Not provided" }}</dd>
-                                        <dt>Client address</dt><dd>{{ booking.client_address }}</dd>
-                                        <dt>Event estimate</dt><dd>£{{ "%.2f"|format(booking.total_event_cost) }}</dd>
-                                        <dt>Travel charge</dt><dd>£{{ "%.2f"|format(booking.travel_charge) }}</dd>
-                                        <dt>Current total</dt><dd>£{{ "%.2f"|format(row.final_total) }}</dd>
-                                        <dt>Payment preference</dt><dd>{{ booking.payment_preference }}</dd>
-                                        <dt>Referral code</dt><dd>{% if booking.promo_code %}<a href="{{ url_for('rewards.dashboard', q=booking.promo_code) }}">{{ booking.promo_code }}</a>{% else %}None{% endif %}</dd>
-                                        <dt>Referral status</dt><dd>{{ "Verified" if booking.referral_verified else ("Pending migration" if booking.promo_code and booking.referral_verified is none else ("Invalid" if booking.promo_code else "Not provided")) }}</dd>
-                                        <dt>Ethnicity</dt><dd>{{ booking.ethnicity }}{% if booking.ethnicity_detail %} · {{ booking.ethnicity_detail }}{% endif %}</dd>
-                                        <dt>Religion</dt><dd>{{ booking.religion }}</dd>
-                                        <dt>Date of birth</dt><dd>{{ booking.date_of_birth.strftime("%d/%m/%Y") if booking.date_of_birth else 'Not provided' }}</dd>
-                                        <dt>Additional information</dt><dd>{{ booking.additional_info or "None" }}</dd>
-                                        <dt>Client signature</dt><dd>{{ booking.signature }}</dd>
-                                        <dt>CL Paints signature</dt><dd>{{ booking.company_signature or "Not signed" }}</dd>
-                                    </dl>
-                                </details>
+                                    <summary>View booking details</summary><div class="calendar-detail-content">{% include '_admin_booking_details.html' %}</div></details>
                                 <details class="booking-detail booking-manage-detail">
                                     <summary>Manage request</summary>
                                     <form data-warn-unsaved method="post" action="{{ url_for('admin_manage_booking', booking_id=booking.id) }}" class="booking-manage-form">
                                         <label class="booking-field">
                                             <span>Status</span>
                                             <select name="status">
-                                                {% for status in ['Under Review', 'Accepted', 'Declined'] %}
+                                                {% for status in ['Under Review', 'Awaiting Payment', 'Accepted', 'Declined'] %}
                                                 <option value="{{ status }}" {% if booking.status == status %}selected{% endif %}>{{ status }}</option>
                                                 {% endfor %}
                                             </select>
@@ -179,7 +144,7 @@ Bookings | CL Paints
                                         </label>
                                         <div class="booking-manage-actions">
                                             <button class="btn small" type="submit" name="action" value="update">Update</button>
-                                            <button class="btn small primary" type="submit" name="action" value="accept">Accept</button>
+                                            <button class="btn small primary" type="submit" name="action" value="request_payment">Reviewed &mdash; request payment</button><button class="btn small" type="submit" name="action" value="accept">Confirm booking after payment</button>
                                             <button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>
                                         </div>
                                     </form>
@@ -188,7 +153,7 @@ Bookings | CL Paints
                         </tr>
                     {% else %}
                         <tr>
-                            <td class="booking-empty" colspan="8">No bookings match this filter.</td>
+                            <td class="booking-empty" colspan="9">No bookings match this filter.</td>
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -199,4 +164,6 @@ Bookings | CL Paints
 </div>
 
 
+<dialog id="calendar-event-dialog" class="booking-review-dialog calendar-event-dialog" aria-labelledby="calendar-dialog-title"><div class="calendar-dialog-heading"><h2 id="calendar-dialog-title">Full booking details</h2><button type="button" class="btn" data-calendar-close autofocus>Close</button></div><div id="calendar-dialog-content"></div></dialog>
+<script src="{{ url_for('static',filename='admin-calendar.js') }}" defer></script>
 {% endblock %}

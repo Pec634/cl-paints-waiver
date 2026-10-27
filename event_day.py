@@ -24,7 +24,7 @@ def register(app, db, Event, Booking, Waiver, Setting, loyalty_models, schedule,
             for index, event in enumerate(schedule(booking)):
                 if event.get('date') == selected.isoformat():
                     day_bookings[(booking.id, index + 1)] = (booking, event)
-                    booking_rows.append(dict(booking=booking, event=event))
+                    booking_rows.append(dict(booking=booking, event=event, event_index=index))
         corrections = app.extensions['loyalty_correction_model']
         for event in Event.query.filter_by(event_date=selected).order_by(Event.name).all():
             if event.booking_id and (event.booking_id, event.booking_day_number) not in day_bookings:

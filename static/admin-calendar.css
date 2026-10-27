@@ -23,3 +23,8 @@
 .calendar-dialog-heading h2 { margin: 0; }
 .calendar-event-dialog { color: #263244; background: white; }
 @media (max-width: 650px) { .calendar-details { grid-template-columns: 1fr; gap: 4px; } .calendar-details dd { margin-bottom: 10px; } .calendar-event-dialog { padding: 16px; } }
+.calendar-scroll { max-height: 70vh; overflow: auto; overscroll-behavior: contain; }
+.booking-row { cursor: pointer; }
+.booking-row:focus-visible { outline: 3px solid #325cb0; outline-offset: -3px; }
+.calendar-event-dialog { width: min(900px, 94vw); max-height: 85vh; overflow: auto; }
+.calendar-event-dialog::backdrop { background: rgb(0 0 0 / 45%); }

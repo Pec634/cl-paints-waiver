@@ -326,3 +326,87 @@ hosting cannot deliver at the due time; overdue jobs send when it resumes.
 An external scheduler can also run `flask --app app send-wedding-followups`
 every minute against the same database and email configuration. Run tests with
 `python -m unittest test_kiosk test_wedding_followups test_native_forms`.
+
+For account setup, sandbox testing and server configuration, see [SumUp setup](SUMUP_SETUP.md).
+
+### Event cash-up and revenue sharing
+
+Open **Cash-up & revenue sharing** from a booking's details, activity or Payments
+page, or use its cash-up link in Event day. Records are admin-only and separate
+for each event date. The booking must be confirmed to enter counts; events marked
+completed can still be cashed up.
+
+Save the opening till float and safe count with both checks and the checker's
+name. At closing, enter cash/card takings, refunds, internal till/safe movements,
+other cash movements and organiser transfers by method. The agreed organiser
+percentage defaults from that event day's revenue-sharing arrangement. Expected
+sharing uses cash and card takings minus refunds, excluding opening floats.
+Record who received transfers and any reference or receipt details.
+
+The live preview shows expected till/safe balances, over/short differences and
+sharing still unpaid or overpaid. Drafts can be saved during an event; closing
+requires the event day to have finished and both counts to be checked. Explain
+cash discrepancies and other movements in the notes. Corrections to a closed
+cash-up require a reason and retain all previous revisions in admin history.
+These figures do not automatically post client payments, alter invoices, move
+money or change the booking's confirmation/completion status.
+
+### Daily handovers
+
+Open **Daily handovers** in admin navigation, or open the sheet for the selected
+date from **Event-day tools**. Each date has one current sheet with a manager
+name, business planned for the day, AM/PM notes, incidents/actions, next-shift
+follow-up and staffing rows (names, roles, shifts, attendance, breaks and cover).
+Confirmed bookings for that day link to their details and cash-up.
+
+Save a draft during AM and return later for PM. To complete the sheet, fill in
+both handover sections and explicitly record incidents or select no incidents.
+Every save retains a revision. Completed-sheet corrections require a reason,
+and stale forms cannot overwrite another manager's save. Handovers and their
+staffing/incident history are admin-only. Use the date picker to revisit older
+records; future sheets can be prepared as drafts.
+
+The Dashboard's **Today & daily actions** panel brings together today's confirmed
+bookings, handover status and staffing, bookings awaiting payment, finished event
+days needing cash-up, and unresolved cash-count or organiser-sharing differences.
+Dates use Europe/London time. A cash-count review records the reviewer and their
+explanation in a new revision without altering money. Unpaid/overpaid sharing
+remains flagged; correcting cash-up figures clears the previous review.
+
+Handovers also record separate AM/PM managers and planned versus actual staff
+shift times. A receiving manager can acknowledge a saved completed handover;
+subsequent content corrections require fresh acknowledgement. Existing sheets
+and staffing entries continue to work without the additional fields.
+
+Use **Print / save PDF** on a saved handover or cash-up to open an admin-only
+report of its saved revision, then use the browser's print dialog. Reports retain
+manager/checker names, times and correction notes; unsaved edits are not included.
+Handover and cash-up editors open as large scrollable pop-up sheets with section
+shortcuts. Handover staffing uses labelled cards for each person, with paired
+planned/actual shift fields. Cash-up groups sales, refunds, cash movements,
+organiser transfers and physical closing counts. Both layouts adapt to phones.
+Closing a sheet retains unsaved entries while you stay on the page; reopen it
+with the Open sheet button. Save before navigating away. Without dialog support,
+the forms remain available directly on the page.
+
+Cash-up can count individual GBP notes (&pound;50, &pound;20, &pound;10, &pound;5)
+and coins (&pound;2, &pound;1, 50p, 20p, 10p, 5p, 2p, 1p) for the opening float,
+opening safe, closing till and closing safe. Enter quantities, not monetary
+amounts. Enabled counters calculate the corresponding cash total, which is also
+recalculated by the server when saved. Manual totals remain available for older
+records. Saved breakdowns appear in printable cash-up reports.
+
+When the opening float and closing till have denomination counts, **Put the float
+back** shows the quantity available to return for each denomination, shortages
+needing change/top-ups, and remaining counted till cash. The target is the
+original opening mix. This is an allocation guide and does not automatically
+record a transfer or include cash already moved to the safe.
+
+The daily handover includes an **Event-day cash-up** section for confirmed
+booking dates. Each event opens its existing cash-up inside the handover, with
+opening/closing checks, denomination counters and float-return advice. Cash-up
+saves do not navigate away from unsaved handover notes. A status refresh enables
+handover completion once every event's cash-up is closed; the server checks this
+again on completion and acknowledgement. Drafts remain available while cash-ups
+are in progress. Dates without confirmed booking events do not require cash-up.
+Saved handovers retain references to the cash-up revisions used at completion.

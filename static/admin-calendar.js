@@ -2,6 +2,24 @@
   const dialog = document.getElementById('calendar-event-dialog');
   const content = document.getElementById('calendar-dialog-content');
   let opener;
+  document.querySelectorAll('.booking-row').forEach(row => {
+    const details = row.querySelector('.booking-detail:not(.booking-manage-detail)');
+    if (!details) return;
+    row.tabIndex = 0;
+    row.setAttribute('aria-haspopup', 'dialog');
+    const open = event => {
+      if (event.target.closest('a, button, input, select, textarea, .booking-manage-detail')) return;
+      if (!dialog || typeof dialog.showModal !== 'function') { details.open = true; return; }
+      event.preventDefault();
+      opener = row;
+      content.replaceChildren(details.querySelector('.calendar-detail-content').cloneNode(true));
+      dialog.showModal();
+    };
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', event => {
+      if (event.target === row && ['Enter', ' '].includes(event.key)) open(event);
+    });
+  });
   document.querySelectorAll('[data-calendar-detail]').forEach(link => {
     link.addEventListener('click', event => {
       const details = document.getElementById(link.dataset.calendarDetail);

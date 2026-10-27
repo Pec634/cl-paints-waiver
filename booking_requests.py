@@ -45,7 +45,7 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
         check()
         kind = request.form.get('kind', '')
         details = request.form.get('details', '').strip()
-        if booking.status not in ('Accepted', 'Under Review') or kind not in ('change', 'cancellation') or not details or len(details) > 2500:
+        if booking.status not in ('Accepted', 'Under Review', 'Awaiting Payment') or kind not in ('change', 'cancellation') or not details or len(details) > 2500:
             flash('Choose an active booking and describe your request (up to 2,500 characters).', 'error')
             return redirect(url_for('client.booking_detail', booking_id=booking.id))
         key = f'{booking.id}:{kind}'
@@ -79,7 +79,7 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
             response = request.form.get('response', '').strip()
             if item.status != 'Pending' or action not in ('complete', 'decline') or not response or len(response) > 2500:
                 flash('Enter your decision and response for a pending request.', 'error')
-            elif action == 'complete' and item.kind == 'cancellation' and booking.status not in ('Accepted', 'Under Review'):
+            elif action == 'complete' and item.kind == 'cancellation' and booking.status not in ('Accepted', 'Under Review', 'Awaiting Payment'):
                 flash('This booking is no longer active. Decline or explain the request instead.', 'error')
             else:
                 from client_notifications import booking_snapshot

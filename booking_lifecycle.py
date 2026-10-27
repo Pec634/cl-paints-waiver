@@ -52,6 +52,7 @@ def define_models(db):
 def register(app, db, models, Booking, Event, Change, Message, BookingRequest, Entry,
              current_client, admin_required, schedule, admin_email, send_email, settings):
     Activity, Proposal, FollowUp = models
+    app.extensions['booking_followup_model'] = FollowUp
     zone = ZoneInfo('Europe/London')
 
     def csrf():
@@ -163,6 +164,8 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
                 rows.append(dict(at=followup.requested_at, label='Feedback requested', actor='CL Paints', details=''))
             if followup.responded_at:
                 rows.append(dict(at=followup.responded_at, label='Feedback received', actor='Client', details=f'{followup.rating}/5 · {followup.feedback}'))
+        if admin and app.extensions.get('cashup_timeline'):
+            rows.extend(app.extensions['cashup_timeline'](booking))
         return sorted(rows, key=lambda row: row['at'], reverse=True)
 
     @app.context_processor
