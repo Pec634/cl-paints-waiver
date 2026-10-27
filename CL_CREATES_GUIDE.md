@@ -20,6 +20,8 @@ The public form accepts multiple headbands and quantities, with 11 non-space cha
 
 Orders receive sequential references such as O-000001. Search by reference, name, email or address. Select a reference to open its details in a dialog; the link also works as a standalone page. Attach the HTTPS SumUp invoice URL and reference, then manually record payments verified in SumUp. Invoice links are supported; PDF uploads and automated SumUp reconciliation are not included.
 
+Open an unpaid order marked **Under review** to use **Delete order**. Tick the confirmation checkbox to permanently remove the order and its communication history. Orders with a recorded payment or a later status cannot be deleted. Resolve any attached invoice in SumUp and remove its link/reference before deleting; deletion does not cancel a SumUp invoice.
+
 Status choices are Under review, Paid, In production, Shipped and Ready for collection. Full recorded payment is required after Under review. Fulfilment statuses must match postage or collection. Shipped and Ready for collection count as completed in the statistics. Payment statistics show recorded amounts and outstanding balances across all orders. Order counts use current UK calendar day, Monday-start week, month and year.
 
 Automatic confirmation and status emails use the existing portal email delivery service. CL Creates has its own enable switch, subject, body and supported placeholders. Its separate communication history records sent, failed and disabled messages. Send a customer email from order details to follow up or retry failed delivery. Incoming email replies remain in the business mailbox; this is an outbound communication log.

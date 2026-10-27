@@ -59,6 +59,52 @@ class CreatesTest(unittest.TestCase):
         with self.admin.session_transaction() as session:
             return session['creates_csrf']
 
+    def review_order(self):
+        order = self.Order(first_name='Delete', last_name='Test', email='delete@example.com',
+            address='Test address', fulfilment='collection', items_json='[]', total=10, paid=0,
+            status='Under review')
+        main.db.session.add(order)
+        main.db.session.commit()
+        return order
+
+    def test_delete_review_order_removes_communications_and_preserves_other_orders(self):
+        order = self.review_order()
+        other = self.review_order()
+        order_id, other_id = order.id, other.id
+        main.db.session.add(self.Message(order_id=order_id, subject='Test', body='Message', result='sent'))
+        main.db.session.commit()
+        token = self.admin_token()
+        path = f'/admin/cl-creates/orders/{order_id}'
+        self.assertIn(b'Delete order', self.admin.get(path+'?popup=1').data)
+        response = self.admin.post(path, data=dict(csrf_token=token, action='delete', confirm_delete='yes'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('deleted=1', response.location)
+        self.assertIsNone(main.db.session.get(self.Order, order_id))
+        self.assertEqual(self.Message.query.filter_by(order_id=order_id).count(), 0)
+        self.assertIsNotNone(main.db.session.get(self.Order, other_id))
+        self.assertEqual(self.admin.get(path).status_code, 404)
+
+    def test_delete_requires_admin_csrf_confirmation_and_unpaid_review_status(self):
+        order = self.review_order()
+        token = self.admin_token()
+        path = f'/admin/cl-creates/orders/{order.id}'
+        data = dict(csrf_token=token, action='delete', confirm_delete='yes')
+        self.assertEqual(self.client.post(path, data=data).status_code, 302)
+        self.assertEqual(self.admin.post(path, data=dict(data, csrf_token='bad')).status_code, 400)
+        response = self.admin.post(path, data=dict(data, confirm_delete=''))
+        self.assertIn(b'Confirm that you want', response.data)
+        for field, value in [('paid', 1), ('status', 'Paid'), ('status', 'In production'),
+                             ('invoice_url', 'https://pay.sumup.com/test'), ('invoice_reference', '2026-001')]:
+            original = getattr(order, field)
+            setattr(order, field, value)
+            main.db.session.commit()
+            response = self.admin.post(path, data=data)
+            self.assertEqual(response.status_code, 200)
+            self.assertIsNotNone(main.db.session.get(self.Order, order.id))
+            self.assertNotIn(b'name="action" value="delete"', response.data)
+            setattr(order, field, original)
+            main.db.session.commit()
+
     def test_portal_shop_prefills_signup_details_and_keeps_edits(self):
         account = self.fixture.signup()
         Address = main.app.extensions['client_billing_address_model']

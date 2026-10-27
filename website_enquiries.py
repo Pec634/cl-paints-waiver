@@ -143,13 +143,27 @@ def register(app, db, models, settings, send_email, admin_required):
     @app.route('/admin/communications/website-enquiries/<int:enquiry_id>', methods=['GET', 'POST'])
     @admin_required
     def communications_public_enquiry(enquiry_id):
-        enquiry = db.get_or_404(Enquiry, enquiry_id)
+        enquiry = Enquiry.query.filter_by(id=enquiry_id).with_for_update().first_or_404()
         csrf = session.setdefault('website_reply_csrf', secrets.token_urlsafe(32))
         reply_token = session.setdefault(f'website_reply_{enquiry.id}', secrets.token_urlsafe(32))
         if request.method == 'POST':
             if not secrets.compare_digest(csrf, request.form.get('csrf_token', '')):
                 abort(400)
-            if request.form.get('action') == 'status':
+            if request.form.get('action') == 'delete':
+                if request.form.get('confirm_delete') != 'yes':
+                    abort(400, 'Confirm that you want to permanently delete this enquiry.')
+                try:
+                    Reply.query.filter_by(enquiry_id=enquiry.id).delete(synchronize_session=False)
+                    db.session.delete(enquiry)
+                    db.session.commit()
+                except SQLAlchemyError:
+                    db.session.rollback()
+                    flash('The enquiry could not be deleted. Please try again.', 'error')
+                    return redirect(url_for('communications_public_enquiry', enquiry_id=enquiry_id))
+                session.pop(f'website_reply_{enquiry_id}', None)
+                flash('Website enquiry and its reply history deleted.', 'success')
+                return redirect(url_for('communications_public_enquiries'))
+            elif request.form.get('action') == 'status':
                 state = request.form.get('status')
                 if state not in ('new', 'replied', 'resolved'):
                     abort(400)

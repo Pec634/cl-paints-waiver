@@ -331,11 +331,22 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
     @admin_required
     def creates_order(order_id):
         token = csrf()
-        order = Order.query.get_or_404(order_id)
+        order = Order.query.filter_by(id=order_id).with_for_update().first_or_404()
         error = None
         if request.method == 'POST':
             try:
-                if request.form.get('action') == 'message':
+                if request.form.get('action') == 'delete':
+                    if order.status != 'Under review' or order.paid != 0:
+                        raise ValueError('Only unpaid orders under review can be deleted.')
+                    if order.invoice_url or order.invoice_reference:
+                        raise ValueError('This order has an attached invoice. Resolve the invoice in SumUp and remove its details before deleting the order.')
+                    if request.form.get('confirm_delete') != 'yes':
+                        raise ValueError('Confirm that you want to permanently delete this order.')
+                    Message.query.filter_by(order_id=order.id).delete(synchronize_session=False)
+                    db.session.delete(order)
+                    db.session.commit()
+                    return redirect(url_for('creates_admin', deleted='1'))
+                elif request.form.get('action') == 'message':
                     subject, body = (request.form.get(k, '').strip() for k in ('subject', 'body'))
                     if not subject or not body or len(subject) > 200 or len(body) > 10000:
                         raise ValueError('Enter a subject and message (maximum 200 / 10,000 characters).')
