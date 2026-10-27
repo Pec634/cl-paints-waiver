@@ -1,0 +1,30 @@
+/* Bookings remain within the available workspace at every screen width. */
+.admin .booking-request-list { display: grid; gap: 20px; width: 100%; min-width: 0; }
+.admin .booking-request-card { min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: white; overflow-wrap: anywhere; }
+.admin .booking-request-card[hidden] { display: none; }
+.booking-card-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 12px; }
+.booking-card-heading > div { min-width: 0; }
+.admin .booking-card-heading h3 { margin: 6px 0; font-size: 1.15rem; }
+.booking-card-heading small { color: var(--muted); }
+.booking-card-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.booking-card-facts > div { min-width: 0; }
+.booking-card-facts dt { color: var(--muted); font-size: .85rem; font-weight: 700; margin-bottom: 6px; }
+.booking-card-facts dd { margin: 0; line-height: 1.6; }
+.booking-card-invoices { min-width: 0; }
+.booking-card-actions { display: flex; flex-wrap: wrap; align-items: start; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border); }
+.booking-card-actions > .booking-detail { flex: 1 1 100%; min-width: 0; }
+.booking-card-actions > .booking-detail > summary { padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: #f6f8fc; }
+.booking-card-actions > .booking-delete-detail > summary { color: #9c2639; background: #fff7f8; }
+.booking-card-actions .booking-manage-form, .booking-card-actions .booking-detail dl { min-width: 0; max-width: 100%; }
+.booking-card-actions .booking-manage-form .booking-field { font-size: .9rem; }
+.booking-card-actions :is(input, select, textarea, fieldset) { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.booking-card-actions .booking-manage-actions { display: flex; flex-wrap: wrap; gap: 10px; grid-column: 1 / -1; }
+.booking-card-actions .btn { white-space: normal; text-align: center; }
+.booking-card-actions .client-form { margin-top: 16px; }
+@media (max-width: 800px) {
+    .booking-card-facts { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .admin .booking-request-card { padding: 16px; }
+    .booking-card-actions .booking-manage-form, .booking-card-actions .travel-mileage-fields { grid-template-columns: minmax(0, 1fr); }
+    .booking-card-actions > a.btn { flex: 1 1 180px; }
+    .booking-card-actions .booking-manage-actions .btn { flex: 1 1 180px; }
+}

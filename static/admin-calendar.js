@@ -8,7 +8,7 @@
     row.tabIndex = 0;
     row.setAttribute('aria-haspopup', 'dialog');
     const open = event => {
-      if (event.target.closest('a, button, input, select, textarea, .booking-manage-detail')) return;
+      if (event.target.closest('a, button, input, select, textarea, .booking-manage-detail, .booking-action-detail')) return;
       if (!dialog || typeof dialog.showModal !== 'function') { details.open = true; return; }
       event.preventDefault();
       opener = row;

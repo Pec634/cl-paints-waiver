@@ -4,7 +4,7 @@
 Bookings | CL Paints
 {% endblock %}
 
-{% block body %}<link rel="stylesheet" href="{{ url_for('static',filename='admin-calendar.css') }}">
+{% block body %}<link rel="stylesheet" href="{{ url_for('static',filename='admin-calendar.css') }}"><link rel="stylesheet" href="{{ url_for('static',filename='admin-bookings.css') }}">
 <div class="admin">
     {% include '_admin_sidebar.html' %}
 
@@ -77,39 +77,28 @@ Bookings | CL Paints
                 <input id="bookingSearch" type="search" placeholder="Search booking requests" autocomplete="off">
             </div>
 
-            <div class="table-wrap">
-                <table class="waiver-table booking-table" data-workspace-list>
-                    <thead>
-                        <tr>
-                            <th>Date submitted</th>
-                            <th>Client</th>
-                            <th>Phone number</th>
-                            <th>Email</th>
-                            <th>Event address</th>
-                            <th>Event date</th>
-                            <th>Status</th>
-                            <th>Invoices</th><th>Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <div class="booking-table booking-request-list" data-workspace-list>
                     {% for row in booking_rows %}
                         {% set booking = row.booking %}
-                        <tr class="booking-row" id="booking-{{ booking.id }}" data-record-status="{{ booking.status }}">
-                            <td>{{ booking.submitted_at.strftime("%d/%m/%Y %H:%M") }}</td>
-                            <td data-search-client>{{ booking.first_name }} {{ booking.last_name }}</td>
-                            <td data-search-phone>{{ booking.phone }}</td>
-                            <td data-search-email>{{ booking.email }}</td>
-                            <td data-search-event="{{ booking.event_type }} {{ booking.event_address }}">{{ booking.event_address }}</td>
-                            <td>{{ booking.event_date.strftime("%d/%m/%Y") }}</td>
-                            <td>{% set badge_status = booking.status %}{% include '_status_badge.html' %}{% if booking_pending_agreement(booking) %}<p>Client signature pending</p>{% endif %}</td>
-                            <td>{% include '_invoice_documents.html' %}{% for invoice in invoice_links(booking) %}<p><a href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">Invoice {{ invoice.reference }}</a></p>{% endfor %}</td>
-                            <td>
+                        <article class="booking-row booking-request-card" id="booking-{{ booking.id }}" data-record-status="{{ booking.status }}" aria-labelledby="booking-title-{{ booking.id }}">
+                            <header class="booking-card-heading">
+                                <div><small>{{ booking.public_reference }}</small><h3 id="booking-title-{{ booking.id }}" data-search-client>{{ booking.first_name }} {{ booking.last_name }}</h3><small>Submitted {{ booking.submitted_at.strftime("%d/%m/%Y %H:%M") }}</small></div>
+                                <div>{% set badge_status = booking.status %}{% include '_status_badge.html' %}{% if booking_pending_agreement(booking) %}<p>Client signature pending</p>{% endif %}</div>
+                            </header>
+                            <dl class="booking-card-facts">
+                                <div><dt>Event</dt><dd data-search-event>{{ booking.event_type }}<br>{{ booking.event_address }}</dd></div>
+                                <div><dt>Event date</dt><dd>{{ booking.event_date.strftime("%d/%m/%Y") }}</dd></div>
+                                <div><dt>Contact</dt><dd><span data-search-phone>{{ booking.phone }}</span><br><span data-search-email>{{ booking.email }}</span></dd></div>
+                            </dl>
+                            <div class="booking-card-invoices">{% include '_invoice_documents.html' %}{% for invoice in invoice_links(booking) %}<p><a href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">Invoice {{ invoice.reference }}</a></p>{% endfor %}</div>
+                            <div class="booking-card-actions">
+                                <a class="btn small primary" href="{{ url_for('admin_payments', booking_id=booking.id) }}">Payments &amp; invoices</a>
                                 <a class="btn small" href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Activity &amp; date changes</a>
                                 {% if booking.status == 'Under Review' %}<a class="btn small primary" href="{{ url_for('admin_edit_booking', booking_id=booking.id) }}">Edit booking details</a>{% endif %}
                                 <a class="btn small" href="{{ url_for('admin_booking_messages', booking_id=booking.id) }}">Messages{% if booking_message_counts.get(booking.id) %} &middot; {{ booking_message_counts[booking.id] }} unread{% endif %}</a>
                                 <details class="booking-detail">
                                     <summary>View booking details</summary><div class="calendar-detail-content">{% include '_admin_booking_details.html' %}</div></details>
-                                <details class="booking-detail booking-manage-detail">
+                                <details class="booking-detail booking-manage-detail booking-action-detail">
                                     <summary>Manage request</summary>
                                     <form data-warn-unsaved method="post" action="{{ url_for('admin_manage_booking', booking_id=booking.id) }}" class="booking-manage-form">
                                         <label class="booking-field">
@@ -150,7 +139,10 @@ Bookings | CL Paints
                                             <button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>
                                         </div>
                                     </form>
-                                    {% if booking.status in booking_deletable_statuses %}
+                                </details>
+                                {% if booking.status in booking_deletable_statuses %}
+                                <details class="booking-detail booking-delete-detail booking-action-detail">
+                                    <summary>Delete request</summary>
                                     {% set deletion_blocker = booking_deletion_blocker(booking) %}
                                     {% if deletion_blocker %}<p class="booking-admin-notice">Deletion unavailable: {{ deletion_blocker }}</p>{% else %}
                                     <form method="post" action="{{ url_for('admin_delete_booking',booking_id=booking.id) }}" class="client-form">
@@ -158,17 +150,14 @@ Bookings | CL Paints
                                         <p>Permanently delete this unconfirmed request, including its messages, uploaded documents and form responses. The client account and unrelated bookings stay in place.</p>
                                         <label><input type="checkbox" name="confirm_delete" value="yes" required> I want to permanently delete {{ booking.public_reference }}.</label>
                                         <button type="submit" class="btn small booking-decline">Delete non-confirmed booking</button>
-                                    </form>{% endif %}{% endif %}
+                                    </form>{% endif %}
                                 </details>
-                            </td>
-                        </tr>
+                                {% endif %}
+                            </div>
+                        </article>
                     {% else %}
-                        <tr>
-                            <td class="booking-empty" colspan="9">No bookings match this filter.</td>
-                        </tr>
+                        <p class="booking-empty">No bookings match this filter.</p>
                     {% endfor %}
-                    </tbody>
-                </table>
             </div>
         </section>
     </main>
