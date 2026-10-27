@@ -122,11 +122,26 @@ Attach its invoice number, purpose (deposit, balance or full payment), amount,
 due date and secure customer link. The client can open it from their booking.
 Invoice numbers are unique across bookings to prevent accidental duplicate links.
 
-This is an invoice-link workflow, not an API synchronisation. No SumUp API key
-is required. Attaching an invoice does not charge a card, email the client or
-mark it paid. Confirm receipt in SumUp, then record the payment in the booking
-ledger using SumUp as the method and the invoice number in the internal note.
-The existing booking update notification then reports the changed balance.
+Attaching an invoice does not charge a card, email the client or mark it paid.
+Invoice links work without API credentials. With `SUMUP_API_KEY` and
+`SUMUP_MERCHANT_CODE` configured, **Check SumUp invoice payments** checks the
+last 90 days and records verified full invoice payments against this booking.
+Matching requires the exact `Invoice # <invoice number>` transaction description,
+GBP currency, the correct merchant and a successful online payment. The original
+UK payment date and SumUp transaction reference are retained. Repeated syncs do
+not duplicate transactions or change booking status. Partial payments, refunds,
+multiple transactions, payments exceeding the booking balance and existing manual
+or checkout ledger entries are left for manual review. Refunds are not posted
+automatically; inspect sync review messages and record verified corrections.
+
+Preview all attached invoice matches with `flask --app app sync-sumup-invoices`.
+Add `--apply` to record matches, or `--days 365` to check an older period.
+For automatic checks, schedule `flask --app app sync-sumup-invoices --apply`
+every 15 minutes on your hosting service, using its existing app environment
+and database. Scheduling is not enabled by saving local credentials. Retain
+command output and alert on failures: review cases produce a nonzero exit code.
+Transactions without an attached invoice are counted as unmatched; attach their
+invoice and rerun. Sync does not create invoices, send emails or change SumUp.
 
 ## Public-event waiver kiosk
 

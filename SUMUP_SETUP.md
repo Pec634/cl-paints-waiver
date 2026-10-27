@@ -91,6 +91,28 @@ and matching merchant code on the production server. Confirm any account
 requirements with SumUp, restart the app, and perform an explicitly authorised
 small live payment before inviting clients to pay.
 
-Invoice attachments and manually attached SumUp invoice links remain separate
-from API checkouts. Their payment status is not automatically imported by this
-integration. Refunds and saved-card charges are not implemented here.
+Invoice attachments remain separate from API checkouts. To keep using invoices
+created in SumUp, attach the exact invoice number to the booking, then use
+**Check SumUp invoice payments** on its Payments page. The app reads transaction
+history and verifies matching full invoice payments before recording them.
+This does not require Hosted Checkout or a public callback URL.
+
+Preview reconciliation with:
+
+```powershell
+flask --app app sync-sumup-invoices
+```
+
+Add `--apply` to record verified matches. The default window is 90 days;
+`--days 365` includes older payments. Schedule the command with `--apply` every
+15 minutes on the hosting service to enable automatic checks. Both credentials
+must be configured there with permission to read transaction history/details.
+Keep command output and monitor nonzero exits for errors or manual review.
+
+Only exact `Invoice # <attached invoice number>` descriptions are matched.
+Partial payments, multiple transactions, refund/status discrepancies, amounts
+above the booking balance and existing manual/checkout ledger entries require
+review. These conservative checks protect payments you previously entered by
+hand. A missing invoice reference cannot be matched by amount alone. Sync does
+not change SumUp invoices or booking status, or send emails. Refunds and
+saved-card charges are not automatically recorded.

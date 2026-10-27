@@ -1,6 +1,7 @@
 <section class="panel"><h2>SumUp invoices</h2>
 {% if request.endpoint == 'admin_payments' %}
-<p>Create invoices in SumUp, then attach them here for your client. SumUp invoice statuses do not sync automatically; record confirmed payments in the ledger below.</p>
+<p>Create invoices in SumUp, then attach them here for your client. Check payments to record verified invoice payments from the last 90 days. Partial payments and existing ledger entries need review to avoid duplicates.</p>
+<form method="post" action="{{ url_for('admin_sync_sumup_invoices', booking_id=booking.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn" type="submit">Check SumUp invoice payments</button></form>
 <a class="btn primary" href="{{ url_for('admin_booking_invoices', booking_id=booking.id) }}">Attach SumUp invoice</a>
 {% else %}<p>Your invoices are issued through SumUp. Open an invoice to view its details and payment options. Payments below are updated by CL Paints after confirmation.</p>{% endif %}
 {% for invoice in booking_invoices %}
