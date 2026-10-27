@@ -1,0 +1,38 @@
+.website-enquiry-page { display: grid; gap: 14px; min-width: 0; }
+.enquiry-selection-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 0; }
+.enquiry-selection-choice { display: flex; align-items: start; gap: 9px; line-height: 1.5; overflow-wrap: anywhere; }
+.enquiry-selection-choice[hidden] { display: none; }
+.enquiry-selection-choice input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 20px; margin: 2px 0 0; padding: 0; accent-color: var(--pink); }
+.enquiry-bulk-form .client-record > .enquiry-selection-choice { margin-bottom: 12px; font-weight: 650; }
+.enquiry-bulk-delete { display: grid; justify-items: start; gap: 12px; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+.enquiry-bulk-delete p { margin: 0; }
+.enquiry-bulk-delete button:disabled { opacity: .5; cursor: not-allowed; }
+.website-enquiry-page :is(p, h2, h3) { overflow-wrap: anywhere; }
+.enquiry-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.enquiry-heading > div { min-width: 0; }
+.enquiry-heading h2 { margin: 6px 0; }
+.enquiry-heading p { margin: 6px 0; }
+.enquiry-heading small { color: var(--muted); }
+.enquiry-heading a { text-decoration: underline; }
+.enquiry-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.enquiry-status label { font-weight: 650; }
+.enquiry-status select { min-height: 38px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; background: white; font: inherit; }
+.enquiry-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.admin .website-enquiry-page .panel { min-width: 0; padding: 16px; margin: 0; border-radius: 10px; }
+.website-enquiry-page h3 { margin: 0 0 10px; }
+.enquiry-message-scroll { max-height: 45vh; overflow-y: auto; overflow-wrap: anywhere; }
+.enquiry-message-scroll .client-message { margin: 0; white-space: pre-wrap; }
+.website-enquiry-page .client-form { display: grid; gap: 10px; margin: 0; }
+.enquiry-compose > p { font-size: .9rem; margin: 0 0 12px; color: var(--muted); }
+.website-enquiry-page textarea { padding: 10px; resize: vertical; min-height: 160px; }
+.website-enquiry-page details > summary { cursor: pointer; font-weight: 700; }
+.website-enquiry-page details[open] > summary { margin-bottom: 12px; }
+.enquiry-delete > summary { color: #9c2639; }
+.website-enquiry-page .client-form .enquiry-delete-confirm { display: flex; align-items: start; gap: 10px; line-height: 1.5; font-weight: 500; }
+.website-enquiry-page .enquiry-delete-confirm input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 20px; padding: 0; margin: 2px 0 0; accent-color: var(--pink); }
+.admin .website-enquiry-page .btn { width: auto; min-height: 38px; padding: 8px 12px; }
+@media (min-width: 1100px) { .enquiry-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) {
+    .enquiry-heading { flex-wrap: wrap; }
+    .admin .website-enquiry-page .btn, .enquiry-status select { min-height: 44px; }
+}

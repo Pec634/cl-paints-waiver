@@ -136,9 +136,39 @@ def register(app, db, models, settings, send_email, admin_required):
                                       (Enquiry.name, Enquiry.email, Enquiry.subject, Enquiry.message)]))
         pagination = query.order_by(Enquiry.created_at.desc(), Enquiry.id.desc()).paginate(per_page=25, error_out=False)
         response = app.make_response(render_template('admin_public_enquiries.html', pagination=pagination,
-                         query=term, state=state, new_count=Enquiry.query.filter_by(status='new').count()))
+                         query=term, state=state, new_count=Enquiry.query.filter_by(status='new').count(),
+                         csrf=session.setdefault('website_reply_csrf', secrets.token_urlsafe(32))))
         response.headers['Cache-Control'] = 'private, no-store'
         return response
+
+    @app.post('/admin/communications/website-enquiries/delete-selected')
+    @admin_required
+    def communications_delete_public_enquiries():
+        token = session.get('website_reply_csrf', '')
+        if not token or not secrets.compare_digest(token, request.form.get('csrf_token', '')):
+            abort(400)
+        raw_ids = request.form.getlist('enquiry_ids')
+        if not raw_ids or len(raw_ids) > 25 or any(not value.isascii() or not value.isdigit() or len(value) > 10 for value in raw_ids):
+            abort(400, 'Select between 1 and 25 website enquiries.')
+        ids = {int(value) for value in raw_ids}
+        if request.form.get('confirm_delete') != 'yes':
+            abort(400, 'Confirm deletion of the selected enquiries.')
+        try:
+            enquiries = Enquiry.query.filter(Enquiry.id.in_(ids)).with_for_update().all()
+            if len(enquiries) != len(ids):
+                abort(409, 'Some selected enquiries have changed or were deleted. Reload the list before trying again.')
+            Reply.query.filter(Reply.enquiry_id.in_(ids)).delete(synchronize_session=False)
+            for enquiry in enquiries:
+                db.session.delete(enquiry)
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            flash('The selected enquiries could not be deleted. Please try again.', 'error')
+            return redirect(url_for('communications_public_enquiries'))
+        for enquiry_id in ids:
+            session.pop(f'website_reply_{enquiry_id}', None)
+        flash(f'{len(ids)} website enquiries and their reply histories deleted.', 'success')
+        return redirect(url_for('communications_public_enquiries'))
 
     @app.route('/admin/communications/website-enquiries/<int:enquiry_id>', methods=['GET', 'POST'])
     @admin_required

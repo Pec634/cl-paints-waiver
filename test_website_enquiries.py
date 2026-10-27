@@ -3,9 +3,11 @@ os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 import unittest
 from unittest.mock import patch
 import app as main
+import test_native_form_browser as browser_helpers
 
 
 class WebsiteEnquiriesTest(unittest.TestCase):
+    browser = browser_helpers.NativeFormBrowserTest.browser
     def setUp(self):
         self.captcha_env = patch.dict(os.environ, {'RECAPTCHA_SITE_KEY': '', 'RECAPTCHA_SECRET_KEY': ''})
         self.captcha_env.start()
@@ -111,6 +113,65 @@ class WebsiteEnquiriesTest(unittest.TestCase):
         self.assertEqual(self.Reply.query.filter_by(enquiry_id=other_id).count(), 1)
         self.assertEqual(self.admin.get(path).status_code, 404)
 
+    def bulk_fixture(self):
+        rows = [self.Enquiry(name='Visitor', email='visitor@example.com', subject=f'Bulk {index}',
+            message='Test', submission_token=f'bulk-{index}') for index in range(3)]
+        main.db.session.add_all(rows)
+        main.db.session.flush()
+        ids = [row.id for row in rows]
+        main.db.session.add_all([self.Reply(enquiry_id=row.id, token=f'bulk-reply-{row.id}', body='Reply') for row in rows])
+        main.db.session.commit()
+        self.admin.get('/admin/communications/website-enquiries')
+        with self.admin.session_transaction() as state:
+            token = state['website_reply_csrf']
+        return ids, dict(csrf_token=token, enquiry_ids=[str(value) for value in ids[:2]], confirm_delete='yes')
+
+    def test_bulk_delete_only_selected_enquiries_and_their_replies(self):
+        ids, data = self.bulk_fixture()
+        with patch.object(main, 'send_client_email') as send:
+            response = self.admin.post('/admin/communications/website-enquiries/delete-selected', data=data, follow_redirects=True)
+            send.assert_not_called()
+        self.assertIn(b'2 website enquiries and their reply histories deleted.', response.data)
+        self.assertEqual([row.id for row in self.Enquiry.query.all()], ids[2:])
+        self.assertEqual([row.enquiry_id for row in self.Reply.query.all()], ids[2:])
+
+    def test_bulk_delete_validation_and_missing_selection_are_atomic(self):
+        ids, data = self.bulk_fixture()
+        path = '/admin/communications/website-enquiries/delete-selected'
+        self.assertEqual(self.visitor.post(path, data=data).status_code, 302)
+        self.assertEqual(self.admin.get(path).status_code, 405)
+        for changes in [dict(csrf_token='bad'), dict(confirm_delete=''), dict(enquiry_ids=[]),
+                        dict(enquiry_ids=['bad']), dict(enquiry_ids=['1'] * 26)]:
+            self.assertEqual(self.admin.post(path, data=dict(data, **changes)).status_code, 400)
+        self.assertEqual(self.admin.post(path, data=dict(data, enquiry_ids=[str(ids[0]), '999999'])).status_code, 409)
+        self.assertEqual(self.Enquiry.query.count(), 3)
+        self.assertEqual(self.Reply.query.count(), 3)
+
+    @unittest.skipUnless(browser_helpers.EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_bulk_selection_browser_controls(self):
+        self.bulk_fixture()
+        page = self.admin.get('/admin/communications/website-enquiries')
+        for width in (1280, 390):
+            self.browser(page.data, '''
+                const form = document.querySelector('[data-enquiry-selection]');
+                const all = form.querySelector('[data-select-all]');
+                const choices = [...form.querySelectorAll('[name=enquiry_ids]')];
+                const confirmation = form.elements.confirm_delete;
+                const button = form.querySelector('[data-delete-selected]');
+                assert(button.disabled, 'Delete must start disabled');
+                all.click();
+                assert(choices.every(choice => choice.checked), 'Select all must select this page');
+                assert(button.disabled, 'Selection alone must not enable deletion');
+                confirmation.click();
+                assert(!button.disabled, 'Confirmed selection must enable deletion');
+                choices[0].click();
+                assert(all.indeterminate, 'Partial selection must be shown');
+                assert(!confirmation.checked && button.disabled, 'Changing selection must require fresh confirmation');
+                all.click(); all.click();
+                assert(choices.every(choice => !choice.checked), 'Select all must allow clearing selection');
+                assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Bulk controls must fit the screen');
+            ''', width=width)
+
     def test_enquiry_deletion_requires_admin_csrf_and_confirmation(self):
         enquiry = self.Enquiry(name='Visitor', email='visitor@example.com', subject='Keep me',
             message='Test', submission_token='protected-enquiry')
@@ -125,6 +186,34 @@ class WebsiteEnquiriesTest(unittest.TestCase):
         self.assertEqual(self.admin.post(path, data=dict(data, csrf_token='bad')).status_code, 400)
         self.assertEqual(self.admin.post(path, data=dict(data, confirm_delete='')).status_code, 400)
         self.assertIsNotNone(main.db.session.get(self.Enquiry, enquiry.id))
+
+    @unittest.skipUnless(browser_helpers.EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_enquiry_workspace_fits_desktop_and_phone(self):
+        enquiry = self.Enquiry(name='Visitor', email='visitor@example.com', subject='Layout test',
+            message=('Long enquiry message\n' * 200), submission_token='layout-test')
+        main.db.session.add(enquiry)
+        main.db.session.commit()
+        page = self.admin.get(f'/admin/communications/website-enquiries/{enquiry.id}')
+        for width in (1280, 390):
+            self.browser(page.data, '''
+                assert(document.title === 'Website enquiry | CL Paints', 'Page title must contain only title text');
+                assert(document.querySelectorAll('[name=confirm_delete]').length === 1, 'Only one delete form should exist');
+                const deletion = document.querySelector('.enquiry-delete');
+                assert(!deletion.open, 'Delete section should start collapsed');
+                deletion.querySelector('summary').click();
+                const checkbox = deletion.querySelector('[type=checkbox]');
+                assert(checkbox.offsetWidth === 20 && checkbox.offsetHeight === 20, 'Confirmation must be a normal-sized checkbox');
+                assert(!deletion.querySelector('form').checkValidity(), 'Deletion must require confirmation');
+                const message = document.querySelector('.enquiry-message-scroll');
+                assert(message.scrollHeight > message.clientHeight, 'Long messages must scroll');
+                const reply = document.getElementById('enquiry-reply');
+                const original = document.querySelector('.enquiry-original');
+                const composer = document.querySelector('.enquiry-compose');
+                if (innerWidth > 1100) assert(composer.getBoundingClientRect().left > original.getBoundingClientRect().left, 'Desktop should show message beside reply');
+                else assert(composer.getBoundingClientRect().top >= original.getBoundingClientRect().bottom, 'Phone should stack message and reply');
+                assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Page must fit horizontally');
+                assert(reply.getBoundingClientRect().right <= innerWidth, 'Reply field must fit');
+            ''', width=width)
 
     def test_admin_reply_delivery_and_search(self):
         with patch.object(main, 'send_client_email', return_value=True):
