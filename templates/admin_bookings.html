@@ -37,6 +37,8 @@ Bookings | CL Paints
         {% if request.args.get('status_email') == 'sent' %}<p class="booking-admin-notice">The client has been emailed about the booking update.</p>{% elif request.args.get('status_email') == 'failed' %}<p class="booking-admin-error">The booking is saved, but its update email could not be sent. Contact the client to let them know.</p>{% endif %}
 
         {% if request.args.get('payment_error') %}<p class="booking-admin-error" role="alert">Review the booking and mark it Awaiting Payment first. Confirmation requires the recorded deposit, or full payment if no deposit is set. Set the payment schedule on the booking's Payments page.</p>{% endif %}
+        {% if request.args.get('deleted') %}<p class="booking-admin-notice" role="status">Booking request {{ request.args.get('deleted') }} deleted.</p>{% endif %}
+        {% if request.args.get('deletion_error') %}<p class="booking-admin-error" role="alert">{{ request.args.get('deletion_error') }}</p>{% endif %}
         <section class="stats">
             <article>
                 <span>Total requests</span>
@@ -148,6 +150,15 @@ Bookings | CL Paints
                                             <button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>
                                         </div>
                                     </form>
+                                    {% if booking.status in booking_deletable_statuses %}
+                                    {% set deletion_blocker = booking_deletion_blocker(booking) %}
+                                    {% if deletion_blocker %}<p class="booking-admin-notice">Deletion unavailable: {{ deletion_blocker }}</p>{% else %}
+                                    <form method="post" action="{{ url_for('admin_delete_booking',booking_id=booking.id) }}" class="client-form">
+                                        <input type="hidden" name="csrf_token" value="{{ booking_delete_csrf }}">
+                                        <p>Permanently delete this unconfirmed request, including its messages, uploaded documents and form responses. The client account and unrelated bookings stay in place.</p>
+                                        <label><input type="checkbox" name="confirm_delete" value="yes" required> I want to permanently delete {{ booking.public_reference }}.</label>
+                                        <button type="submit" class="btn small booking-decline">Delete non-confirmed booking</button>
+                                    </form>{% endif %}{% endif %}
                                 </details>
                             </td>
                         </tr>

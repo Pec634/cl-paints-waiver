@@ -519,6 +519,8 @@ from booking_cashup import define_model as define_cashup_model
 BookingCashup = define_cashup_model(db)
 from daily_handovers import define_model as define_handover_model
 DailyHandover = define_handover_model(db)
+from historical_finances import define_model as define_financial_correction_model
+BookingFinancialCorrection = define_financial_correction_model(db)
 from booking_requests import define_model as define_booking_request_model
 BookingRequest = define_booking_request_model(db)
 from booking_messages import define_model as define_booking_message_model
@@ -2787,6 +2789,10 @@ from daily_handovers import register as register_daily_handovers
 register_daily_handovers(app, db, DailyHandover, Booking, booking_schedule_events, admin_required, BookingCashup)
 from daily_operations import register as register_daily_operations
 register_daily_operations(app, db, Booking, DailyHandover, BookingCashup, booking_schedule_events)
+from booking_deletion import register as register_booking_deletion
+register_booking_deletion(app, db, Booking, admin_required)
+from historical_finances import register as register_historical_finances
+register_historical_finances(app, db, BookingFinancialCorrection, Booking, tool_models[1], notification_models[0], SumupCheckout, booking_schedule_events, admin_required)
 
 from booking_requests import register as register_booking_requests
 register_booking_requests(app, db, BookingRequest, Booking, ClientEnquiry, get_current_client,

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+import re
 import unittest
 from zoneinfo import ZoneInfo
 import test_business_tools as fixtures
@@ -59,6 +60,9 @@ class BookingCashupTest(unittest.TestCase):
 
     def opening(self, **changes):
         data = self.data(action='open', opening_till='50.00', opening_safe='100.00')
+        page=self.admin.get(self.path+'?day='+str(changes.get('event_index','0'))).get_data(as_text=True)
+        previous=re.search(r'name="safe_previous_version" value="([^"]*)"',page)
+        data['safe_previous_version']=previous.group(1) if previous else ''
         data.update(changes)
         return self.admin.post(self.path, data=data)
 
@@ -259,6 +263,76 @@ class BookingCashupTest(unittest.TestCase):
         self.assertEqual(saved.values['denominations']['closing_till']['100'], 110)
         self.assertEqual(self.latest().values['denominations']['closing_till']['100'], 109)
         self.assertEqual(self.latest().values['denominations']['opening_safe']['5000'], 2)
+
+    def next_booking(self):
+        booking=self.fixture.fixture.fixture.booking(self.booking.email,status='Accepted')
+        booking.event_schedule=self.booking.event_schedule
+        main.db.session.commit()
+        self.booking=booking
+        self.path=f'/admin/bookings/{booking.id}/cash-up'
+        return booking
+
+    def test_previous_safe_close_visible_and_opening_difference_is_rejected(self):
+        self.opening()
+        self.closing()
+        previous=self.latest()
+        self.next_booking()
+        page=self.admin.get(self.path)
+        self.assertIn(b'Previous closing safe check',page.data)
+        self.assertIn(b'176.00',page.data)
+        self.assertEqual(self.opening(version='',opening_safe='175').status_code,400)
+        self.assertEqual(main.BookingCashup.query.count(),2)
+        self.assertEqual(self.opening(version='',count_opening_safe='yes',denom_opening_safe_100='176',opening_safe='999').status_code,302)
+        saved=self.latest()
+        self.assertEqual(saved.values['safe_previous_record_id'],previous.id)
+        self.assertEqual(Decimal(saved.values['opening_safe']),Decimal('176'))
+        self.assertIn(b'Safe opening continuity',self.admin.get(self.path+'?print=1').data)
+
+    def test_prior_safe_close_cannot_be_changed_to_break_a_saved_opening(self):
+        self.opening(); self.closing()
+        previous=self.latest()
+        old_booking=self.booking; old_path=self.path
+        self.next_booking()
+        self.assertEqual(self.opening(version='',opening_safe='176').status_code,302)
+        self.booking=old_booking; self.path=old_path
+        response=self.closing(version=str(previous.id),action='correct',correction_reason='Safe recount',
+            closing_safe='175',notes='One pound short')
+        self.assertEqual(response.status_code,400)
+        self.assertIn(b'already linked to a later opening',response.data)
+        self.assertEqual(main.BookingCashup.query.count(),3)
+        self.assertEqual(self.closing(version=str(previous.id),action='correct',correction_reason='Receipt correction').status_code,302)
+        self.assertEqual(self.latest().values['closing_checked_at'],previous.values['closing_checked_at'])
+
+    def test_stale_safe_baseline_is_rejected_even_when_entered_amount_matches_new_close(self):
+        self.opening(); self.closing()
+        previous=self.latest()
+        self.assertEqual(self.closing(action='correct',correction_reason='Recount before next opening',
+            closing_safe='180',notes='Four pounds over').status_code,302)
+        corrected=self.latest()
+        self.next_booking()
+        response=self.opening(version='',opening_safe='180',safe_previous_version=str(previous.id))
+        self.assertEqual(response.status_code,400)
+        self.assertIn(b'previous safe closing check changed',response.data)
+        self.assertEqual(self.opening(version='',opening_safe='180').status_code,302)
+        self.assertEqual(self.latest().values['safe_previous_record_id'],corrected.id)
+
+    @unittest.skipUnless(browser_helpers.EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_browser_opening_safe_must_match_previous_close_including_note_coin_counts(self):
+        self.opening(); self.closing(); self.next_booking()
+        self.browser(self.admin.get(self.path).data, '''
+            const form=document.querySelector('[data-cashup-form]');
+            const button=form.querySelector('button[value="open"]');
+            const message=form.querySelector('[data-safe-difference]');
+            assert(button.disabled,'Mismatched opening safe must block saving');
+            const input=form.elements.opening_safe;
+            input.value='176';input.dispatchEvent(new Event('input',{bubbles:true}));
+            assert(!button.disabled && message.textContent.includes('matches'),'Matching count should enable opening');
+            input.value='175';input.dispatchEvent(new Event('input',{bubbles:true}));
+            assert(button.disabled,'Any safe difference must block saving');
+            const toggle=form.querySelector('[name="count_opening_safe"]');toggle.checked=true;toggle.dispatchEvent(new Event('change',{bubbles:true}));
+            const coins=form.elements.denom_opening_safe_100;coins.value='176';coins.dispatchEvent(new Event('input',{bubbles:true}));
+            assert(input.value==='176.00' && !button.disabled,'Denomination count must use the same matching rule');
+        ''')
 
     @unittest.skipUnless(browser_helpers.EDGE.is_file(), 'Microsoft Edge is not installed')
     def test_browser_note_coin_totals_and_float_return_guidance(self):

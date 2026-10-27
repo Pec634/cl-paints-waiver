@@ -410,3 +410,36 @@ handover completion once every event's cash-up is closed; the server checks this
 again on completion and acknowledgement. Drafts remain available while cash-ups
 are in progress. Dates without confirmed booking events do not require cash-up.
 Saved handovers retain references to the cash-up revisions used at completion.
+
+In **Bookings > Manage request**, eligible unconfirmed requests have a **Delete
+non-confirmed booking** option with explicit checkbox confirmation. Confirmed or
+previously confirmed bookings and requests linked to payments, SumUp checkouts or
+invoices, cash-ups, events, completion records or staff shifts are protected.
+Deletion removes request-only messages, documents and form responses, preserves
+the client account and other bookings, and detaches retained import receipts.
+
+New cash-ups show the most recent saved closing safe check across bookings,
+including its amount, checker, time and recorded denominations. The new opening
+safe must match that closing amount exactly; there is no discrepancy override.
+The server rechecks the baseline on save and retains its revision reference in
+the opening record/report. The first opening without any prior close establishes
+the starting count. Correcting an earlier closing safe to a different amount is
+blocked if that would break a later saved opening check. Existing historical
+openings are not rewritten.
+
+### Correcting imported historical finances
+
+For bookings whose event dates have all finished, open **Payments & deposit >
+Correct imported / historical booking figures**. Enter the corrected event price
+and travel charge, then optionally add an **additional missing payment already
+received** with its original date, method (SumUp, Cash or Bank transfer) and receipt
+reference. Do not enter a cumulative total already partly recorded in the ledger.
+Price-only corrections can leave the additional payment at zero.
+
+A reason is required and retained with before/after figures in admin history.
+Existing ledger entries, signatures, dates and booking status are preserved; a
+correction neither charges a card nor sends a client email. Client-visible totals
+and balance update, with a booking change record. Stale forms and repeated saves
+cannot duplicate the historical receipt. Unresolved online checkouts must be
+reconciled first. Corrections do not amend external SumUp invoices. Historical
+financial correction records also protect a booking from deletion.

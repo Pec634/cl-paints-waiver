@@ -166,6 +166,8 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
                 rows.append(dict(at=followup.responded_at, label='Feedback received', actor='Client', details=f'{followup.rating}/5 · {followup.feedback}'))
         if admin and app.extensions.get('cashup_timeline'):
             rows.extend(app.extensions['cashup_timeline'](booking))
+        if admin and app.extensions.get('historical_finances_timeline'):
+            rows.extend(app.extensions['historical_finances_timeline'](booking))
         return sorted(rows, key=lambda row: row['at'], reverse=True)
 
     @app.context_processor

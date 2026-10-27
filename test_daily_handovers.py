@@ -194,9 +194,11 @@ class DailyHandoversTest(unittest.TestCase):
         self.assertEqual(self.admin.post(self.path,data=dict(data,action='draft')).status_code,302)
         for index in range(2):
             cash_path=f'/admin/bookings/{booking.id}/cash-up'
+            previous=main.BookingCashup.query.filter_by(phase='Closed').order_by(main.BookingCashup.id.desc()).first()
             opened=self.admin.post(cash_path,data=dict(csrf_token='admin-token',event_index=str(index),
                 event_date=selected,version='',action='open',opening_till='0',opening_safe='0',
-                till_checked='yes',safe_checked='yes',checked_by='Manager',embed='1'))
+                till_checked='yes',safe_checked='yes',checked_by='Manager',embed='1',
+                safe_previous_version=str(previous.id) if previous else ''))
             self.assertEqual(opened.status_code,302)
             self.assertIn('embed=1',opened.location)
             embedded=self.admin.get(opened.location)

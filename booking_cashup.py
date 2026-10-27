@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import json
 import secrets
 from zoneinfo import ZoneInfo
+from datetime import timezone
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.exc import IntegrityError
 
@@ -92,6 +93,25 @@ def define_model(db):
 
 
 def register(app, db, Cashup, Booking, schedule, admin_required):
+    def current_checks():
+        ids=db.session.query(db.func.max(Cashup.id)).group_by(Cashup.booking_id,Cashup.event_index,Cashup.event_date)
+        return Cashup.query.filter(Cashup.id.in_(ids)).all()
+
+    def previous_safe_close(key):
+        candidates=[]
+        for row in current_checks():
+            if row.phase!='Closed' or (row.booking_id,row.event_index,row.event_date)==key:
+                continue
+            first=Cashup.query.filter_by(booking_id=row.booking_id,event_index=row.event_index,
+                event_date=row.event_date,phase='Closed').order_by(Cashup.id).first()
+            try:
+                at=datetime.fromisoformat(first.values['closing_checked_at'])
+                if at.tzinfo is None: at=at.replace(tzinfo=ZoneInfo('Europe/London'))
+            except (KeyError,ValueError):
+                at=first.recorded_at.replace(tzinfo=timezone.utc)
+            candidates.append((at,first.id,row))
+        return max(candidates,key=lambda item:(item[0],item[1]))[2] if candidates else None
+
     def records(booking):
         return Cashup.query.filter_by(booking_id=booking.id).order_by(Cashup.recorded_at.desc(), Cashup.id.desc()).all()
 
@@ -125,6 +145,10 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
             return cashup_report(booking, saved)
         events = schedule(booking)
         token = session.setdefault('client_csrf', secrets.token_urlsafe(32))
+        if request.method == 'POST':
+            # A stable retained record serialises shared-safe openings/corrections
+            # on databases that support row locks; all lookups below occur after it.
+            Cashup.query.order_by(Cashup.id).with_for_update().first()
         selected = request.form.get('event_index', type=int) if request.method == 'POST' else request.args.get('day', 0, type=int)
         if selected is None or not 0 <= selected < len(events):
             abort(400)
@@ -137,6 +161,9 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
             return cashup_report(booking, latest)
         values = latest.values if latest else {field: '0.00' for field, _ in OPEN_FIELDS + CLOSE_FIELDS}
         values.setdefault('share_percent', str(event.get('revenue_share_percent') or '0'))
+        key=(booking.id,selected,date)
+        previous_safe = (db.session.get(Cashup,values.get('safe_previous_record_id'))
+            if latest and values.get('safe_previous_record_id') else previous_safe_close(key))
         embedded = request.args.get('embed') == '1' or request.form.get('embed') == '1'
         error = None
         if request.method == 'POST':
@@ -184,6 +211,15 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                 if action != 'correct':
                     values['correction_reason'] = ''
                 if action == 'open':
+                    # Re-read on save: another event may have closed since this form opened.
+                    previous_safe=previous_safe_close(key)
+                    expected_id=str(previous_safe.id) if previous_safe else ''
+                    if request.form.get('safe_previous_version','') != expected_id:
+                        raise ValueError('The previous safe closing check changed. Review the latest safe close shown below and count the opening safe again.')
+                    if previous_safe and money(values['opening_safe']) != money(previous_safe.values['closing_safe']):
+                        raise ValueError(f"Opening safe must match the previous closing safe exactly: £{Decimal(previous_safe.values['closing_safe']):.2f}. No safe difference is allowed.")
+                    values['safe_previous_record_id']=previous_safe.id if previous_safe else None
+                    values['safe_previous_amount']=previous_safe.values['closing_safe'] if previous_safe else None
                     if request.form.get('till_checked') != 'yes' or request.form.get('safe_checked') != 'yes':
                         raise ValueError('Confirm both opening till and safe checks, including zero counts.')
                     values['opening_checked_by'] = values['checked_by']
@@ -197,6 +233,11 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                     if any(money(values[field]) > 0 for field in ('till_other_in', 'till_other_out', 'safe_other_in', 'safe_other_out')) and not values['notes']:
                         raise ValueError('Explain other cash movements and banked cash in the notes.')
                     if action in ('close', 'correct'):
+                        if action=='correct' and money(values['closing_safe']) != money(latest.values['closing_safe']):
+                            prior_ids={row.id for row in Cashup.query.filter_by(booking_id=booking.id,event_index=selected,event_date=date).all()}
+                            for following in current_checks():
+                                if following.values.get('safe_previous_record_id') in prior_ids and money(following.values['opening_safe']) != money(values['closing_safe']):
+                                    raise ValueError('This safe close is already linked to a later opening check. It cannot be changed to a different amount because that would create a safe difference.')
                         start = datetime.fromisoformat(date + 'T' + event['start_time'])
                         finish = datetime.fromisoformat(date + 'T' + event['finish_time'])
                         if finish <= start:
@@ -207,7 +248,10 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                             raise ValueError('Confirm both closing till and safe checks.')
                         if (result['till_variance'] or result['safe_variance']) and not values['notes']:
                             raise ValueError('Explain any till or safe count differences in the notes.')
-                        values['closing_checked_at'] = datetime.now(ZoneInfo('Europe/London')).isoformat(timespec='minutes')
+                        if action=='correct':
+                            values['closing_corrected_at']=datetime.now(ZoneInfo('Europe/London')).isoformat(timespec='seconds')
+                        else:
+                            values['closing_checked_at']=datetime.now(ZoneInfo('Europe/London')).isoformat(timespec='seconds')
                 phase = 'Open' if action == 'open' else ('Draft' if action == 'draft' else 'Closed')
                 row = Cashup(booking_id=booking.id, event_index=selected, event_date=date,
                              revision=latest.revision + 1 if latest else 1, phase=phase,
@@ -225,7 +269,7 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
         response = app.make_response(render_template('admin_booking_cashup.html', booking=booking, events=events,
             selected=selected, event=event, latest=latest, values=values, result=totals(values),
             opening_fields=OPEN_FIELDS, closing_fields=CLOSE_FIELDS, history=records(booking),
-            client_csrf=token, error=error, embedded=embedded))
+            client_csrf=token, error=error, embedded=embedded, previous_safe=previous_safe))
         response.headers['Cache-Control'] = 'private, no-store'
         return response, 400 if error else 200
 
