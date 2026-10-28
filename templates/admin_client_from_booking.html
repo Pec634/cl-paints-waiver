@@ -1,0 +1,19 @@
+{% extends 'rewards/base.html' %}
+{% block title %}Create client from booking | CL Paints{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('admin_payments', booking_id=booking.id) }}">&larr; Back to booking payments</a></p>
+<h1>Create client from booking</h1>
+<p>{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }}</p>
+<section class="panel"><h2>Review customer details</h2>
+<p>This adds a client profile using this booking's email. Bookings with the same email appear in that profile, including their existing invoices and payments. The booking price and payments will stay as recorded.</p>
+{% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="client-form" data-warn-unsaved>
+<input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+<p><strong>Booking email:</strong> {{ booking.email }}</p>
+<div class="client-grid"><label>First name<input name="first_name" maxlength="100" value="{{ values.first_name }}" required></label><label>Surname<input name="last_name" maxlength="100" value="{{ values.last_name }}" required></label></div>
+<label>Phone<input name="phone" maxlength="50" value="{{ values.phone }}"></label>
+<label>Customer address<textarea name="address" rows="4" maxlength="4000">{{ values.address }}</textarea></label>
+<p>No password is created and no email is sent. The customer must verify their email with a sign-in code before accessing the portal.</p>
+<div><button type="submit" class="btn primary">Create client profile</button></div>
+</form></section>
+{% endblock %}

@@ -4,6 +4,8 @@ from zoneinfo import ZoneInfo
 import secrets
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
+from email_validator import validate_email, EmailNotValidError
 
 def define_model(db):
     class AdminClientNote(db.Model):
@@ -16,6 +18,53 @@ def define_model(db):
 def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enquiry,
              Owner, Invoice, loyalty, admin_required):
     _, Balance, _, Custodian, _ = loyalty
+    def booking_account(booking):
+        return Account.query.filter(db.func.lower(db.func.trim(Account.email)) == booking.email.strip().casefold()).first()
+
+    @app.context_processor
+    def booking_profile_context():
+        return dict(booking_client_account=booking_account)
+
+    @app.route('/admin/bookings/<int:booking_id>/client', methods=['GET', 'POST'])
+    @admin_required
+    def admin_client_from_booking(booking_id):
+        booking = db.get_or_404(Booking, booking_id)
+        csrf = session.setdefault('client_csrf', secrets.token_urlsafe(32))
+        if request.method == 'POST' and not secrets.compare_digest(csrf, request.form.get('csrf_token', '')):
+            abort(400)
+        account = booking_account(booking)
+        if account:
+            return redirect(url_for('admin_client_profile', client_id=account.id, tab='payments'))
+        error = None
+        values = dict(first_name=booking.first_name, last_name=booking.last_name,
+                      phone=booking.phone or '', address=booking.client_address or '')
+        if request.method == 'POST':
+            values = {key: request.form.get(key, value).strip() for key, value in values.items()}
+            try:
+                email = validate_email(booking.email.strip(), check_deliverability=False).normalized.casefold()
+                if any(not values[key] or len(values[key]) > 100 for key in ('first_name', 'last_name')):
+                    raise ValueError('Enter a first name and surname, up to 100 characters each.')
+                if len(values['phone']) > 50 or len(values['address']) > 4000:
+                    raise ValueError('Keep the phone number within 50 characters and the address within 4,000 characters.')
+                account = Account(email=email, **values)
+                db.session.add(account)
+                db.session.commit()
+                flash('Client created from booking. Existing bookings, prices and payments are unchanged. No email was sent.', 'success')
+                return redirect(url_for('admin_client_profile', client_id=account.id, tab='payments'))
+            except IntegrityError:
+                db.session.rollback()
+                account = booking_account(booking)
+                if account:
+                    return redirect(url_for('admin_client_profile', client_id=account.id, tab='payments'))
+                error = 'The client could not be created. Reload and check the booking email before trying again.'
+            except (EmailNotValidError, ValueError) as exc:
+                db.session.rollback()
+                error = str(exc)
+        response = app.make_response(render_template('admin_client_from_booking.html', booking=booking,
+            values=values, client_csrf=csrf, error=error))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+
     @app.route('/admin/clients/<int:client_id>', methods=['GET','POST'])
     @admin_required
     def admin_client_profile(client_id):

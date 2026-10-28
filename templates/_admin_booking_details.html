@@ -1,5 +1,5 @@
 <h3>{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }}</h3><p>{{ booking.email }} &middot; {{ booking.phone }} &middot; {{ booking.status }}</p>
-                                    {% include '_booking_intake_details.html' %}
+                                    {% include '_booking_client_profile.html' %}{% include '_booking_intake_details.html' %}
                                     <p><a class="btn small" href="{{ url_for('admin_payments',booking_id=booking.id) }}">Payments &amp; deposit</a> {% if booking.status == 'Accepted' %}<a class="btn small" href="{{ url_for('connecteam_rota') }}">Staff rota</a>{% endif %}</p>
                                     <dl class="calendar-details">
                                         <dt>Internal notes</dt><dd>{{ booking.internal_notes or "None" }}</dd><dt>Request type</dt><dd>{{ "Availability" if booking.request_type == "availability" else "Booking" }}</dd>
