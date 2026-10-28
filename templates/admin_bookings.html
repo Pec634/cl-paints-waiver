@@ -15,9 +15,14 @@ Bookings | CL Paints
                 <h1>Bookings</h1><a class="client-text-link" href="{{ url_for('admin_calendar') }}">Check availability calendar &rarr;</a>
                 <p>Client requests submitted through the CL Paints booking form.</p>
             </div>
-            <a class="btn" href="{{ url_for('admin_import_bookings') }}">Import bookings</a>
-            <a class="btn primary" href="{{ url_for('admin_booking_on_behalf') }}">Book on behalf of client</a>
-            <a class="btn primary" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form</a>
+            <details class="booking-actions-menu">
+                <summary class="btn primary">Booking actions</summary>
+                <nav aria-label="Booking actions">
+                    <a href="{{ url_for('admin_booking_on_behalf') }}">Book on behalf of client</a>
+                    <a href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form <span>(new tab)</span></a>
+                    <a href="{{ url_for('admin_import_bookings') }}">Import bookings</a>
+                </nav>
+            </details>
         </div>
 
         {% if request.args.get('consent_pending') %}<p class="booking-admin-error" role="alert">The client must review and sign their portal agreement before this booking can be accepted.</p>{% elif request.args.get('created_on_behalf') %}<p class="booking-admin-notice" role="status">Booking created on behalf of the client. Their portal agreement and signature are pending.</p>{% elif request.args.get('imported') %}

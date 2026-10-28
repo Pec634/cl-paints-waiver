@@ -26,6 +26,18 @@ class BookingLayoutTest(unittest.TestCase):
         page = self.fixture.admin.get('/admin/bookings?filter=all')
         self.assertEqual(page.status_code, 200)
         self.browser(page.data, '''
+            const menu = document.querySelector('.booking-actions-menu');
+            assert(menu && !menu.open, 'Booking actions should start collapsed');
+            menu.querySelector('summary').click();
+            assert(menu.open, 'Actions menu should open');
+            assert(menu.querySelectorAll('nav a').length === 3, 'All booking actions should remain available');
+            const menuBounds = menu.querySelector('nav').getBoundingClientRect();
+            assert(menuBounds.left >= 0 && menuBounds.right <= innerWidth + 1, 'Actions menu must fit the screen');
+            menu.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+            assert(!menu.open && document.activeElement === menu.querySelector('summary'), 'Escape should close the menu and return focus');
+            menu.querySelector('summary').click();
+            document.querySelector('h1').click();
+            assert(!menu.open, 'Clicking outside should close the menu');
             const card = document.querySelector('.booking-request-card');
             const deletion = card.querySelector('.booking-delete-detail');
             const manage = card.querySelector('.booking-manage-detail');

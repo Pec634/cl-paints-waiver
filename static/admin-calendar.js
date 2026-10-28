@@ -1,4 +1,20 @@
 (() => {
+  const actions = document.querySelector('.booking-actions-menu');
+  if (actions) {
+    document.addEventListener('click', event => {
+      if (!actions.contains(event.target)) actions.open = false;
+    });
+    actions.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && actions.open) {
+        actions.open = false;
+        actions.querySelector('summary').focus();
+        event.stopPropagation();
+      }
+    });
+    actions.querySelector('nav').addEventListener('click', event => {
+      if (event.target.closest('a')) actions.open = false;
+    });
+  }
   const dialog = document.getElementById('calendar-event-dialog');
   const content = document.getElementById('calendar-dialog-content');
   let opener;
