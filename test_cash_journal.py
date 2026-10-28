@@ -80,6 +80,19 @@ class CashJournalTest(unittest.TestCase):
         self.move()
         self.assertFalse(main.app.extensions['till_float_view']()['fresh'])
 
+    def test_float_warning_compares_count_to_default_not_cash_journal(self):
+        self.opening()
+        self.denominations('target', denom_till_100='142')
+        self.denominations('count', denom_till_100='133')
+        page = self.admin.get(self.path)
+        self.assertIn(b'&pound;9.00 below the default float', page.data)
+        self.assertIn(b'Default: &pound;142.00. Counted: &pound;133.00.', page.data)
+        self.assertIn(b'Cash-record discrepancy (separate from the default float)', page.data)
+        self.denominations('count', denom_till_100='150')
+        self.assertIn(b'&pound;8.00 above the default float', self.admin.get(self.path).data)
+        self.denominations('count', denom_till_100='142')
+        self.assertIn(b'The last till count matches the default float.', self.admin.get(self.path).data)
+
     def test_counts_validate_quantities_and_require_discrepancy_explanation(self):
         self.opening()
         for changes in (dict(denom_till_100='-1'), dict(denom_till_100='1.5'),
