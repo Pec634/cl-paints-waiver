@@ -62,7 +62,7 @@ class InvoiceDocumentsTest(unittest.TestCase):
         self.browser(self.fixture.admin.get('/admin/bookings').data, '''
             const row = document.querySelector('.booking-row');
             const dialog = document.querySelector('#calendar-event-dialog');
-            row.querySelector('td').click();
+            row.querySelector('[data-search-client]').click();
             assert(dialog.open, 'Clicking the booking field must open its details');
             assert(dialog.textContent.includes('invoice.pdf'), 'Invoice missing from popup');
             assert(dialog.textContent.includes('Client signature'), 'Full details missing');

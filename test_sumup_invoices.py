@@ -42,6 +42,40 @@ class SumUpInvoicesTest(unittest.TestCase):
             self.fixture.admin.post(self.path, data=dict(self.data, amount=bad))
         self.assertEqual(main.BookingInvoice.query.count(), 0)
 
+    def test_saved_links_appear_in_booking_calendar_and_activity_details(self):
+        self.fixture.admin.post(self.path, data=self.data)
+        self.booking.status = 'Accepted'
+        main.db.session.commit()
+        for path in ('/admin/bookings?filter=all', '/admin/calendar?month='+self.booking.event_date.strftime('%Y-%m'),
+                     f'/admin/bookings/{self.booking.id}/activity'):
+            page = self.fixture.admin.get(path)
+            self.assertEqual(page.status_code, 200)
+            self.assertNotIn(b'No SumUp invoice links attached.', page.data)
+            self.assertIn(b'https://pay.sumup.com/example', page.data)
+            self.assertIn(b'View invoice in SumUp', page.data)
+            self.assertNotIn(b'Your invoices are issued through SumUp.', page.data)
+
+    def test_pdf_is_acknowledged_without_inventing_payment_matching_metadata(self):
+        from io import BytesIO
+        account = self.fixture.account
+        path = f'/admin/clients/{account.id}/invoice-documents'
+        self.fixture.admin.get(f'/admin/clients/{account.id}')
+        with self.fixture.admin.session_transaction() as state:
+            csrf = state['client_csrf']
+        self.fixture.admin.post(path, data=dict(csrf_token=csrf, booking_id=str(self.booking.id),
+            invoice_document=(BytesIO(b'%PDF-1.4\ninvoice'), 'Invoice_2026-016.pdf')))
+        for path in ('/admin/bookings?filter=all', f'/admin/bookings/{self.booking.id}/payments',
+                     f'/admin/bookings/{self.booking.id}/activity'):
+            page = self.fixture.admin.get(path)
+            self.assertIn(b'Invoice document attached', page.data)
+            self.assertIn(b'Invoice_2026-016.pdf', page.data)
+            self.assertIn(b'Link SumUp invoice for payment checks', page.data)
+            self.assertNotIn(b'No SumUp invoice', page.data)
+        page = self.fixture.client.get(f'/client/bookings/{self.booking.id}')
+        self.assertIn(b'Invoice document attached', page.data)
+        self.assertNotIn(b'Link SumUp invoice for payment checks', page.data)
+        self.assertEqual(main.BookingInvoice.query.count(), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

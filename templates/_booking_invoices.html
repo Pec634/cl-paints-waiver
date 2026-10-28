@@ -1,12 +1,17 @@
+{% set invoice_records = invoice_links(booking) %}
+{% set invoice_files = invoice_documents(booking) %}
+{% set invoice_admin = request.endpoint.startswith('admin_') %}
 <section class="panel"><h2>SumUp invoices</h2>
+{% if invoice_admin %}
 {% if request.endpoint == 'admin_payments' %}
 <p>Create invoices in SumUp, then attach them here for your client. Check payments to record verified invoice payments from the last 90 days. Partial payments and existing ledger entries need review to avoid duplicates.</p>
 <form method="post" action="{{ url_for('admin_sync_sumup_invoices', booking_id=booking.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn" type="submit">Check SumUp invoice payments</button></form>
 <a class="btn primary" href="{{ url_for('admin_booking_invoices', booking_id=booking.id) }}">Attach SumUp invoice</a>
+{% else %}<p>View linked SumUp invoices and manage payment checks from this booking's Payments page.</p><a class="btn" href="{{ url_for('admin_payments', booking_id=booking.id) }}">Payments &amp; invoices</a>{% endif %}
 {% else %}<p>Your invoices are issued through SumUp. Open an invoice to view its details and payment options. Payments below are updated by CL Paints after confirmation.</p>{% endif %}
-{% for invoice in booking_invoices %}
+{% for invoice in invoice_records %}
 <article class="client-record"><strong>{{ invoice.purpose }} · {{ invoice.reference }}</strong>
 <p>£{{ '%.2f'|format(invoice.amount) }} · Due {{ invoice.due_date.strftime('%d/%m/%Y') }}</p>
 {% if booking_payments_allowed(booking) or request.endpoint.startswith("admin_") %}<a class="btn" href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">View invoice in SumUp</a>{% else %}<p>Invoice payment is available after CL Paints reviews your booking and requests payment.</p>{% endif %}</article>
-{% else %}<p>No SumUp invoices attached.</p>{% endfor %}</section>
+{% else %}{% if invoice_files %}<p>Invoice document{{ 's' if invoice_files|length != 1 else '' }} attached &mdash; available to download below.</p>{% if invoice_admin %}<p>To check payments automatically, also link the SumUp invoice number, amount and payment URL to this booking. Uploading a PDF alone does not enable payment matching.</p><a class="btn" href="{{ url_for('admin_booking_invoices', booking_id=booking.id) }}">Link SumUp invoice for payment checks</a>{% endif %}{% else %}<p>No SumUp invoice links attached.</p>{% endif %}{% endfor %}</section>
 {% include '_invoice_documents.html' %}
