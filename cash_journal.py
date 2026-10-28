@@ -113,13 +113,21 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
             current = baseline.values['denominations']['closing_till']
             at, source = baseline.recorded_at, 'Event closing till count'
             fresh = not state['movement_ids'] and not state['active']
+        safe_counts = baseline.values.get('denominations', {}).get('closing_safe') if baseline else None
+        safe_fresh = safe_counts is not None and not state['active']
+        if safe_fresh and state['movement_ids']:
+            safe_fresh = not Movement.query.filter(Movement.id.in_(state['movement_ids']),
+                db.or_(Movement.source == 'safe', Movement.destination == 'safe')).first()
         rows = []
         for pence, label in DENOMINATIONS:
             desired = (target.counts if target else {}).get(str(pence), 0)
             actual = (current or {}).get(str(pence), 0)
+            safe_quantity = safe_counts.get(str(pence), 0) if safe_counts is not None else None
             rows.append(dict(pence=pence, label=label, desired=desired, actual=actual,
+                safe_quantity=safe_quantity, safe_value=Decimal(safe_quantity)*pence/100 if safe_quantity is not None else None,
                 short=max(0, desired-actual), surplus=max(0, actual-desired)))
         return dict(target=target, counted=counted, current=current, current_at=at, source=source, fresh=fresh, rows=rows,
+            safe_fresh=safe_fresh, safe_count_at=baseline.recorded_at if safe_counts is not None else None,
             current_total=sum(Decimal(row['actual'])*row['pence']/100 for row in rows) if current is not None else None,
             short_total=sum(Decimal(row['short'])*row['pence']/100 for row in rows))
 

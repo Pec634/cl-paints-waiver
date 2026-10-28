@@ -101,6 +101,32 @@ class CashJournalTest(unittest.TestCase):
         self.denominations('target', record_version='', denom_till_100='20')
         self.assertEqual(main.TillDenominationRecord.query.count(), 1)
 
+    def test_till_shortages_show_safe_quantities_and_mark_them_stale_after_safe_transfer(self):
+        values = {field:'0.00' for field, _ in OPEN_FIELDS+CLOSE_FIELDS}
+        values.update(closing_till='20', closing_safe='10', checked_by='Manager',
+            denominations={'closing_safe':{'100':10}, 'closing_till':{'2000':1}})
+        main.db.session.add(main.BookingCashup(booking_id=self.booking.id, event_index=0, event_date=self.date,
+            revision=1, phase='Closed', data_json=json.dumps(values), recorded_by='Manager'))
+        main.db.session.commit()
+        self.denominations('target', denom_till_100='5')
+        view = main.app.extensions['till_float_view']()
+        pound = next(row for row in view['rows'] if row['pence']==100)
+        self.assertEqual(pound['short'], 5)
+        self.assertEqual(pound['safe_quantity'], 10)
+        self.assertEqual(pound['safe_value'], Decimal('10'))
+        self.assertTrue(view['safe_fresh'])
+        page = self.admin.get(self.path)
+        self.assertIn(b'Enough in the safe to cover this shortage.', page.data)
+        self.move(amount='1')
+        self.assertFalse(main.app.extensions['till_float_view']()['safe_fresh'])
+        self.assertIn(b'recount before transferring', self.admin.get(self.path).data)
+
+    def test_missing_safe_breakdown_is_unknown_not_zero(self):
+        self.opening()
+        self.denominations('target', denom_till_100='5')
+        self.denominations('count', denom_till_2000='1')
+        self.assertIn(b'Safe quantity unknown', self.admin.get(self.path).data)
+
     def test_admin_csrf_validation_and_duplicate_protection(self):
         self.assertEqual(self.fixture.client.get(self.path).status_code, 302)
         self.assertEqual(self.admin.post(self.path, data={'csrf_token':'bad'}).status_code, 400)
