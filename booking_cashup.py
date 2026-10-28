@@ -65,8 +65,8 @@ def totals(values):
     net = cash + n('card_sales') - n('card_refunds')
     shared = n('share_till') + n('share_safe') + n('share_bank')
     due = (max(Decimal(0), net) * n('share_percent') / 100).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
-    till = n('opening_till') + cash + n('safe_to_till') - n('till_to_safe') - n('share_till') + n('till_other_in') - n('till_other_out')
-    safe = n('opening_safe') + n('till_to_safe') - n('safe_to_till') - n('share_safe') + n('safe_other_in') - n('safe_other_out')
+    till = n('opening_till') + cash + n('safe_to_till') - n('till_to_safe') - n('share_till') + n('till_other_in') - n('till_other_out') + n('invoice_cash_till')
+    safe = n('opening_safe') + n('till_to_safe') - n('safe_to_till') - n('share_safe') + n('safe_other_in') - n('safe_other_out') + n('invoice_cash_safe')
     return dict(gross=n('cash_sales') + n('card_sales'), refunds=n('cash_refunds') + n('card_refunds'),
                 net=net, shared=shared, share_due=due, share_remaining=due-shared, retained=net-shared,
                 expected_till=till, expected_safe=safe, till_variance=n('closing_till')-till,
@@ -93,6 +93,15 @@ def define_model(db):
 
 
 def register(app, db, Cashup, Booking, schedule, admin_required):
+    def pending_event_days(booking):
+        pending = []
+        for index, event in enumerate(schedule(booking)):
+            row = Cashup.query.filter_by(booking_id=booking.id, event_index=index, event_date=event.get('date', '')).order_by(Cashup.revision.desc()).first()
+            if not row or row.phase != 'Closed':
+                pending.append(index + 1)
+        return pending
+    app.extensions['pending_cashup_event_days'] = pending_event_days
+
     def current_checks():
         ids=db.session.query(db.func.max(Cashup.id)).group_by(Cashup.booking_id,Cashup.event_index,Cashup.event_date)
         return Cashup.query.filter(Cashup.id.in_(ids)).all()
@@ -100,7 +109,7 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
     def previous_safe_close(key):
         candidates=[]
         for row in current_checks():
-            if row.phase!='Closed' or (row.booking_id,row.event_index,row.event_date)==key:
+            if row.phase!='Closed' or row.values.get('no_cash_handled') or (row.booking_id,row.event_index,row.event_date)==key:
                 continue
             first=Cashup.query.filter_by(booking_id=row.booking_id,event_index=row.event_index,
                 event_date=row.event_date,phase='Closed').order_by(Cashup.id).first()
@@ -175,6 +184,8 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                 abort(409, 'This event date has changed. Reload before saving.')
             if request.form.get('version', '') != (str(latest.id) if latest else ''):
                 abort(409, 'This cash-up has changed. Reload before saving.')
+            if latest and latest.values.get('no_cash_handled'):
+                abort(409, 'This event was reconciled without physical cash. Use Payments for ledger corrections.')
             action = request.form.get('action')
             if action not in ('open', 'draft', 'close', 'correct'):
                 abort(400)

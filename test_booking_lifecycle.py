@@ -147,6 +147,12 @@ class BookingLifecycleTest(unittest.TestCase):
         self.assertEqual(FollowUp.query.count(), 0)
         self.booking.event_date = (datetime.now(ZoneInfo('Europe/London'))-timedelta(days=2)).date()
         main.db.session.commit()
+        blocked = self.admin.post(self.route, data=dict(csrf_token='admin-token', action='complete'))
+        self.assertIn(b'Complete the cash sheet/payment reconciliation', blocked.data)
+        self.assertEqual(FollowUp.query.count(), 0)
+        self.admin.post(f'/admin/bookings/{self.booking.id}/cash-up/invoice-payment', data=dict(
+            csrf_token='admin-token', version='', event_index='0', event_date=self.booking.event_date.isoformat(),
+            cash_handled='no', invoice_payment_state='unpaid', invoice_checked_by='Manager', invoice_payment_confirmed='yes'))
         self.admin.post(self.route, data=dict(csrf_token='admin-token',action='complete'))
         followup = FollowUp.query.one()
         self.assertIsNone(followup.requested_at)

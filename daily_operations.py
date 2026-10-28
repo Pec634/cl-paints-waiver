@@ -29,7 +29,7 @@ def register(app, db, Booking, Handover, Cashup, schedule):
                 item = dict(booking=booking, event=event, index=index, cashup=row)
                 if start.date() == today:
                     todays.append(item)
-                if event.get('publicity_type') == 'Public' and end <= now and (not row or row.phase != 'Closed'):
+                if end <= now and (not row or row.phase != 'Closed'):
                     due.append(item)
         # Keep unresolved financial issues visible even if a booking is later cancelled
         # or its event date changes. Every link identifies the saved event date.

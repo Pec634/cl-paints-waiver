@@ -230,6 +230,8 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
                         return redirect(url_for('admin_booking_activity', booking_id=booking.id))
                     if booking.status != 'Accepted' or not events or max(interval(e)[1] for e in events) >= datetime.now(zone).replace(tzinfo=None):
                         raise ValueError('Only mark a confirmed booking completed after all its event times have passed.')
+                    if app.extensions['pending_cashup_event_days'](booking):
+                        raise ValueError('Complete the cash sheet/payment reconciliation for every event day before marking this booking completed.')
                     if any(p.display_status == 'Pending' for p in Proposal.query.filter_by(booking_id=booking.id, status='Pending').all()):
                         raise ValueError('Withdraw pending date proposals before marking this event completed.')
                     db.session.add(FollowUp(booking_id=booking.id, completed_at=datetime.utcnow(), completed_by=who))

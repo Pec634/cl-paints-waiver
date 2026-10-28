@@ -19,7 +19,7 @@
   const navigation = document.createElement('nav');
   navigation.className = 'operational-sheet-navigation';
   navigation.setAttribute('aria-label', 'Sheet sections');
-  sheet.querySelectorAll('[data-handover-form] > section > h2, [data-cashup-form] > section > h2, .sheet-closing-stage > section > h2').forEach((label, index) => {
+  sheet.querySelectorAll('[data-handover-form] > section > h2, [data-cashup-form] > section > h2, .sheet-closing-stage > section > h2, [data-invoice-reconciliation] > h2').forEach((label, index) => {
     const section = label.parentElement;
     section.id ||= 'sheet-section-'+index;
     const button = document.createElement('button');

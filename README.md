@@ -428,14 +428,44 @@ needing change/top-ups, and remaining counted till cash. The target is the
 original opening mix. This is an allocation guide and does not automatically
 record a transfer or include cash already moved to the safe.
 
-The daily handover includes an **Event-day cash-up** section for confirmed public
+The daily handover includes an **Event-day cash-up** section for all confirmed
 booking dates. Each event opens its existing cash-up inside the handover, with
 opening/closing checks, denomination counters and float-return advice. Cash-up
 saves do not navigate away from unsaved handover notes. A status refresh enables
-handover completion once every public event's cash-up is closed; the server checks this
+handover completion once every event's cash-up is closed; the server checks this
 again on completion and acknowledgement. Drafts remain available while cash-ups
-are in progress. Private events and dates without confirmed public booking events do not require cash-up.
+are in progress. Public and private events both require reconciliation. Dates
+without confirmed events do not require cash-up. Marking a booking completed
+also requires a closed cash sheet for every event day.
 Saved handovers retain references to the cash-up revisions used at completion.
+
+The existing cash sheet now includes **Invoice payment reconciliation**. Select
+full payment, partial payment, unpaid or no client invoice expected. Select
+already-recorded booking payments (including verified SumUp receipts) instead
+of entering them again. The saved reconciliation keeps the receipt IDs, methods,
+amounts, dates, checker and balance at the time of reconciliation.
+
+For new receipts, enter amounts split across cash, card/SumUp and bank transfer,
+with the receipt date and invoice/reference. These are manually verified receipts:
+confirm you checked the bank/provider/cash evidence. They are posted to the client
+ledger once, in the same database transaction as the saved sheet revision. New
+receipts cannot exceed the outstanding booking balance. Creating a reconciliation
+does not change the booking status or send an email.
+
+If no physical cash was handled, reconciliation closes the event sheet after
+the event finishes without inventing zero till/safe counts or changing the shared
+safe balance. For cash handled, save opening counts first, reconcile invoice cash,
+then complete the existing closing counts. Cash allocated to the till/safe after
+opening is included automatically in its expected closing balance, separately
+from sales and organiser revenue sharing. Do not repeat it in sales or other cash
+in. Existing cash payments may be marked already accounted for, or allocated once
+to a till/safe after opening. Reusing the same cash receipt on another sheet is
+blocked. Keep using the shared-safe opening/closing continuity checks for physical
+cash sheets; this change does not replace them with independent event safes.
+
+Invoice reconciliations are audit snapshots and cannot be resubmitted as another
+receipt. Use Payments for later ledger corrections; physical closing corrections
+retain invoice allocations. Card/bank payments do not change expected cash.
 
 In **Bookings > Manage request**, eligible unconfirmed requests have a **Delete
 non-confirmed booking** option with explicit checkbox confirmation. Confirmed or

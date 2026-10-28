@@ -2789,6 +2789,8 @@ from google_calendar_sync import register as register_google_calendar_sync
 register_google_calendar_sync(app, db, BusinessSetting, Booking, booking_schedule_events, get_business_settings, admin_required)
 from booking_cashup import register as register_booking_cashup
 register_booking_cashup(app, db, BookingCashup, Booking, booking_schedule_events, admin_required)
+from cashup_invoice_payments import register as register_cashup_invoice_payments
+register_cashup_invoice_payments(app, db, BookingCashup, Booking, tool_models[1], booking_schedule_events, admin_required)
 from daily_handovers import register as register_daily_handovers
 register_daily_handovers(app, db, DailyHandover, Booking, booking_schedule_events, admin_required, BookingCashup)
 from daily_operations import register as register_daily_operations
