@@ -18,6 +18,7 @@ Bookings | CL Paints
             <details class="booking-actions-menu">
                 <summary class="btn primary">Booking actions</summary>
                 <nav aria-label="Booking actions">
+                    <a href="{{ url_for('admin_choose_client_booking') }}">Create client from booking</a>
                     <a href="{{ url_for('admin_booking_on_behalf') }}">Book on behalf of client</a>
                     <a href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form <span>(new tab)</span></a>
                     <a href="{{ url_for('admin_import_bookings') }}">Import bookings</a>

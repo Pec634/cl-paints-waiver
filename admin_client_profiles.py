@@ -25,6 +25,24 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
     def booking_profile_context():
         return dict(booking_client_account=booking_account)
 
+    @app.get('/admin/bookings/create-client')
+    @admin_required
+    def admin_choose_client_booking():
+        term = request.args.get('q', '').strip()
+        if len(term) > 100:
+            abort(400)
+        linked = Account.query.filter(db.func.lower(db.func.trim(Account.email)) ==
+                                      db.func.lower(db.func.trim(Booking.email))).exists()
+        query = Booking.query.filter(~linked)
+        if term:
+            pattern = '%' + term.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+            query = query.filter(or_(*[column.ilike(pattern, escape='\\') for column in
+                (Booking.first_name, Booking.last_name, Booking.email, Booking.first_name + ' ' + Booking.last_name)]))
+        pagination = query.order_by(Booking.submitted_at.desc(), Booking.id.desc()).paginate(per_page=25, error_out=False)
+        response = app.make_response(render_template('admin_choose_client_booking.html', pagination=pagination, query=term))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+
     @app.route('/admin/bookings/<int:booking_id>/client', methods=['GET', 'POST'])
     @admin_required
     def admin_client_from_booking(booking_id):

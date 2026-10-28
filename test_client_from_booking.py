@@ -88,4 +88,16 @@ class ClientFromBookingTest(unittest.TestCase):
         self.admin.post(self.path, data=dict(csrf_token=self.csrf))
         for path in paths:
             self.assertIn(b'Client profile &amp; invoice uploads', self.admin.get(path).data)
-            self.assertNotIn(b'Create client from booking', self.admin.get(path).data)
+            if path != paths[0]:
+                self.assertNotIn(b'Create client from booking', self.admin.get(path).data)
+
+    def test_submenu_booking_picker_search_and_existing_profile_filter(self):
+        picker = '/admin/bookings/create-client'
+        self.assertEqual(self.fixture.client.get(picker).status_code, 302)
+        page = self.admin.get(picker)
+        self.assertIn(self.path.encode(), page.data)
+        self.assertIn('no-store', page.headers['Cache-Control'])
+        self.assertNotIn(self.path.encode(), self.admin.get(picker+'?q=nonexistent-customer').data)
+        self.assertIn(self.path.encode(), self.admin.get(picker+'?q=historic@example.com').data)
+        self.admin.post(self.path, data=dict(csrf_token=self.csrf))
+        self.assertNotIn(self.path.encode(), self.admin.get(picker).data)
