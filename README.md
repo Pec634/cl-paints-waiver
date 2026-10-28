@@ -487,6 +487,16 @@ an explained adjustment transfer rather than rewriting that baseline. Expected b
 count the physical money before moving it. Bank/other sources are cash movement
 counterparties, not a bank-account balance or expense ledger.
 
+The journal also includes **Till float & denomination count**. Set the default
+quantity of each GBP note/coin, then save a separate physical till count. Totals,
+shortages and surpluses are calculated per denomination: surplus notes do not
+replace missing coins. Targets and counts retain their checker, timestamp and
+quantities in history. Counts do not overwrite expected balances or create money
+movements; a discrepancy requires an explanation. Subsequent cash movements or
+event activity mark old counts as needing a recount. Closing denomination counts
+from event sheets are used when newer than a standalone count. Record actual
+top-ups and change movements separately in the cash journal.
+
 In **Bookings > Manage request**, eligible unconfirmed requests have a **Delete
 non-confirmed booking** option with explicit checkbox confirmation. Confirmed or
 previously confirmed bookings and requests linked to payments, SumUp checkouts or

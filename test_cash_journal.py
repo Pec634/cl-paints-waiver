@@ -57,6 +57,50 @@ class CashJournalTest(unittest.TestCase):
         state = main.app.extensions['cash_journal_position']()
         self.assertEqual((state['till'], state['safe']), (Decimal('20'), Decimal('100')))
 
+    def denominations(self, kind, **changes):
+        base = self.form()
+        previous = main.TillDenominationRecord.query.filter_by(kind=kind).order_by(main.TillDenominationRecord.id.desc()).first()
+        data = dict(csrf_token=base['csrf_token'], cash_version=base['version'], record_version=str(previous.id) if previous else '',
+            kind=kind, checked_by='Manager', note='Count check')
+        data.update(changes)
+        return self.admin.post('/admin/cash-movements/till-count', data=data)
+
+    def test_default_and_actual_denominations_show_shortages_without_moving_money(self):
+        self.opening()
+        self.denominations('target', denom_till_10='100')
+        self.denominations('count', denom_till_2000='1')
+        view = main.app.extensions['till_float_view']()
+        self.assertEqual(view['target'].total, Decimal('10'))
+        self.assertEqual(view['current_total'], Decimal('20'))
+        self.assertEqual(view['short_total'], Decimal('10'))
+        self.assertTrue(view['fresh'])
+        self.assertEqual(main.app.extensions['cash_journal_position']()['till'], Decimal('20'))
+        self.assertEqual(main.CashMovement.query.count(), 1)
+        self.assertIn(b'Saved note and coin quantities', self.admin.get(self.path).data)
+        self.move()
+        self.assertFalse(main.app.extensions['till_float_view']()['fresh'])
+
+    def test_counts_validate_quantities_and_require_discrepancy_explanation(self):
+        self.opening()
+        for changes in (dict(denom_till_100='-1'), dict(denom_till_100='1.5'),
+                        dict(denom_till_100='1000000'), dict(denom_till_5000='999999')):
+            self.denominations('target', **changes)
+            self.assertEqual(main.TillDenominationRecord.query.count(), 0)
+        self.denominations('count', denom_till_100='10', note='')
+        self.assertEqual(main.TillDenominationRecord.query.count(), 0)
+        self.denominations('count', denom_till_100='10', note='Explained difference to review')
+        self.assertEqual(main.TillDenominationRecord.query.count(), 1)
+        self.assertEqual(main.app.extensions['cash_journal_position']()['till'], Decimal('20'))
+        self.assertIn(b'Counted cash differs', self.admin.get(self.path).data)
+
+    def test_denomination_posts_require_admin_csrf_and_fresh_versions(self):
+        path = '/admin/cash-movements/till-count'
+        self.assertEqual(self.fixture.client.post(path).status_code, 302)
+        self.assertEqual(self.admin.post(path, data={'csrf_token':'bad'}).status_code, 400)
+        self.denominations('target', denom_till_100='10')
+        self.denominations('target', record_version='', denom_till_100='20')
+        self.assertEqual(main.TillDenominationRecord.query.count(), 1)
+
     def test_admin_csrf_validation_and_duplicate_protection(self):
         self.assertEqual(self.fixture.client.get(self.path).status_code, 302)
         self.assertEqual(self.admin.post(self.path, data={'csrf_token':'bad'}).status_code, 400)
@@ -122,5 +166,10 @@ class CashJournalTest(unittest.TestCase):
         self.browser(self.admin.get(self.path).data, '''
             const link = document.querySelector('a[href="/admin/cash-movements"]');
             assert(link && link.closest('details').querySelector('summary').textContent.includes('Finance'), 'Cash history must be under Finance & reports');
+            const target = [...document.querySelectorAll('[data-till-denominations]')].find(form => form.elements.kind.value === 'target');
+            target.closest('details').open = true;
+            const pound = target.querySelector('[data-till-pence="100"]');
+            pound.value = '12'; pound.dispatchEvent(new Event('input', {bubbles:true}));
+            assert(target.querySelector('[data-till-count-total]').textContent.includes('12.00'), 'Default float total must update when quantities change');
             assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Cash journal must fit phone width');
         ''', width=390)

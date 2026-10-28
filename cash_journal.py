@@ -1,11 +1,12 @@
 """Append-only, non-event physical cash transfers and combined cash-sheet history."""
 from datetime import datetime, timedelta
 from decimal import Decimal
+import json
 import secrets
 from zoneinfo import ZoneInfo
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.exc import IntegrityError
-from booking_cashup import CLOSE_FIELDS, money
+from booking_cashup import CLOSE_FIELDS, DENOMINATIONS, money, read_counts
 
 LOCATIONS = {'till': 'Till', 'safe': 'Safe', 'bank': 'Bank', 'other': 'Other cash source / use'}
 
@@ -26,7 +27,25 @@ def define_model(db):
     return CashMovement
 
 
-def register(app, db, Movement, Cashup, Setting, admin_required):
+def define_till_count_model(db):
+    class TillDenominationRecord(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        kind = db.Column(db.String(10), nullable=False, index=True)
+        counts_json = db.Column(db.Text, nullable=False)
+        total = db.Column(db.Numeric(10, 2), nullable=False)
+        expected_total = db.Column(db.Numeric(10, 2))
+        cash_version = db.Column(db.String(64), nullable=False)
+        checked_by = db.Column(db.String(255), nullable=False)
+        note = db.Column(db.String(1000), nullable=False, default='')
+        recorded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+        @property
+        def counts(self):
+            return json.loads(self.counts_json)
+    return TillDenominationRecord
+
+
+def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
     def lock():
         key = 'cash_journal_lock'
         if not db.session.get(Setting, key):
@@ -80,6 +99,64 @@ def register(app, db, Movement, Cashup, Setting, admin_required):
 
     app.extensions['cash_journal_position'] = position
     app.extensions['cash_journal_lock'] = lock
+
+    def till_view(state=None):
+        state = state or position()
+        target = TillCount.query.filter_by(kind='target').order_by(TillCount.id.desc()).first()
+        counted = TillCount.query.filter_by(kind='count').order_by(TillCount.id.desc()).first()
+        current = counted.counts if counted else None
+        at = counted.recorded_at if counted else None
+        source = 'Till count' if counted else ''
+        fresh = bool(counted and counted.cash_version == state['version'] and not state['active'])
+        baseline = state['baseline']
+        if baseline and baseline.values.get('denominations', {}).get('closing_till') is not None and (not at or baseline.recorded_at > at):
+            current = baseline.values['denominations']['closing_till']
+            at, source = baseline.recorded_at, 'Event closing till count'
+            fresh = not state['movement_ids'] and not state['active']
+        rows = []
+        for pence, label in DENOMINATIONS:
+            desired = (target.counts if target else {}).get(str(pence), 0)
+            actual = (current or {}).get(str(pence), 0)
+            rows.append(dict(pence=pence, label=label, desired=desired, actual=actual,
+                short=max(0, desired-actual), surplus=max(0, actual-desired)))
+        return dict(target=target, counted=counted, current=current, current_at=at, source=source, fresh=fresh, rows=rows,
+            current_total=sum(Decimal(row['actual'])*row['pence']/100 for row in rows) if current is not None else None,
+            short_total=sum(Decimal(row['short'])*row['pence']/100 for row in rows))
+
+    app.extensions['till_float_view'] = till_view
+
+    @app.post('/admin/cash-movements/till-count')
+    @admin_required
+    def admin_till_denominations():
+        csrf = session.get('cash_journal_csrf', '')
+        if not csrf or not secrets.compare_digest(csrf, request.form.get('csrf_token', '')):
+            abort(400)
+        Cashup.query.order_by(Cashup.id).with_for_update().first()
+        lock()
+        state = position()
+        kind = request.form.get('kind')
+        if kind not in ('target', 'count'):
+            abort(400)
+        try:
+            previous = TillCount.query.filter_by(kind=kind).order_by(TillCount.id.desc()).first()
+            if request.form.get('record_version', '') != (str(previous.id) if previous else ''):
+                raise ValueError('This denomination record changed. Reload before saving again.')
+            if kind == 'count' and (state['active'] or request.form.get('cash_version') != state['version']):
+                raise ValueError('Cash records changed or an event sheet is open. Close the event sheet and reload before counting here.')
+            counts, total = read_counts(request.form, 'till')
+            checker, note = request.form.get('checked_by', '').strip(), request.form.get('note', '').strip()
+            if not checker or len(checker) > 255 or len(note) > 1000:
+                raise ValueError('Enter the checker name (up to 255 characters) and keep notes within 1,000 characters.')
+            if kind == 'count' and state['till'] is not None and total != state['till'] and not note:
+                raise ValueError('Explain the difference between the counted till and expected balance in the notes.')
+            db.session.add(TillCount(kind=kind, counts_json=json.dumps(counts), total=total,
+                expected_total=state['till'] if kind == 'count' else None, cash_version=state['version'], checked_by=checker, note=note))
+            db.session.commit()
+            flash('Default till float saved.' if kind == 'target' else 'Till denomination count saved. Expected balances and money movements were not changed.', 'success')
+        except (ValueError, IntegrityError) as exc:
+            db.session.rollback()
+            flash(str(exc) if not isinstance(exc, IntegrityError) else 'The count changed. Reload before saving.', 'error')
+        return redirect(url_for('admin_cash_movements'))
 
     @app.route('/admin/cash-movements', methods=['GET', 'POST'])
     @admin_required
@@ -142,6 +219,8 @@ def register(app, db, Movement, Cashup, Setting, admin_required):
             history.append(dict(at=item.recorded_at, kind=item.kind, movement=item, sheet=None))
         for sheet in latest_checks():
             history.append(dict(at=sheet.recorded_at, kind='event', movement=None, sheet=sheet))
+        for count in TillCount.query.all():
+            history.append(dict(at=count.recorded_at, kind='denominations', movement=None, sheet=None, count=count))
         start, end = request.args.get('start', ''), request.args.get('end', '')
         try:
             zone = ZoneInfo('Europe/London')
@@ -159,6 +238,7 @@ def register(app, db, Movement, Cashup, Setting, admin_required):
         page = max(1, request.args.get('page', 1, type=int))
         response = app.make_response(render_template('admin_cash_movements.html', state=state,
             history=history[(page-1)*25:page*25], has_next=len(history)>page*25, page=page,
-            start=start, end=end, csrf=csrf, movement_token=token, locations=LOCATIONS, cash_fields=CLOSE_FIELDS))
+            start=start, end=end, csrf=csrf, movement_token=token, locations=LOCATIONS, cash_fields=CLOSE_FIELDS,
+            till_float=till_view(state)))
         response.headers['Cache-Control'] = 'private, no-store'
         return response
