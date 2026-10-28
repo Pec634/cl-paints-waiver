@@ -25,6 +25,7 @@ def register(app, db, Cashup, Booking, Entry, schedule, admin_required):
         if not token or not secrets.compare_digest(token, request.form.get('csrf_token', '')):
             abort(400)
         Cashup.query.order_by(Cashup.id).with_for_update().first()
+        app.extensions['cash_journal_lock']()
         booking = Booking.query.filter_by(id=booking_id).with_for_update().first_or_404()
         index = request.form.get('event_index', type=int)
         events = schedule(booking)

@@ -158,6 +158,7 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
             # A stable retained record serialises shared-safe openings/corrections
             # on databases that support row locks; all lookups below occur after it.
             Cashup.query.order_by(Cashup.id).with_for_update().first()
+            app.extensions['cash_journal_lock']()
         selected = request.form.get('event_index', type=int) if request.method == 'POST' else request.args.get('day', 0, type=int)
         if selected is None or not 0 <= selected < len(events):
             abort(400)
@@ -173,6 +174,11 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
         key=(booking.id,selected,date)
         previous_safe = (db.session.get(Cashup,values.get('safe_previous_record_id'))
             if latest and values.get('safe_previous_record_id') else previous_safe_close(key))
+        journal = app.extensions['cash_journal_position']()
+        safe_expected = (journal['safe'] if journal['has_movements'] else
+                         money(previous_safe.values['closing_safe']) if previous_safe else None)
+        if latest:
+            safe_expected = money(values['opening_safe'])
         embedded = request.args.get('embed') == '1' or request.form.get('embed') == '1'
         error = None
         if request.method == 'POST':
@@ -224,11 +230,20 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                 if action == 'open':
                     # Re-read on save: another event may have closed since this form opened.
                     previous_safe=previous_safe_close(key)
+                    journal = app.extensions['cash_journal_position']()
+                    safe_expected = (journal['safe'] if journal['has_movements'] else
+                        money(previous_safe.values['closing_safe']) if previous_safe else None)
+                    if journal['has_movements'] and request.form.get('safe_external_version', '') != journal['version']:
+                        raise ValueError('Cash transfers changed. Reload and review the latest expected safe balance before opening.')
+                    if journal['has_movements'] and (journal['movement_ids'] or not journal['baseline']) and money(values['opening_till']) != journal['till']:
+                        raise ValueError(f"Opening till must match the expected balance after recorded non-event transfers: £{journal['till']:.2f}. Record any further cash movement in the journal first.")
                     expected_id=str(previous_safe.id) if previous_safe else ''
                     if request.form.get('safe_previous_version','') != expected_id:
                         raise ValueError('The previous safe closing check changed. Review the latest safe close shown below and count the opening safe again.')
-                    if previous_safe and money(values['opening_safe']) != money(previous_safe.values['closing_safe']):
-                        raise ValueError(f"Opening safe must match the previous closing safe exactly: £{Decimal(previous_safe.values['closing_safe']):.2f}. No safe difference is allowed.")
+                    if safe_expected is not None and money(values['opening_safe']) != safe_expected:
+                        raise ValueError(f"Opening safe must match the previous closing safe plus recorded non-event transfers exactly: £{safe_expected:.2f}. No safe difference is allowed.")
+                    values['safe_external_movement_ids'] = journal['movement_ids']
+                    values['safe_external_version'] = journal['version']
                     values['safe_previous_record_id']=previous_safe.id if previous_safe else None
                     values['safe_previous_amount']=previous_safe.values['closing_safe'] if previous_safe else None
                     if request.form.get('till_checked') != 'yes' or request.form.get('safe_checked') != 'yes':
@@ -244,6 +259,11 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                     if any(money(values[field]) > 0 for field in ('till_other_in', 'till_other_out', 'safe_other_in', 'safe_other_out')) and not values['notes']:
                         raise ValueError('Explain other cash movements and banked cash in the notes.')
                     if action in ('close', 'correct'):
+                        if action == 'correct':
+                            journal_now = app.extensions['cash_journal_position']()
+                            if (journal_now['baseline'] and journal_now['baseline'].id == latest.id and journal_now['movement_ids']
+                                and any(money(values[field]) != money(latest.values[field]) for field in ('closing_till', 'closing_safe'))):
+                                raise ValueError('Non-event cash transfers already depend on this closing count. Record an explained adjustment transfer rather than rewriting this count.')
                         if action=='correct' and money(values['closing_safe']) != money(latest.values['closing_safe']):
                             prior_ids={row.id for row in Cashup.query.filter_by(booking_id=booking.id,event_index=selected,event_date=date).all()}
                             for following in current_checks():
@@ -280,7 +300,8 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
         response = app.make_response(render_template('admin_booking_cashup.html', booking=booking, events=events,
             selected=selected, event=event, latest=latest, values=values, result=totals(values),
             opening_fields=OPEN_FIELDS, closing_fields=CLOSE_FIELDS, history=records(booking),
-            client_csrf=token, error=error, embedded=embedded, previous_safe=previous_safe))
+            client_csrf=token, error=error, embedded=embedded, previous_safe=previous_safe,
+            safe_expected=safe_expected, cash_journal=journal))
         response.headers['Cache-Control'] = 'private, no-store'
         return response, 400 if error else 200
 

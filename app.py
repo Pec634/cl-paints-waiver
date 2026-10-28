@@ -517,6 +517,8 @@ from invoice_documents import define_model as define_invoice_document_model
 InvoiceDocument = define_invoice_document_model(db)
 from booking_cashup import define_model as define_cashup_model
 BookingCashup = define_cashup_model(db)
+from cash_journal import define_model as define_cash_movement_model
+CashMovement = define_cash_movement_model(db)
 from daily_handovers import define_model as define_handover_model
 DailyHandover = define_handover_model(db)
 from historical_finances import define_model as define_financial_correction_model
@@ -2788,6 +2790,8 @@ register_sumup_invoice_sync(app, db, BookingInvoice, Booking, tool_models[1], ad
 from google_calendar_sync import register as register_google_calendar_sync
 register_google_calendar_sync(app, db, BusinessSetting, Booking, booking_schedule_events, get_business_settings, admin_required)
 from booking_cashup import register as register_booking_cashup
+from cash_journal import register as register_cash_journal
+register_cash_journal(app, db, CashMovement, BookingCashup, BusinessSetting, admin_required)
 register_booking_cashup(app, db, BookingCashup, Booking, booking_schedule_events, admin_required)
 from cashup_invoice_payments import register as register_cashup_invoice_payments
 register_cashup_invoice_payments(app, db, BookingCashup, Booking, tool_models[1], booking_schedule_events, admin_required)

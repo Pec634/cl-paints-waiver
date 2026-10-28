@@ -467,6 +467,26 @@ Invoice reconciliations are audit snapshots and cannot be resubmitted as another
 receipt. Use Payments for later ledger corrections; physical closing corrections
 retain invoice allocations. Card/bank payments do not change expected cash.
 
+### Cash movement journal
+
+Use **Finance & reports → Cash movements & history** to review event cash sheets
+and record physical transfers when no event is running. For a till top-up, choose
+Safe → Till (or Bank → Till for a cash withdrawal), enter the amount, reason and
+checker. Recording a transfer changes expected cash balances, not sales income or
+client payments. With no prior physical close, record initial till/safe counts once.
+The journal uses the latest physical cash close and subsequent transfers, with
+date filters and paginated history. Each event entry links to its full revisions.
+
+An open/draft event cash sheet blocks off-event transfers; enter movements on that
+sheet instead. The next opening must reflect non-event transfers, including safe
+withdrawals and till top-ups. Reload if another record changed the balances.
+New journal records use their actual recording time and cannot be edited/deleted;
+correct a transfer with an explained reverse transfer followed by the correct one.
+Closing counts used by later journal transfers are protected from edits; record
+an explained adjustment transfer rather than rewriting that baseline. Expected balances are not independent counts:
+count the physical money before moving it. Bank/other sources are cash movement
+counterparties, not a bank-account balance or expense ledger.
+
 In **Bookings > Manage request**, eligible unconfirmed requests have a **Delete
 non-confirmed booking** option with explicit checkbox confirmation. Confirmed or
 previously confirmed bookings and requests linked to payments, SumUp checkouts or
