@@ -6,6 +6,12 @@ function updateCreates() {
   document.getElementById('shipping').disabled = !posting;
   document.getElementById('shipping').hidden = !posting;
   let quantity = 0;
+  lines.querySelectorAll('.creates-line').forEach(line => {
+    const glitter = line.querySelector('[name=letter_finish]').value === 'Glitter';
+    line.querySelector('[data-glitter-colour]').hidden = !glitter;
+    line.querySelector('[name=glitter_colour]').required = glitter;
+    if (window.renderHeadbandPreview) window.renderHeadbandPreview(line);
+  });
   lines.querySelectorAll('[name=quantity]').forEach(input => quantity += Number(input.value) || 0);
   lines.querySelectorAll('[name=wording]').forEach(input => {
     const value = input.value;

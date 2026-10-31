@@ -59,6 +59,8 @@ def define_models(db):
         filename=db.Column(db.String(150),nullable=False)
     from giveaway_draw import define_model
     db._giveaway_draw = define_model(db)
+    from giveaway_import import define_model as define_import_model
+    define_import_model(db)
     return NativeForm,NativeSubmission,ConsentMedia
 
 
@@ -87,6 +89,8 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
         if not secrets.compare_digest(csrf(),request.form.get('csrf_token','')):abort(400)
     from giveaway_draw import register as register_giveaway_draw
     register_giveaway_draw(app, db, Form, Submission, Account, admin_required, check, current_client)
+    from giveaway_import import register as register_giveaway_import
+    register_giveaway_import(app, db, Form, Submission, Account, admin_required, check, csrf, send_email)
     records=register_records(app,db,models,Account,Booking,current_client,admin_required,available,csrf,check)
     from form_workflows import register as register_workflows
     workflows=register_workflows(app,db,models,Booking,current_client,admin_required,available,records,csrf,check)

@@ -1,3 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}CL Creates{% endblock %}
-{% block body %}{% set order_popup = request.endpoint == 'creates_order' and request.args.get('popup') == '1' %}<div class="admin{% if order_popup %} creates-order-popup{% endif %}">{% if not order_popup %}{% include '_admin_sidebar.html' %}{% endif %}<main id="portal-main"><h1>CL Creates</h1>{% if not order_popup %}<nav class="event-day-actions" aria-label="CL Creates navigation"><a class="btn" href="{{ url_for('admin_dashboard') }}">&larr; Back to admin portal</a><a class="btn" href="{{ url_for('creates_admin') }}">Orders</a><a class="btn" href="{{ url_for('creates_communications') }}">Communication history</a><a class="btn" href="{{ url_for('creates_settings') }}">Settings &amp; showcase</a><a class="btn" href="{{ url_for('creates_library') }}">Image library</a><a class="btn" href="{{ url_for('creates_shop') }}">Public order form</a></nav>{% endif %}{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% block creates %}{% endblock %}</main></div>{% endblock %}
+{% block body %}{% set order_popup = request.endpoint == 'creates_order' and request.args.get('popup') == '1' %}<div class="admin{% if order_popup %} creates-order-popup{% endif %}">{% if not order_popup %}{% include '_admin_sidebar.html' %}{% endif %}<main id="portal-main"><h1>CL Creates</h1>{% if not order_popup %}<link rel="stylesheet" href="{{ url_for('static', filename='cl-creates-navigation.css') }}">
+<nav class="creates-compact-nav" aria-label="CL Creates navigation">
+<a href="{{ url_for('creates_admin') }}" {% if request.endpoint in ['creates_admin','creates_order'] %}aria-current="page"{% endif %}>Orders</a>
+<a href="{{ url_for('creates_communications') }}" {% if request.endpoint == 'creates_communications' %}aria-current="page"{% endif %}>Messages</a>
+<details class="creates-setup-menu"><summary {% if request.endpoint in ['creates_settings','creates_library','creates_colours','creates_shapes'] %}class="creates-setup-active"{% endif %}>Shop setup</summary><div class="creates-setup-links">
+{% for endpoint,label in [('creates_settings','Pricing & showcase'),('creates_library','Image library'),('creates_colours','Colours & glitter'),('creates_shapes','Shapes')] %}<a href="{{ url_for(endpoint) }}" {% if request.endpoint == endpoint %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</div></details>
+<a href="{{ url_for('creates_shop') }}">View shop &nearr;</a>
+<a class="creates-admin-return" href="{{ url_for('admin_dashboard') }}">&larr; Admin</a>
+</nav>{% endif %}{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% block creates %}{% endblock %}</main></div>{% endblock %}

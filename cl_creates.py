@@ -11,6 +11,8 @@ from flask import abort, redirect, render_template, request, session, url_for
 from email_validator import validate_email, EmailNotValidError
 
 STATUSES = ('Under review', 'Paid', 'In production', 'Shipped', 'Ready for collection')
+HEADBAND_COLOURS = ('Black', 'White', 'Red', 'Blue', 'Green', 'Pink', 'Purple', 'Gold', 'Silver')
+LETTER_FINISHES = ('Plain', 'Glitter')
 
 
 def next_order_action(order):
@@ -130,6 +132,76 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         row = db.session.get(Setting, 'cl_creates')
         return dict(defaults, **(json.loads(row.value) if row else {}))
 
+    def colour_options():
+        row = db.session.get(Setting, 'cl_creates_colours')
+        return json.loads(row.value) if row else dict(headband=list(HEADBAND_COLOURS), glitter=['Gold', 'Silver', 'Pink', 'Blue', 'Purple', 'Red', 'Green'])
+
+    def shape_options():
+        row = db.session.get(Setting, 'cl_creates_shapes')
+        return json.loads(row.value) if row else ['Heart', 'Star']
+
+    @app.route('/admin/cl-creates/shapes', methods=['GET', 'POST'])
+    @admin_required
+    def creates_shapes():
+        token = csrf()
+        shapes = shape_options()
+        error = None
+        if request.method == 'POST':
+            try:
+                name = request.form.get('name', '').strip()
+                action = request.form.get('action')
+                if action == 'add':
+                    if not name or len(name) > 40 or any(not char.isprintable() for char in name):
+                        raise ValueError('Enter a shape name between 1 and 40 characters.')
+                    if name.casefold() in {shape.casefold() for shape in shapes}:
+                        raise ValueError('That shape is already available.')
+                    if len(shapes) >= 50:
+                        raise ValueError('You can list up to 50 shapes.')
+                    shapes.append(name)
+                elif action == 'remove':
+                    if name in shapes:
+                        shapes.remove(name)
+                else:
+                    abort(400)
+                db.session.merge(Setting(key='cl_creates_shapes', value=json.dumps(shapes)))
+                db.session.commit()
+                return redirect(url_for('creates_shapes'))
+            except ValueError as exc:
+                error = str(exc)
+        return render_template('creates_shapes.html', shapes=shapes, csrf=token, error=error)
+
+    @app.route('/admin/cl-creates/colours', methods=['GET', 'POST'])
+    @admin_required
+    def creates_colours():
+        token = csrf()
+        options = colour_options()
+        error = None
+        if request.method == 'POST':
+            try:
+                kind = request.form.get('kind')
+                action = request.form.get('action')
+                name = request.form.get('name', '').strip()
+                if kind not in ('headband', 'glitter') or action not in ('add', 'remove'):
+                    abort(400)
+                if action == 'add':
+                    if not name or len(name) > 40 or any(not char.isprintable() for char in name):
+                        raise ValueError('Enter a colour name between 1 and 40 characters.')
+                    if name.casefold() in {value.casefold() for value in options[kind]}:
+                        raise ValueError('That colour is already available.')
+                    if len(options[kind]) >= 50:
+                        raise ValueError('You can list up to 50 colours in each category.')
+                    options[kind].append(name)
+                elif name in options[kind]:
+                    if kind == 'headband' and len(options[kind]) == 1:
+                        raise ValueError('Keep at least one headband colour available.')
+                    options[kind].remove(name)
+                db.session.merge(Setting(key='cl_creates_colours', value=json.dumps(options)))
+                db.session.commit()
+                return redirect(url_for('creates_colours'))
+            except ValueError as exc:
+                error = str(exc)
+        return render_template('creates_colours.html', options=options, csrf=token, error=error)
+
     def csrf():
         token = session.setdefault('creates_csrf', secrets.token_urlsafe(32))
         if request.method == 'POST' and not secrets.compare_digest(token, request.form.get('csrf_token', '')):
@@ -212,7 +284,19 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                 if not 1 <= len(ids) <= 30 or len(ids) != len(words) or len(ids) != len(quantities):
                     raise ValueError('Add between 1 and 30 headband lines.')
                 items = []
-                for pid, wording, quantity in zip(ids, words, quantities):
+                options = colour_options()
+                colours = request.form.getlist('colour') or [options['headband'][0]] * len(ids)
+                finishes = request.form.getlist('letter_finish') or ['Plain'] * len(ids)
+                glitter_colours = request.form.getlist('glitter_colour') or [(options['glitter'][0] if options['glitter'] else '')] * len(ids)
+                shapes = request.form.getlist('word_shape') or [''] * len(ids)
+                available_shapes = shape_options()
+                if len(colours) != len(ids) or len(finishes) != len(ids) or len(glitter_colours) != len(ids) or len(shapes) != len(ids):
+                    raise ValueError('Choose a colour and letter finish for each headband.')
+                for pid, wording, quantity, colour, finish, glitter_colour, shape in zip(ids, words, quantities, colours, finishes, glitter_colours, shapes):
+                    if shape and shape not in available_shapes:
+                        raise ValueError('Choose an available shape between words.')
+                    if colour not in options['headband'] or finish not in LETTER_FINISHES or (finish == 'Glitter' and glitter_colour not in options['glitter']):
+                        raise ValueError('Choose an available headband colour and letter finish.')
                     if pid == 'custom':
                         product_name = 'Custom wording headband'
                     else:
@@ -225,7 +309,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     qty = int(quantity)
                     if not 1 <= qty <= 100:
                         raise ValueError('Each quantity must be between 1 and 100.')
-                    items.append(dict(product=product_name, wording=wording, quantity=qty, price=config['price']))
+                    items.append(dict(product=product_name, wording=wording, colour=colour, letter_finish=finish, glitter_colour=glitter_colour if finish == 'Glitter' else '', word_shape=shape if len(wording.split()) > 1 else '', quantity=qty, price=config['price']))
                 total = sum(i['quantity'] * money(i['price']) for i in items) + (money(config['postage']) if fulfilment == 'postage' else 0)
                 order = Order(first_name=first, last_name=last, email=email, address=address,
                               fulfilment=fulfilment, items_json=json.dumps(items), total=total)
@@ -238,6 +322,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                 error = str(exc)
         session.setdefault('creates_submission', secrets.token_urlsafe(32))
         return render_template('creates_shop.html', products=products, config=config, csrf=token, error=error,
+                               headband_colours=colour_options()['headband'], glitter_colours=colour_options()['glitter'], letter_finishes=LETTER_FINISHES if colour_options()['glitter'] else ('Plain',),
+                               word_shapes=shape_options(),
                                gallery=LibraryImage.query.filter_by(visible=True).order_by(LibraryImage.id).all(), **shop_context)
 
     @app.get('/cl-creates/library/<int:image_id>')

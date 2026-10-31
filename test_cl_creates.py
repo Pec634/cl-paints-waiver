@@ -56,6 +56,65 @@ class CreatesTest(unittest.TestCase):
                         address_line1='1 Test Road', town='London', postcode='SW1A 1AA', mainland='on',
                         consent='on', product=str(self.product.id), wording='HELLO WORLD', quantity='2')
 
+    def test_colour_and_glitter_saved_for_each_headband(self):
+        data = self.form()
+        data.update(product=['custom', 'custom'], wording=['TEAM BLUE', 'PARTY'], quantity=['2', '1'],
+                    colour=['Blue', 'Pink'], letter_finish=['Plain', 'Glitter'])
+        response = self.client.post('/cl-creates', data=data)
+        order = self.Order.query.one()
+        self.assertEqual([item['colour'] for item in order.items], ['Blue', 'Pink'])
+        self.assertEqual([item['letter_finish'] for item in order.items], ['Plain', 'Glitter'])
+        self.assertEqual(float(order.total), 21)
+        self.assertIn(b'Glitter', response.data)
+        self.assertIn(b'Pink', self.admin.get(f'/admin/cl-creates/orders/{order.id}').data)
+
+    def test_invalid_colour_or_finish_is_rejected(self):
+        for colour, finish in [('Unknown', 'Plain'), ('Black', 'Unknown')]:
+            data = self.form()
+            data.update(colour=colour, letter_finish=finish)
+            self.client.post('/cl-creates', data=data)
+            self.assertEqual(self.Order.query.count(), 0)
+
+    def test_admin_manages_colours_and_glitter_letter_choices(self):
+        token = self.admin_token()
+        path = '/admin/cl-creates/colours'
+        self.assertEqual(self.client.get(path).status_code, 302)
+        self.assertEqual(self.admin.post(path, data={'kind':'headband','action':'add','name':'Orange'}).status_code, 400)
+        for kind, colour in [('headband','Orange'), ('glitter','Rose gold')]:
+            response = self.admin.post(path, data={'csrf_token':token,'kind':kind,'action':'add','name':colour})
+            self.assertEqual(response.status_code, 302)
+            self.assertIn(colour.encode(), self.client.get('/cl-creates').data)
+        data = self.form()
+        data.update(colour='Orange', letter_finish='Glitter', glitter_colour='Rose gold')
+        self.client.post('/cl-creates', data=data)
+        order = self.Order.query.one()
+        self.assertEqual(order.items[0]['glitter_colour'], 'Rose gold')
+        self.admin.post(path, data={'csrf_token':token,'kind':'glitter','action':'remove','name':'Rose gold'})
+        data = self.form()
+        data.update(colour='Orange', letter_finish='Glitter', glitter_colour='Rose gold')
+        self.client.post('/cl-creates', data=data)
+        self.assertEqual(self.Order.query.count(), 1)
+        self.assertEqual(order.items[0]['glitter_colour'], 'Rose gold')
+
+    def test_admin_manages_word_shapes_and_orders_preserve_selection(self):
+        token = self.admin_token()
+        path = '/admin/cl-creates/shapes'
+        self.assertEqual(self.client.get(path).status_code, 302)
+        self.admin.post(path, data={'csrf_token':token,'action':'add','name':'Butterfly'})
+        self.assertIn(b'Butterfly', self.client.get('/cl-creates').data)
+        data = self.form()
+        data.update(word_shape='Butterfly')
+        response = self.client.post('/cl-creates', data=data)
+        self.assertIn(b'Between words: Butterfly', response.data)
+        order = self.Order.query.one()
+        self.assertEqual(order.items[0]['word_shape'], 'Butterfly')
+        self.admin.post(path, data={'csrf_token':token,'action':'remove','name':'Butterfly'})
+        data = self.form()
+        data.update(word_shape='Butterfly')
+        self.client.post('/cl-creates', data=data)
+        self.assertEqual(self.Order.query.count(), 1)
+        self.assertEqual(order.items[0]['word_shape'], 'Butterfly')
+
     def admin_token(self):
         self.assertEqual(self.admin.get('/admin/cl-creates').status_code, 200)
         with self.admin.session_transaction() as session:

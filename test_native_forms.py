@@ -125,6 +125,42 @@ class NativeFormsTest(unittest.TestCase):
         main.db.session.commit()
         self.assertEqual(draw.days_remaining, 0)
 
+    def test_historical_import_preview_confirm_and_duplicate_protection(self):
+        import re
+        form = self.create('giveaway')
+        path = f'/admin/native-forms/{form.id}/import-entrants'
+        self.assertEqual(self.client.get(path).status_code, 302)
+        account = self.fixture.fixture.account
+        csv_data = f'first_name,last_name,email\nExisting,Person,{account.email}\nAlex,Imported,alex-import@example.com\nAlex,Imported,ALEX-IMPORT@example.com\n'
+        payload = dict(csrf_token='admin-token', action='preview', send_email='yes',
+                       csv_file=(BytesIO(csv_data.encode()), 'entrants.csv'))
+        with patch.dict(main.app.extensions, {'client_notice_deliver':lambda *args: False}), patch('app.send_client_email', return_value=True) as send:
+            page = self.admin.post(path, data=payload, content_type='multipart/form-data')
+            self.assertIn(b'Confirmation email preview', page.data)
+            self.assertEqual(Submission.query.count(), 0)
+            send.assert_not_called()
+            token = re.search(rb'name="batch_token" value="([^"]+)"', page.data).group(1).decode()
+            confirm = dict(csrf_token='admin-token', action='confirm', batch_token=token)
+            self.assertEqual(self.admin.post(path, data=confirm).status_code, 302)
+            self.assertEqual(Submission.query.filter_by(form_id=form.id).count(), 2)
+            self.assertEqual(send.call_count, 2)
+            self.admin.post(path, data=confirm)
+            self.assertEqual(send.call_count, 2)
+        imported = Submission.query.filter_by(email='alex-import@example.com').one()
+        self.assertIn('Historical entry', imported.terms_snapshot)
+        self.assertIn('Imported historical', imported.answers_json)
+        self.assertEqual(Submission.query.filter_by(client_id=account.id, form_id=form.id).count(), 1)
+
+    def test_import_invalid_csv_is_atomic_and_optional_email_defaults_off(self):
+        form = self.create('giveaway')
+        path = f'/admin/native-forms/{form.id}/import-entrants'
+        page = self.admin.post(path, data=dict(csrf_token='admin-token', action='preview',
+            csv_file=(BytesIO(b'first_name,last_name,email\nAlex,Test,valid@example.com\nBad,Email,invalid'), 'bad.csv')),
+            content_type='multipart/form-data')
+        self.assertNotIn(b'name="batch_token"', page.data)
+        self.assertEqual(Submission.query.count(), 0)
+        self.assertIsNone(main.ClientAccount.query.filter_by(email='valid@example.com').first())
+
     def test_photo_upload_privacy_and_validation(self):
         form=self.create('photo');payload=self.data(form)
         payload.update(people='Alex; I am their parent',authority='yes',media=(BytesIO(b'\x89PNG\r\n\x1a\nexample'),'photo.png'))
