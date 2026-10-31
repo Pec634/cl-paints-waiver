@@ -54,7 +54,7 @@ class CreatesTest(unittest.TestCase):
             return dict(csrf_token=session['creates_csrf'], submission_token=session['creates_submission'],
                         first_name='Alex', last_name='Smith', email='alex@example.com', fulfilment='postage',
                         address_line1='1 Test Road', town='London', postcode='SW1A 1AA', mainland='on',
-                        consent='on', product=str(self.product.id), wording='HELLO WORLD', quantity='2')
+                        consent='on', custom_order_declaration='yes', product=str(self.product.id), wording='HELLO WORLD', quantity='2')
 
     def test_colour_and_glitter_saved_for_each_headband(self):
         data = self.form()
@@ -114,6 +114,18 @@ class CreatesTest(unittest.TestCase):
         self.client.post('/cl-creates', data=data)
         self.assertEqual(self.Order.query.count(), 1)
         self.assertEqual(order.items[0]['word_shape'], 'Butterfly')
+
+    def test_custom_order_refund_declaration_is_required_and_saved(self):
+        data = self.form()
+        data.pop('custom_order_declaration')
+        page = self.client.post('/cl-creates', data=data)
+        self.assertEqual(self.Order.query.count(), 0)
+        self.assertIn(b'Please read and acknowledge', page.data)
+        data['custom_order_declaration'] = 'yes'
+        self.client.post('/cl-creates', data=data)
+        order = self.Order.query.one()
+        self.assertIn('change of mind', order.acknowledgement)
+        self.assertIn('statutory rights', order.acknowledgement)
 
     def admin_token(self):
         self.assertEqual(self.admin.get('/admin/cl-creates').status_code, 200)

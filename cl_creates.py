@@ -13,6 +13,8 @@ from email_validator import validate_email, EmailNotValidError
 STATUSES = ('Under review', 'Paid', 'In production', 'Shipped', 'Ready for collection')
 HEADBAND_COLOURS = ('Black', 'White', 'Red', 'Blue', 'Green', 'Pink', 'Purple', 'Gold', 'Silver')
 LETTER_FINISHES = ('Plain', 'Glitter')
+CUSTOM_REFUND_POLICY = ('Each headband is personalised and custom-made to your order. We do not accept returns or offer refunds for a change of mind or mistakes in the wording or options you approve. '
+                        'This does not affect your statutory rights if an item is faulty, not as described or otherwise fails to meet your legal rights. Please check all wording and selections before ordering.')
 
 
 def next_order_action(order):
@@ -89,6 +91,7 @@ def define_models(db):
 
 def register(app, db, models, Setting, admin_required, send_email, get_current_client=lambda: None):
     app.jinja_env.globals['next_order_action'] = next_order_action
+    app.jinja_env.globals['creates_refund_policy'] = CUSTOM_REFUND_POLICY
     Order, Message, Product, LibraryImage = models
     defaults = {'price': '5.00', 'postage': '6.00', 'emails': True,
                 'subject': 'CL Creates {order_number}: {status}',
@@ -280,6 +283,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     address = '\n'.join(p for p in parts if p) + '\nUnited Kingdom'
                 if len(address) > 1000 or not request.form.get('consent'):
                     raise ValueError('Please acknowledge the order and privacy information.')
+                if request.form.get('custom_order_declaration') != 'yes':
+                    raise ValueError('Please read and acknowledge the custom-made order and refunds declaration.')
                 ids, words, quantities = (request.form.getlist(k) for k in ('product', 'wording', 'quantity'))
                 if not 1 <= len(ids) <= 30 or len(ids) != len(words) or len(ids) != len(quantities):
                     raise ValueError('Add between 1 and 30 headband lines.')
@@ -312,7 +317,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     items.append(dict(product=product_name, wording=wording, colour=colour, letter_finish=finish, glitter_colour=glitter_colour if finish == 'Glitter' else '', word_shape=shape if len(wording.split()) > 1 else '', quantity=qty, price=config['price']))
                 total = sum(i['quantity'] * money(i['price']) for i in items) + (money(config['postage']) if fulfilment == 'postage' else 0)
                 order = Order(first_name=first, last_name=last, email=email, address=address,
-                              fulfilment=fulfilment, items_json=json.dumps(items), total=total)
+                              fulfilment=fulfilment, items_json=json.dumps(items), total=total,
+                              acknowledgement='Customer confirmed wording, selections, order and privacy information, and accepted the custom-made refund declaration (CL Creates v2): ' + CUSTOM_REFUND_POLICY)
                 db.session.add(order)
                 db.session.commit()
                 session.pop('creates_submission', None)
