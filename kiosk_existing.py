@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import secrets
+import re
 from zoneinfo import ZoneInfo
 from email_validator import validate_email, EmailNotValidError
 from flask import abort, flash, redirect, render_template, request, session, url_for
@@ -79,9 +80,13 @@ def register(app, db, Waiver, Participant, Account, Code, Custodian, active, cle
             return redirect(url_for('kiosk_customer'))
         from record_ids import reference_record_id
         reference = request.form.get('reference', '').strip().upper()
+        short_code = bool(re.fullmatch(r'[0-9A-Z]{4,12}', reference))
         record_id = reference_record_id(reference, 'W') if len(reference) <= 100 else None
+        if short_code:
+            record_id = int(reference, 36)
         waiver = db.session.get(Waiver, record_id) if record_id else Waiver.query.filter(func.upper(Waiver.waiver_reference) == reference).first() if len(reference) <= 100 else None
-        if waiver and record_id and waiver.public_reference != reference:
+        expected_reference = waiver.public_reference.rsplit(' - ', 1)[-1] if waiver and short_code else waiver.public_reference if waiver else None
+        if waiver and record_id and expected_reference != reference:
             waiver = None
         if not valid(waiver) or not people(waiver):
             flash('We could not find a current waiver with members for that ID. Check your confirmation email, use email verification, or ask staff.', 'error')

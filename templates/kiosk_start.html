@@ -9,8 +9,8 @@
   </section>
   {% else %}
   <div class="kiosk-choice-grid">
-    <section class="kiosk-choice"><h2>I already have a waiver</h2><p>Use the waiver ID from your confirmation email for a quick member check. This does not sign you into your client account.</p>
-      <form class="client-form" method="post" action="{{ url_for('kiosk_lookup_id') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><label>Waiver ID<input name="reference" maxlength="100" autocomplete="off" placeholder="DD/MM/YYYY - W - 0001" required></label><button class="btn primary">Find my waiver members</button></form>
+    <section class="kiosk-choice"><h2>I already have a waiver</h2><p>Enter just the final code from the waiver ID in your confirmation email, including any letters and leading zeros. You do not need the date or W prefix. This does not sign you into your client account.</p>
+      <form class="client-form" method="post" action="{{ url_for('kiosk_lookup_id') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><label>Waiver code<input name="reference" maxlength="100" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 0001 or 000A" required></label><button class="btn primary">Find my waiver members</button></form>
       <details><summary>Find my waiver by email</summary><p>We will email you a code to verify access to your waiver members. No client account is required.</p>
         <form class="client-form" method="post" action="{{ url_for('kiosk_email_code') }}"><input type="hidden" name="csrf_token" value="{{ item.csrf }}"><label>Email used on your waiver<input type="email" name="email" maxlength="255" autocomplete="off" required></label><button class="btn">Email me a verification code</button></form>
       </details>

@@ -309,6 +309,20 @@ class KioskTest(unittest.TestCase):
         self.assertEqual(item.phase,'signup')
         self.assertNotIn(b'Alex Client',self.admin.get('/kiosk/customer').data)
 
+    def test_kiosk_accepts_final_waiver_code_without_date_prefix(self):
+        item = main.db.session.get(main.KioskSession, self.kiosk_id)
+        code = self.fixture.waiver.public_reference.rsplit(' - ', 1)[-1]
+        self.admin.post('/kiosk/lookup-id', data={'csrf_token':item.csrf,'reference':code.lower()})
+        self.assertEqual(item.phase, 'members')
+        page = self.admin.get('/kiosk/customer').data
+        self.assertIn(b'Alex Client', page)
+        self.assertNotIn(self.fixture.account.email.encode(), page)
+        self.admin.post('/kiosk/start-over', data={'csrf_token':item.csrf})
+        self.fixture.waiver.expiry_date = datetime.utcnow() - timedelta(days=1)
+        main.db.session.commit()
+        self.admin.post('/kiosk/lookup-id', data={'csrf_token':item.csrf,'reference':code})
+        self.assertEqual(item.phase, 'signup')
+
     def test_forged_reference_dates_and_archived_waivers_are_rejected(self):
         item=main.db.session.get(main.KioskSession,self.kiosk_id)
         reference=self.fixture.waiver.public_reference
