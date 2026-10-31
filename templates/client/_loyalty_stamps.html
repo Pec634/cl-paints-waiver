@@ -1,0 +1,21 @@
+{% set points = loyalty_balances[person.id] %}
+<div class="loyalty-stamps" role="img" aria-label="{{ points }} of 3 loyalty points collected. {{ 'Free face paint available on your next public-event visit.' if points == 3 else 'Collect three points for a free face paint on your fourth visit.' }}">
+    {% for point in range(1,4) %}
+    <div class="loyalty-stamp-step{% if point <= points %} earned{% endif %}" aria-hidden="true">
+        <span class="loyalty-stamp">
+            <svg viewBox="0 0 48 48" fill="none" focusable="false" aria-hidden="true">
+                <path d="M25 6C14 6 6 14 6 25c0 10 8 17 17 17 4 0 6-2 6-5 0-2-2-3-2-5 0-2 2-4 5-4h4c5 0 7-3 7-7C43 12 35 6 25 6Z" fill="currentColor" opacity=".15"/>
+                <path d="M25 6C14 6 6 14 6 25c0 10 8 17 17 17 4 0 6-2 6-5 0-2-2-3-2-5 0-2 2-4 5-4h4c5 0 7-3 7-7C43 12 35 6 25 6Z" stroke="currentColor" stroke-width="2.5"/>
+                <circle cx="16" cy="19" r="3" fill="currentColor"/><circle cx="25" cy="14" r="3" fill="currentColor"/><circle cx="34" cy="19" r="3" fill="currentColor"/><circle cx="14" cy="29" r="3" fill="currentColor"/>
+            </svg>
+            {% if point <= points %}<span class="loyalty-stamp-tick"><svg viewBox="0 0 16 16" fill="none"><path d="m3 8 3 3 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{% endif %}
+        </span>
+        <span class="loyalty-stamp-label">Point {{ point }}</span>
+        <small>{{ 'Collected' if point <= points else 'To collect' }}</small>
+    </div>
+    {% endfor %}
+    <div class="loyalty-stamp-step loyalty-stamp-reward{% if points == 3 %} ready{% endif %}" aria-hidden="true">
+        <span class="loyalty-stamp"><svg viewBox="0 0 48 48" fill="none" focusable="false"><path d="M9 23h30v18H9zM6 16h36v8H6zM24 16v25" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 16c-10 0-13-3-11-7 3-5 10 0 11 7Zm0 0c10 0 13-3 11-7-3-5-10 0-11 7Z" fill="currentColor" fill-opacity=".15" stroke="currentColor" stroke-width="2.5"/></svg></span>
+        <span class="loyalty-stamp-label">Free paint</span><small>{{ 'Next visit!' if points == 3 else '4th visit' }}</small>
+    </div>
+</div>
