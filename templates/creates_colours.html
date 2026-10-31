@@ -1,6 +1,6 @@
 {% extends 'creates_base.html' %}{% block creates %}
 <h2>Colours &amp; glitter letters</h2><p>Choose which colours customers can order. Removing a colour updates new orders immediately; existing orders keep their saved selections.</p>
-<div class="client-grid">{% for kind,title in [('headband','Headband colours'),('glitter','Glitter letter colours')] %}
+<div class="client-grid">{% for kind,title in [('headband','Letter colours'),('glitter','Glitter letter colours')] %}
 <section class="panel"><h3>{{ title }}</h3>
 <form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="action" value="add"><label>New colour name<input name="name" maxlength="40" placeholder="e.g. Rose gold" required></label><div><button class="btn primary" type="submit">Add colour</button></div></form>
 {% for colour in options[kind] %}<div class="client-record" style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px"><strong>{{ colour }}</strong><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="name" value="{{ colour }}"><button class="btn" type="submit" aria-label="Remove {{ colour }} from {{ title|lower }}">Remove</button></form></div>{% else %}<p>No colours available. Add a colour above to offer glitter letters in the shop.</p>{% endfor %}

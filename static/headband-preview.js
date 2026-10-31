@@ -30,14 +30,14 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const wording = line.querySelector('[name=wording]').value.trim();
-    const bandColour = line.querySelector('[name=colour]').value;
+    const letterColour = line.querySelector('[name=colour]').value;
     const finish = line.querySelector('[name=letter_finish]').value;
     const glitterColour = line.querySelector('[name=glitter_colour]').value;
     const shape = line.querySelector('[name=word_shape]').value;
     const tokens = Array.from((wording || 'YOUR WORDS').toUpperCase()).slice(0, 30);
     const glitter = finish === 'Glitter';
-    const ink = glitter ? colour(glitterColour || 'Gold') : '#252534';
-    const description = `${wording || 'Your wording'} — ${bandColour} headband, ${glitter ? (glitterColour || 'choose a colour') + ' glitter' : 'plain'} letters${shape && wording.split(/\s+/).length > 1 ? ', ' + shape + ' between words' : ''}.`;
+    const ink = glitter ? colour(glitterColour || 'Gold') : colour(letterColour);
+    const description = `${wording || 'Your wording'} — black band and black wording backing, ${glitter ? (glitterColour || 'choose a colour') + ' glitter' : letterColour + ' plain'} letters${shape && wording.split(/\s+/).length > 1 ? ', ' + shape + ' between words' : ''}.`;
     canvas.setAttribute('aria-label', 'Illustrative headband preview: ' + description);
     figure.querySelector('[data-preview-description]').textContent = description;
     ctx.clearRect(0, 0, 800, 500);
@@ -52,10 +52,28 @@
     ctx.strokeStyle = '#b9b9c4';
     ctx.lineWidth = 15;
     ctx.stroke();
-    ctx.strokeStyle = colour(bandColour);
+    ctx.strokeStyle = '#15151a';
     ctx.lineWidth = 11;
     ctx.stroke();
     const step = Math.min(.12, 1.7 / Math.max(tokens.length - 1, 1));
+    const halfSpan = Math.max(.12, (tokens.length - 1) * step / 2 + .08);
+    // Black backing joins the wording to the fixed black band.
+    ctx.beginPath();
+    ctx.arc(400, 390, 207, -Math.PI / 2 - halfSpan, -Math.PI / 2 + halfSpan);
+    ctx.lineWidth = 48;
+    ctx.strokeStyle = '#15151a';
+    ctx.stroke();
+    let letterPaint = ink;
+    if (glitter) {
+      const texture = document.createElement('canvas');
+      texture.width = texture.height = 32;
+      const paint = texture.getContext('2d');
+      paint.fillStyle = ink;
+      paint.fillRect(0, 0, 32, 32);
+      paint.fillStyle = '#ffffffaa';
+      for (let fleck = 0; fleck < 28; fleck++) paint.fillRect((fleck * 7) % 32, (fleck * 13) % 32, 1.2, 1.2);
+      letterPaint = ctx.createPattern(texture, 'repeat');
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     tokens.forEach((token, index) => {
@@ -63,7 +81,7 @@
       ctx.save();
       ctx.translate(400 + Math.sin(angle) * 225, 390 - Math.cos(angle) * 225);
       ctx.rotate(angle);
-      ctx.fillStyle = ink;
+      ctx.fillStyle = letterPaint;
       if (token === ' ' && shape && wording) {
         ctx.beginPath();
         if (shape.toLowerCase() === 'heart') {
@@ -85,18 +103,9 @@
       } else if (token !== ' ') {
         ctx.font = '900 31px Georgia, serif';
         ctx.lineWidth = 5;
-        ctx.strokeStyle = '#fff';
+        ctx.strokeStyle = '#15151a';
         ctx.strokeText(token, 0, 0);
         ctx.fillText(token, 0, 0);
-        if (glitter) {
-          // A static fleck texture avoids flashing while suggesting glitter.
-          ctx.globalCompositeOperation = 'source-atop';
-          ctx.fillStyle = '#fff9';
-          for (let fleck = 0; fleck < 12; fleck++) {
-            ctx.fillRect(((fleck * 7 + index * 3) % 19) - 9, ((fleck * 11) % 24) - 12, 1.5, 1.5);
-          }
-          ctx.globalCompositeOperation = 'source-over';
-        }
       }
       ctx.restore();
     });
