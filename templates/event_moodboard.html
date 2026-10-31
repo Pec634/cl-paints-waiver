@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}{{ event.name }} Moodboard | CL Paints{% endblock %}
+{% block body %}
+<main style="max-width:1000px;margin:auto;padding:24px">
+    <header><div class="brand">CL <span>Paints</span></div><h1>{{ event.name }} Moodboard</h1>
+    <p>Explore the face-painting designs on display at this event.</p></header>
+    {% if images %}
+    {% for design_type, group_title in [('large', 'Large Paints'), ('small', 'Small Paints')] %}
+    {% set designs = images | selectattr('design_type', 'equalto', design_type) | list %}
+    {% if designs %}
+    <section class="moodboard-category" aria-labelledby="{{ design_type }}-heading">
+        <h2 id="{{ design_type }}-heading">{{ group_title }}</h2>
+        <div class="moodboard-admin-grid">
+            {% for image in designs %}
+            <article class="moodboard-admin-card">
+                <a href="{{ image.image_url }}" target="_blank" rel="noopener"><img src="{{ image.image_url }}" alt="{{ image.title }}" loading="lazy" style="width:100%;height:240px;object-fit:contain"></a>
+                <h3>{{ image.title }}</h3>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    {% endfor %}
+    {% else %}<p>The designs for this event have not been added yet. Please check back soon.</p>{% endif %}
+</main>
+{% endblock %}

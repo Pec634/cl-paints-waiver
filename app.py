@@ -789,6 +789,40 @@ def waiver_event(event_id):
     responsible_account=get_current_client()
     )
 
+@app.get('/moodboard/event/<int:event_id>')
+def event_moodboard(event_id):
+    event = db.get_or_404(Event, event_id)
+    if event.status == 'Archived':
+        return 'This event has finished. Its moodboard link is closed.', 410
+    rows = EventMoodboardImage.query.filter_by(event_id=event.id).order_by(
+        EventMoodboardImage.sort_order.asc(), EventMoodboardImage.id.asc()).all()
+    images = [row.image for row in rows if row.image is not None and row.image.active]
+    return render_template('event_moodboard.html', event=event, images=images)
+
+
+@app.get('/admin/events/<int:event_id>/moodboard/qr')
+@admin_required
+def admin_event_moodboard_qr(event_id):
+    from io import BytesIO
+    from flask import send_file
+    import qrcode
+    import qrcode.image.svg
+    db.get_or_404(Event, event_id)
+    output = BytesIO()
+    qrcode.make(url_for('event_moodboard', event_id=event_id, _external=True),
+                image_factory=qrcode.image.svg.SvgPathImage).save(output)
+    output.seek(0)
+    return send_file(output, mimetype='image/svg+xml',
+                     download_name=f'moodboard-event-{event_id}.svg')
+
+
+@app.get('/admin/events/<int:event_id>/moodboard/print')
+@admin_required
+def admin_event_moodboard_print(event_id):
+    event = db.get_or_404(Event, event_id)
+    return render_template('admin_moodboard_printable.html', event=event)
+
+
 @app.post("/admin/moodboard/upload")
 @admin_required
 def admin_moodboard_upload():

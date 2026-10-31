@@ -30,6 +30,18 @@ Event Moodboard | CL Paints
         </div>
 
         <section class="panel">
+            <h2>Moodboard QR code &amp; preview</h2>
+            <p>Scan to view the saved designs for {{ event.name }}. Save your selection below before sharing. No sign-in is needed.</p>
+            <img src="{{ url_for('admin_event_moodboard_qr', event_id=event.id) }}" alt="Moodboard QR code for {{ event.name }}" width="240" height="240" style="max-width:100%;height:auto;background:white">
+            <div class="paint-actions">
+                <a class="btn" href="{{ url_for('event_moodboard', event_id=event.id) }}" target="_blank" rel="noopener">Preview event moodboard</a>
+                <a class="btn" href="{{ url_for('admin_event_moodboard_qr', event_id=event.id) }}" download="moodboard-event-{{ event.id }}.svg">Download QR code</a>
+                <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Print moodboard sign</a>
+            </div>
+            {% if event.status == 'Archived' %}<p>This event is archived. Its public moodboard link is closed.</p>{% endif %}
+        </section>
+
+        <section class="panel">
 
             <div class="panel-heading">
                 <div>
