@@ -68,6 +68,33 @@ class LoyaltyTest(unittest.TestCase):
         self.assertEqual(main.db.session.get(Balance, self.person.id).points, 1)
         self.assertEqual(self.client.get('/client/rewards').status_code, 200)
 
+    def test_repeat_selection_explains_limit_without_awarding_other_members(self):
+        event, path = self.event()
+        self.post_scan(path)
+        response = self.post_scan(path, ids=[self.person.id, self.other.id])
+        self.assertEqual(response.status_code, 302)
+        page = self.client.get(path)
+        self.assertIn(b'You cannot earn any more loyalty points', page.data)
+        self.assertIn(b'data-already-checked-in', page.data)
+        self.assertIn(b'data-participant-name="Alex Client"', page.data)
+        self.assertEqual(Visit.query.filter_by(event_id=event.id).count(), 1)
+        self.assertEqual(main.db.session.get(Balance, self.person.id).points, 1)
+        self.assertIsNone(main.db.session.get(Balance, self.other.id))
+
+    def test_printable_editor_requires_admin_and_existing_public_event_qr(self):
+        event, path = self.event()
+        editor = f'/admin/events/{event.id}/loyalty/printable'
+        self.assertEqual(self.client.get(editor).status_code, 302)
+        page = self.admin.get(editor)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'Print / save as PDF', page.data)
+        self.assertIn(f'/admin/events/{event.id}/loyalty/qr'.encode(), page.data)
+        self.assertIn(b'loyalty-printable.js', page.data)
+        self.assertIn(editor.encode(), self.admin.get(f'/admin/events/{event.id}/loyalty').data)
+        main.db.session.delete(main.db.session.get(EventCode, event.id))
+        main.db.session.commit()
+        self.assertEqual(self.admin.get(editor).status_code, 404)
+
     def test_admin_check_in_validity_claims_and_exact_ids(self):
         event, path = self.event()
         query = dict(event_id=event.id, q=self.waiver.public_reference)

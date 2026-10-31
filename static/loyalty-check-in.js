@@ -30,6 +30,15 @@
   document.body.append(dialog);
   dialog.addEventListener('close', () => reopen.focus());
   form.addEventListener('submit', (event) => {
+    const alreadyCheckedIn = [...form.querySelectorAll('input[data-already-checked-in]:checked')];
+    if (alreadyCheckedIn.length) {
+      event.preventDefault();
+      window.alert('You cannot earn any more loyalty points for the selected participants at this event because they have already checked in:\n\n' +
+        alreadyCheckedIn.map(input => input.dataset.participantName).join('\n') +
+        '\n\nDeselect these participants to check in anyone else.');
+      alreadyCheckedIn[0].focus();
+      return;
+    }
     if (!form.querySelector('input[name="member_id"]:checked')) {
       event.preventDefault();
       help.textContent = 'Select at least one participant being painted today before confirming.';

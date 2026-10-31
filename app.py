@@ -2587,6 +2587,9 @@ def delete_waiver(waiver_id):
 def admin_events():
     archived_view = request.args.get('view') == 'archived'
     events = Event.query.filter(Event.status == 'Archived' if archived_view else Event.status != 'Archived').order_by(Event.id.desc()).all()
+    loyalty_event_id = request.args.get('loyalty_event_id', type=int)
+    loyalty_event = next((event for event in events if event.id == loyalty_event_id), None)
+    loyalty_code = db.session.get(loyalty_models[0], loyalty_event.id) if loyalty_event else None
 
     current_event = Event.query.filter_by(
         is_current=True
@@ -2596,6 +2599,7 @@ def admin_events():
         "admin_events.html",
         events=events,
         current_event=current_event, archived_view=archived_view,
+        loyalty_event=loyalty_event, loyalty_code=loyalty_code,
         client_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32))
     )
 

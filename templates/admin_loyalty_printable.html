@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loyalty sign editor | CL Paints</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='loyalty-printable.css') }}">
+<style id="print-page-size">@page{size:A4 portrait;margin:0}</style>
+</head><body data-event-id="{{ event.id }}">
+<header class="editor-header"><a href="{{ url_for('loyalty.event_admin', event_id=event.id) }}">&larr; Back to event loyalty</a><h1>Loyalty sign editor</h1><p>{{ event.name }} &middot; {{ event.event_date or 'Date not set' }}</p></header>
+<main class="editor-layout">
+<form id="sign-controls" class="editor-controls">
+<h2>Design your printable</h2>
+<label>Heading<textarea name="heading" rows="3" maxlength="140">Scan QR Code to gain loyalty points</textarea></label>
+<label>Reward message<textarea name="reward" rows="3" maxlength="180">Collect 3 points, then enjoy a free face paint on your fourth visit</textarea></label>
+<label>Instructions<textarea name="instructions" rows="3" maxlength="240">Scan, sign in and select the people being painted today. One point per person per public event.</textarea></label>
+<label>Footer<input name="footer" maxlength="140" value="{{ event.name }}"></label>
+<label>Paper size<select name="paper"><option>A4</option><option>A5</option></select></label>
+<label>Orientation<select name="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+<label>Style<select name="theme"><option value="simple">Simple white (like your slide)</option><option value="brand">CL Paints pink</option></select></label>
+<label>Heading size<select name="headingSize"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></label>
+<label>QR size<select name="qrSize"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></label>
+<label class="check"><input type="checkbox" name="logo"> Show CL Paints logo</label>
+<div class="editor-actions"><button type="button" id="save-sign">Save design on this device</button><button type="button" id="reset-sign">Reset design</button><button type="button" id="print-sign" disabled>Print / save as PDF</button></div>
+<p id="editor-status" role="status">Loading event QR code…</p>
+<p>Saved designs are remembered for this event in this browser. Choose “Save as PDF” in the print window to download a copy.</p>
+</form>
+<section class="preview-area" aria-label="Printable sign preview"><article id="loyalty-sign" class="sign" data-theme="simple" data-orientation="portrait" data-heading-size="medium" data-qr-size="medium">
+<img id="sign-logo" class="sign-logo" src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="CL Paints" hidden>
+<h2 data-sign-text="heading">Scan QR Code to gain loyalty points</h2>
+<p class="sign-reward" data-sign-text="reward">Collect 3 points, then enjoy a free face paint on your fourth visit</p>
+<img id="sign-qr" class="sign-qr" src="{{ url_for('loyalty.qr', event_id=event.id) }}" alt="Loyalty check-in QR for {{ event.name }}">
+<p class="sign-instructions" data-sign-text="instructions">Scan, sign in and select the people being painted today. One point per person per public event.</p>
+<p class="sign-footer" data-sign-text="footer">{{ event.name }}</p>
+</article></section></main>
+<script src="{{ url_for('static', filename='loyalty-printable.js') }}" defer></script>
+</body></html>

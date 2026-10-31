@@ -30,6 +30,36 @@ Event Management | CL Paints
         </nav>
         {% if request.args.get('archived') == 'yes' %}<p class="booking-admin-notice" role="status">Event archived. Loyalty visits, points and waiver history are preserved. Public links are closed.</p>{% endif %}
         {% if request.args.get('restored') == 'yes' %}<p class="booking-admin-notice" role="status">Event restored as Closed. Open it when you are ready to accept visitors.</p>{% endif %}
+        <section class="panel" id="event-loyalty-qr">
+            <h2>Loyalty QR code &amp; printables</h2>
+            <form method="get" action="{{ url_for('admin_events', _anchor='event-loyalty-qr') }}" class="client-form">
+                {% if archived_view %}<input type="hidden" name="view" value="archived">{% endif %}
+                <label>Select an event
+                    <select name="loyalty_event_id" required onchange="this.form.requestSubmit()">
+                        <option value="">Choose an event</option>
+                        {% for event in events %}
+                        <option value="{{ event.id }}" {% if loyalty_event and loyalty_event.id == event.id %}selected{% endif %}>{{ event.name }} &middot; {{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; {{ event.status }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div><button class="btn" type="submit">Show loyalty QR code</button></div>
+            </form>
+            {% if loyalty_event %}
+                <h3>{{ loyalty_event.name }}</h3>
+                {% if loyalty_code %}
+                <img src="{{ url_for('loyalty.qr', event_id=loyalty_event.id) }}" alt="Loyalty check-in QR for {{ loyalty_event.name }}" width="240" height="240" style="max-width:100%;height:auto;background:white">
+                <div class="paint-actions">
+                    <a class="btn primary" href="{{ url_for('loyalty.printable', event_id=loyalty_event.id) }}">Design &amp; print loyalty sign</a>
+                    <a class="btn" href="{{ url_for('loyalty.qr', event_id=loyalty_event.id) }}" download="loyalty-event-{{ loyalty_event.id }}.svg">Download QR code</a>
+                    <a class="btn" href="{{ url_for('loyalty.event_admin', event_id=loyalty_event.id) }}">Loyalty visits &amp; details</a>
+                </div>
+                <p>Customers can check in when this public event is open on its event date. Each participant can earn one point per event.</p>
+                {% else %}
+                <p>This event does not have a loyalty QR code yet.</p>
+                <a class="btn" href="{{ url_for('loyalty.event_admin', event_id=loyalty_event.id) }}">Generate loyalty QR code</a>
+                {% endif %}
+            {% else %}<p>Choose an event to display its loyalty QR code and open the printable sign editor.</p>{% endif %}
+        </section>
         {% if archived_view %}
         <section class="panel"><h2>Archived events</h2><p>Past events are retained for loyalty history and reporting.</p>
         <div data-workspace-list>{% for event in events %}<article class="client-record" data-record-status="Archived"><strong>{{ event.name }}</strong><span>{{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; Archived</span>

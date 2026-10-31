@@ -183,6 +183,12 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
             allowed = {p.id for p in people}
             if not ids or not ids <= allowed:
                 abort(400)
+            existing_visits = Visit.query.filter_by(event_id=event.id).filter(Visit.participant_id.in_(ids)).all()
+            if existing_visits:
+                existing_ids = {visit.participant_id for visit in existing_visits}
+                names = ', '.join(f'{person.first_name} {person.last_name}' for person in people if person.id in existing_ids)
+                flash(f'You cannot earn any more loyalty points for these selected participants at this event because they have already checked in: {names}. Deselect them to check in anyone else.', 'error')
+                return redirect(url_for('loyalty.scan', token=token))
             newly_claimed = []
             with db.session.no_autoflush:
                 for person_id in ids:
@@ -240,6 +246,16 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
         visits = db.session.query(Visit, Participant, Balance).join(Participant, Participant.id == Visit.participant_id).join(Balance, Balance.participant_id == Visit.participant_id).filter(Visit.event_id == event_id).order_by(Visit.scanned_at.desc()).all()
         images = Image.query.join(EventImage, EventImage.image_id == Image.id).filter(EventImage.event_id == event_id).all()
         return render_template('admin_loyalty_event.html', event=event, record=record, visits=visits, images=images, client_csrf=csrf(), scan_open=open_event(event))
+
+    @bp.get('/admin/events/<int:event_id>/loyalty/printable')
+    @admin_required
+    def printable(event_id):
+        event = db.session.get(Event, event_id)
+        if not public_event(event):
+            abort(404)
+        if not db.session.get(EventCode, event_id):
+            abort(404)
+        return render_template('admin_loyalty_printable.html', event=event)
 
     @bp.get('/admin/events/<int:event_id>/loyalty/qr')
     @admin_required
