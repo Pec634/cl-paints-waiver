@@ -57,6 +57,8 @@ def define_models(db):
         content=db.Column(db.LargeBinary,nullable=False)
         mime=db.Column(db.String(50),nullable=False)
         filename=db.Column(db.String(150),nullable=False)
+    from giveaway_draw import define_model
+    db._giveaway_draw = define_model(db)
     return NativeForm,NativeSubmission,ConsentMedia
 
 
@@ -83,6 +85,8 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     def csrf():return session.setdefault('client_csrf',secrets.token_urlsafe(32))
     def check():
         if not secrets.compare_digest(csrf(),request.form.get('csrf_token','')):abort(400)
+    from giveaway_draw import register as register_giveaway_draw
+    register_giveaway_draw(app, db, Form, Submission, Account, admin_required, check, current_client)
     records=register_records(app,db,models,Account,Booking,current_client,admin_required,available,csrf,check)
     from form_workflows import register as register_workflows
     workflows=register_workflows(app,db,models,Booking,current_client,admin_required,available,records,csrf,check)
@@ -345,12 +349,26 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
         if not account:return redirect(url_for('client.login'))
         return render_template('native_my_submissions.html',entries=Submission.query.filter_by(client_id=account.id).order_by(Submission.id.desc()).all())
 
+    @app.get('/admin/native-forms/submissions')
+    @admin_required
+    def native_form_submissions_select():
+        form_id = request.args.get('form_id', type=int)
+        db.get_or_404(Form, form_id)
+        return redirect(url_for('native_form_entries', form_id=form_id))
+
     @app.get('/admin/native-forms/<int:form_id>/submissions')
     @admin_required
     def native_form_entries(form_id):
         form=db.get_or_404(Form,form_id)
         rows=records['entries'](form);page=max(1,request.args.get('page',1,type=int))
-        return render_template('admin_native_entries.html',form=form,rows=rows[(page-1)*25:page*25],total=len(rows),page=page,statuses=STATUSES,csrf=csrf())
+        draw_clients = {}
+        for row in rows:
+            if row['client_id'] and row['account_number']:
+                draw_clients.setdefault(row['client_id'], dict(number=row['account_number']))
+        if form.kind == 'giveaway':
+            draw_clients = {account.id: dict(number=account.account_number) for account in Account.query.join(Submission, Submission.client_id == Account.id).filter(Submission.form_id == form.id).distinct().all()}
+        saved_draw = db.session.get(db._giveaway_draw, form.id)
+        return render_template('admin_native_entries.html',form=form,saved_draw=saved_draw,all_forms=Form.query.order_by(Form.id.desc()).all(),draw_clients=list(draw_clients.values()),rows=rows[(page-1)*25:page*25],total=len(rows),page=page,statuses=STATUSES,csrf=csrf())
 
     @app.get('/form-media/<int:media_id>')
     def native_media(media_id):

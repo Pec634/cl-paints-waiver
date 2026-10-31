@@ -1,5 +1,11 @@
+<section class="creates-occasions" aria-labelledby="creates-occasions-heading">
+<h2 id="creates-occasions-heading">A headband for every occasion</h2>
+<p>Make it personal, whatever the occasion. From birthdays, hen parties and weddings to festivals, charity days and sporting events, choose custom wording that brings your group together and helps you stand out.</p>
+<p><strong>Follow a sports team?</strong> Wear your support with pride! Add your team's name, nickname or a short cheer to a custom headband and make your support clear from the sidelines to the stands.</p>
+<p>Celebrating someone special or heading out with friends? Create matching headbands for your group, or give everyone their own message. Each design allows up to 11 characters, plus two spaces.</p>
+</section>
 {% if gallery %}
-<section aria-label="Headband examples"><h2>Made to celebrate</h2><p>Examples of our custom headbands. Choose your own wording in the order form.</p>
+<section aria-label="Headband examples"><h2>A little inspiration</h2><p>These are just a few examples. Choose your own wording in the order form to suit your team, celebration or occasion.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px">
 {% for image in gallery %}<figure style="margin:0"><a href="{{ url_for('creates_library_image',image_id=image.id) }}" target="_blank" rel="noopener"><img src="{{ url_for('creates_library_image',image_id=image.id) }}" alt="{{ image.name }}" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:12px"></a><figcaption>{{ image.name }}</figcaption></figure>{% endfor %}
 </div></section>

@@ -1,0 +1,5 @@
+#creates-form label.creates-checkbox{display:flex;align-items:flex-start;justify-content:flex-start;gap:12px;cursor:pointer;line-height:1.5;margin:16px 0;padding:12px;border:1px solid #dce3ee;border-radius:10px;background:#fff}
+#creates-form label.creates-checkbox input[type=checkbox]{display:block;flex:0 0 20px;width:20px;height:20px;min-width:20px;max-width:20px;margin:2px 0 0;padding:0;accent-color:#b71963}
+#creates-form .creates-checkbox span{flex:1;min-width:0}
+.creates-occasions{margin:24px 0;padding:22px;border-left:4px solid #d82479;border-radius:0 12px 12px 0;background:#ffffffa6}
+.creates-occasions h2{margin-top:0}.creates-occasions p{line-height:1.7}.creates-occasions p:last-child{margin-bottom:0}

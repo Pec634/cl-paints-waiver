@@ -83,5 +83,9 @@ def register(app, db, models, admin_required, settings):
                 db.session.rollback(); flash(str(exc) if isinstance(exc, ValueError) else 'Check the dates and hourly saving.', 'error')
             return redirect(url_for('forms_offers'))
         def local(value): return value.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/London')).strftime('%d/%m/%Y %H:%M')
+        native_models = app.extensions.get('native_form_models')
+        managed_forms = native_models[0].query.order_by(native_models[0].id.desc()).all() if native_models else []
+        submission_counts = dict(db.session.query(native_models[1].form_id, db.func.count(native_models[1].id)).group_by(native_models[1].form_id).all()) if native_models else {}
         return render_template('admin_forms_offers.html', forms=Form.query.order_by(Form.id.desc()).all(),
+                               managed_forms=managed_forms, submission_counts=submission_counts, now=datetime.utcnow(),
                                offers=Promotion.query.order_by(Promotion.starts_at.desc()).all(), csrf=token, local=local)

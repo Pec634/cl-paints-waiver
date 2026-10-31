@@ -143,6 +143,11 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         notice = Notice(email=email, kind=kind, reference=reference, details=details)
         db.session.add(notice)
         db.session.commit()
+        return deliver(notice, name, link, essential)
+    def deliver(notice, name, link, essential=False):
+        email, kind = notice.email, notice.kind
+        config = settings()
+        subject, body, footer, message = render_notification(config, name, kind, notice.reference, notice.details, link)
         account = Account.query.filter(db.func.lower(Account.email) == email.strip().casefold()).first()
         Preference = app.extensions.get('client_email_preference_model')
         preference = db.session.get(Preference, account.id) if Preference and account else None
@@ -158,6 +163,8 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
             notice.email_sent = False
         db.session.commit()
         return notice.email_sent if enabled else None
+    app.extensions['client_notification_model'] = Notice
+    app.extensions['client_notice_deliver'] = deliver
     def booking_updated(booking, before, schedule):
         after = booking_snapshot(booking, schedule)
         changes = {key: {'before': before.get(key, 'Not set'), 'after': after.get(key, 'Removed')}

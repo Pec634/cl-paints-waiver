@@ -1,0 +1,14 @@
+{% if dashboard_giveaway_wins %}
+<link rel="stylesheet" href="{{ url_for('static', filename='giveaway-countdown.css') }}">
+{% for draw in dashboard_giveaway_wins %}
+<section class="giveaway-countdown-banner" aria-labelledby="giveaway-win-{{ draw.form_id }}">
+<div><span class="giveaway-countdown-eyebrow">YOUR GIVEAWAY PRIZE</span><h2 id="giveaway-win-{{ draw.form_id }}">{{ draw.title }}</h2><p>Winning client account: <strong>{{ draw.account_number }}</strong></p>
+{% if draw.claimed_at %}<p><strong>Prize claimed!</strong> Contact CL Paints to arrange your booking.</p>
+{% elif draw.can_redraw %}<p><strong>The claim deadline has passed.</strong> The prize is awaiting a replacement draw.</p>
+{% else %}<p data-countdown-message>Claim your prize before the countdown ends. After 14 days without a response, another winner may be drawn.</p><p>Deadline: {{ draw.claim_deadline.strftime('%d/%m/%Y %H:%M') }} UTC</p>
+<form method="post" action="{{ url_for('client_giveaway_claim', form_id=draw.form_id) }}" data-countdown-claim><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn primary" type="submit">Claim my prize</button></form>{% endif %}</div>
+<div class="giveaway-days" {% if not draw.claimed_at and not draw.can_redraw %}data-claim-countdown="{{ draw.claim_deadline.isoformat() }}Z"{% endif %}><strong data-days-number>{{ 'Claimed' if draw.claimed_at else draw.days_remaining }}</strong><span data-days-label>{% if draw.claimed_at %}Thank you!{% elif draw.can_redraw %}Claim period ended{% else %}{{ 'day' if draw.days_remaining == 1 else 'days' }} left to claim{% endif %}</span></div>
+</section>
+{% endfor %}
+<script src="{{ url_for('static', filename='giveaway-countdown.js') }}" defer></script>
+{% endif %}

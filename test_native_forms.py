@@ -46,6 +46,85 @@ class NativeFormsTest(unittest.TestCase):
         form.ends_at=datetime.utcnow()-timedelta(seconds=1);main.db.session.commit()
         self.assertEqual(self.client.get('/forms/'+str(form.id)).status_code,404)
 
+    def test_automatic_draw_publishes_once_and_notifies_all_entrants(self):
+        form = self.create('giveaway')
+        self.client.post(f'/forms/{form.id}', data=self.data(form))
+        other = main.ClientAccount(email='draw-demo@example.invalid', first_name='Private', last_name='Name')
+        main.db.session.add(other)
+        main.db.session.flush()
+        main.db.session.add(Submission(form_id=form.id, client_id=other.id, token='draw-second-entry',
+            giveaway_key=f'{form.id}:{other.id}', email=other.email, name='Private Name',
+            answers_json='{}', terms_snapshot=form.terms, title_snapshot=form.title))
+        main.db.session.commit()
+        path = f'/admin/native-forms/{form.id}/draw'
+        self.assertEqual(self.client.post(path).status_code, 302)
+        self.assertEqual(self.admin.post(path, data={'csrf_token':'wrong'}).status_code, 400)
+        Notice = main.app.extensions['client_notification_model']
+        with patch.dict(main.app.extensions, {'client_notice_deliver': lambda *args: False}):
+            response = self.admin.post(path, data={'csrf_token':'admin-token'})
+            self.assertEqual(response.status_code, 200)
+            number = response.json['number']
+            self.assertNotIn('name', response.json)
+            self.assertEqual(Notice.query.filter_by(reference=f'Giveaway-{form.id}').count(), 2)
+            again = self.admin.post(path, data={'csrf_token':'admin-token'})
+            self.assertEqual(again.json['number'], number)
+            self.assertEqual(Notice.query.filter_by(reference=f'Giveaway-{form.id}').count(), 2)
+        self.assertFalse(main.db.session.get(Form, form.id).enabled)
+        self.assertEqual(main.db.session.get(main.db._giveaway_draw, form.id).entrant_count, 2)
+        rewards = self.client.get('/client/rewards').data
+        self.assertIn(number.encode(), rewards)
+        self.assertIn(b'Giveaway results', rewards)
+        self.assertNotIn(b'Private Name', rewards)
+
+    def test_unclaimed_giveaway_can_be_redrawn_after_fourteen_days(self):
+        self.test_automatic_draw_publishes_once_and_notifies_all_entrants()
+        form = Form.query.filter_by(kind='giveaway').one()
+        draw = main.db.session.get(main.db._giveaway_draw, form.id)
+        first_winner = draw.client_id
+        path = f'/admin/native-forms/{form.id}/draw'
+        response = self.admin.post(path, data={'csrf_token':'admin-token', 'draw_version':draw.drawn_at.isoformat()})
+        self.assertEqual(response.json['number'], draw.account_number)
+        draw.drawn_at = datetime.utcnow() - timedelta(days=14, seconds=1)
+        main.db.session.commit()
+        version = draw.drawn_at.isoformat()
+        with patch.dict(main.app.extensions, {'client_notice_deliver':lambda *args: False}):
+            response = self.admin.post(path, data={'csrf_token':'admin-token', 'draw_version':version})
+        self.assertEqual(response.status_code, 200)
+        main.db.session.refresh(draw)
+        self.assertNotEqual(draw.client_id, first_winner)
+        self.assertFalse(draw.can_redraw)
+        self.assertEqual(main.db._giveaway_round.query.filter_by(form_id=form.id).count(), 2)
+
+    def test_claimed_giveaway_cannot_be_redrawn(self):
+        self.test_automatic_draw_publishes_once_and_notifies_all_entrants()
+        form = Form.query.filter_by(kind='giveaway').one()
+        draw = main.db.session.get(main.db._giveaway_draw, form.id)
+        response = self.admin.post(f'/admin/native-forms/{form.id}/draw/claim',
+            data={'csrf_token':'admin-token', 'draw_version':draw.drawn_at.isoformat()})
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNotNone(draw.claimed_at)
+        draw.drawn_at = datetime.utcnow() - timedelta(days=15)
+        main.db.session.commit()
+        self.assertFalse(draw.can_redraw)
+
+    def test_winner_dashboard_shows_claim_countdown_at_top(self):
+        with patch('giveaway_draw.secrets.choice', side_effect=lambda accounts: accounts[0]):
+            self.test_automatic_draw_publishes_once_and_notifies_all_entrants()
+        draw = main.db._giveaway_draw.query.one()
+        self.assertEqual(draw.days_remaining, 14)
+        page = self.client.get('/client/').data
+        if b'giveaway-countdown-banner' not in page:
+            page = self.client.get('/client/dashboard').data
+        self.assertIn(b'giveaway-countdown-banner', page)
+        self.assertIn(b'Claim my prize', page)
+        self.assertLess(page.index(b'giveaway-countdown-banner'), page.index(b'client-welcome'))
+        draw.drawn_at = datetime.utcnow() - timedelta(days=13, hours=12)
+        main.db.session.commit()
+        self.assertEqual(draw.days_remaining, 1)
+        draw.drawn_at = datetime.utcnow() - timedelta(days=15)
+        main.db.session.commit()
+        self.assertEqual(draw.days_remaining, 0)
+
     def test_photo_upload_privacy_and_validation(self):
         form=self.create('photo');payload=self.data(form)
         payload.update(people='Alex; I am their parent',authority='yes',media=(BytesIO(b'\x89PNG\r\n\x1a\nexample'),'photo.png'))

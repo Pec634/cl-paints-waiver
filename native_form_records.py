@@ -276,11 +276,20 @@ def register(app, db, models, Account, Booking, current_client, admin_required, 
                     booking=booking,media=db._native_booking_media.query.options(defer(db._native_booking_media.content)).filter_by(booking_id=booking.id).all(),
                     files=FieldFile.query.options(defer(FieldFile.content)).filter_by(booking_id=booking.id).all(),snapshot=json.loads(meta.snapshot_json) if meta else {},
                     version=db.session.get(Version,meta.version_id) if meta and meta.version_id else None))
+        account_ids = {row['item'].client_id for row in result if row['type'] == 'submission'}
+        booking_emails = {row['email'].strip().lower() for row in result if row['type'] == 'booking'}
+        accounts = Account.query.filter(db.or_(Account.id.in_(account_ids), db.func.lower(db.func.trim(Account.email)).in_(booking_emails))).all() if account_ids or booking_emails else []
+        accounts_by_id = {account.id: account for account in accounts}
+        accounts_by_email = {account.email.strip().lower(): account for account in accounts}
+        for row in result:
+            account = accounts_by_id.get(row['item'].client_id) if row['type'] == 'submission' else accounts_by_email.get(row['email'].strip().lower())
+            row['client_id'] = account.id if account else None
+            row['account_number'] = account.account_number if account else ''
         selected_submission=request.args.get('submission',type=int)
         if selected_submission is not None:
             result=[row for row in result if row['type']=='submission' and row['id']==selected_submission]
         query=request.args.get('q','').strip().lower(); status=request.args.get('status','')
-        return [row for row in result if (not status or row['status']==status) and (not query or query in (row['reference']+' '+row['name']+' '+row['email']+' '+json.dumps(row['answers'],ensure_ascii=False)).lower())]
+        return [row for row in result if (not status or row['status']==status) and (not query or query in (row['reference']+' '+row['name']+' '+row['account_number']+' '+row['email']+' '+json.dumps(row['answers'],ensure_ascii=False)).lower())]
 
     @app.get('/admin/native-forms/<int:form_id>/export')
     @admin_required

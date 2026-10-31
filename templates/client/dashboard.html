@@ -1,4 +1,5 @@
 {% extends 'client/base.html' %}{% block content %}
+{% include 'client/_giveaway_countdown.html' %}
 <header class="top client-welcome"><div><h1>Hello, {{ client_account.first_name }}!</h1><p>Let's make your next celebration colourful. Plan your event, follow your bookings and enjoy a little thank-you with rewards.</p><a class="btn primary" href="{{ url_for('booking_request') }}">Let's plan an event →</a></div><div class="client-welcome-art" aria-hidden="true"><img src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="" width="180" height="180"></div>{% include 'client/_dashboard_references.html' %}{% include 'client/_trustpilot.html' %}</header><div class="client-summary"><article class="panel"><span>Requests awaiting review</span><strong>{{ pending }}</strong></article><article class="panel"><span>Rewards available</span><strong>{{ rewards|selectattr('status', 'equalto', 'earned')|list|length }}</strong></article></div><div class="client-dashboard-sections" data-dashboard-accordion>
 {% include '_portal_next_steps.html' %}
 
