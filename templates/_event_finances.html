@@ -1,0 +1,16 @@
+<details class="event-finance"><summary>Booking, payments &amp; pitch fee</summary>
+{% if finance.booking %}
+<p><a href="{{ url_for('admin_bookings', _anchor='booking-' ~ finance.booking.id) }}">{{ finance.booking.public_reference }}</a> &middot; Day {{ event.booking_day_number }} &middot; {{ finance.booking.status }}</p>
+<p>Client payments for the whole booking:<br>Total &pound;{{ '%.2f'|format(finance.payment.total) }} &middot; Received &pound;{{ '%.2f'|format(finance.payment.paid) }} &middot; Outstanding &pound;{{ '%.2f'|format(finance.payment.outstanding) }}</p>
+<a class="btn small" href="{{ url_for('admin_payments', booking_id=finance.booking.id) }}">Payments &amp; invoices</a>
+{% else %}<p>Standalone event &mdash; no booking linked.</p>{% endif %}
+<p>Pitch fee for this event day:
+{% if finance.due is not none %}<strong>&pound;{{ '%.2f'|format(finance.due) }}</strong> &middot;
+{% if finance.paid > finance.due %}Overpaid by &pound;{{ '%.2f'|format(finance.paid-finance.due) }}{% elif finance.remaining == 0 %}{{ 'Paid' if finance.due else 'No fee due' }}{% elif finance.paid > 0 %}Part paid &mdash; &pound;{{ '%.2f'|format(finance.remaining) }} still due{% else %}Due{% endif %}
+{% elif finance.day.get('pitch_fee_required') %}Amount not recorded{% elif finance.booking %}No pitch fee listed{% else %}Amount due not set{% endif %}
+</p>
+<p>Recorded pitch fee payments: &pound;{{ '%.2f'|format(finance.paid) }}.</p>
+{% for entry in finance.entries %}<p>&pound;{{ '%.2f'|format(entry.amount) }} &middot; {{ 'SumUp bank account' if entry.source == 'sumup' else 'Till' }} &middot; {{ entry.recorded_at.strftime('%d/%m/%Y') }} &middot; {{ entry.reason }}</p>{% endfor %}
+<p><a class="btn small" href="{{ url_for('admin_cash_movements', event_id=event.id, _anchor='pitch-fees') }}">Record pitch fee payment</a></p>
+<small>Only payments explicitly linked to this event are included. A listed fee does not mark it paid.</small>
+</details>

@@ -30,6 +30,10 @@ Event Management | CL Paints
         </nav>
         {% if request.args.get('archived') == 'yes' %}<p class="booking-admin-notice" role="status">Event archived. Loyalty visits, points and waiver history are preserved. Public links are closed.</p>{% endif %}
         {% if request.args.get('restored') == 'yes' %}<p class="booking-admin-notice" role="status">Event restored as Closed. Open it when you are ready to accept visitors.</p>{% endif %}
+        <section class="event-printables" aria-labelledby="event-printables-heading">
+        {% if request.args.get('events_created') %}<p class="booking-admin-notice" role="status">{{ request.args.get('events_created') }} linked event(s) created. Existing event links were retained.</p>{% endif %}
+        <div class="panel-heading"><div><h2 id="event-printables-heading">Event printables</h2><p>Choose an event, then design, download or print its signs.</p></div></div>
+        <div class="event-printables-grid">
         <section class="panel" id="event-moodboard-qr">
             <h2>Moodboard QR code &amp; printables</h2>
             <p>Print a sign that customers can scan to view the designs selected for their event.</p>
@@ -88,6 +92,8 @@ Event Management | CL Paints
                 {% endif %}
             {% else %}<p>Choose an event to display its loyalty QR code and open the printable sign editor.</p>{% endif %}
         </section>
+        </div></section>
+        <style>.event-printables{margin-bottom:24px}.event-printables-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.event-printables-grid>.panel{min-width:0;margin:0}.event-printables-grid .paint-actions{display:flex;flex-wrap:wrap;gap:8px}.event-printables-grid .client-form select{max-width:100%}@media(max-width:1100px){.event-printables-grid{grid-template-columns:1fr}}</style>
         {% if archived_view %}
         <section class="panel"><h2>Archived events</h2><p>Past events are retained for loyalty history and reporting.</p>
         <div data-workspace-list>{% for event in events %}<article class="client-record" data-record-status="Archived"><strong>{{ event.name }}</strong><span>{{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; Archived</span>
@@ -99,11 +105,19 @@ Event Management | CL Paints
 
             <div class="panel-heading">
                 <div>
-                    <h2>Create Event</h2>
+                    <h2>Create an event</h2>
                     <p>New events are created closed, with a unique loyalty QR code ready for the event date.</p>
                 </div>
             </div>
 
+            <h3>From an accepted booking</h3>
+            <p>Create one linked event for each public booking day. Dates and venues carry across; payment figures stay linked to the booking.</p>
+            <form method="post" action="{{ url_for('admin_event_from_booking') }}" class="client-form">
+                <input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="return_to" value="events">
+                <label>Booking<select name="booking_id" required><option value="">Choose a confirmed public booking</option>{% for booking in booking_choices %}<option value="{{ booking.id }}">{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }} &middot; {{ booking.event_date }}</option>{% endfor %}</select></label>
+                <div><button class="btn primary" {% if not booking_choices %}disabled{% endif %}>Create event from booking</button></div>
+            </form>
+            <h3>Standalone public event</h3>
             <form
                 method="post"
                 action="/admin/events/create"
@@ -163,10 +177,11 @@ Event Management | CL Paints
 
                     {% for event in events %}
 
-                        <tr data-record-status="{{ event.status }}">
+                        <tr id="event-{{ event.id }}" data-record-status="{{ event.status }}">
 
                             <td data-label="Event">
                                 <strong>{{ event.name }}</strong>
+                                {% set finance = event_finances[event.id] %}{% include '_event_finances.html' %}
                             </td>
                             <td data-label="Event date">
                                 {{ event.event_date.strftime("%d/%m/%Y") if event.event_date else "No date" }}

@@ -1,0 +1,30 @@
+<input type="hidden" name="pitch_count_version" value="{{ till_float.counted.id if till_float.counted else '' }}">
+<label>Link payment to event<select name="event_id"><option value="">No event linked</option>{% for event in payment_events %}<option value="{{ event.id }}" {% if linked_event and linked_event.id == event.id %}selected{% endif %}>{{ event.name }} &middot; {{ event.event_date or 'Date not set' }}</option>{% endfor %}</select></label>
+<section class="pitch-count-summary"><h3>Previous cash records carried forward</h3>
+<p>Expected till: <strong>{% if state.till is not none %}&pound;{{ '%.2f'|format(state.till) }}{% else %}Not set{% endif %}</strong> &middot; Expected safe: <strong>{% if state.safe is not none %}&pound;{{ '%.2f'|format(state.safe) }}{% else %}Not set{% endif %}</strong>.</p>
+{% if till_float.current_total is not none %}<p>Last physically counted till: &pound;{{ '%.2f'|format(till_float.current_total) }} on {{ till_float.current_at.strftime('%d/%m/%Y %H:%M') }} UTC. {% if not till_float.fresh %}Cash records have changed since that count.{% endif %}</p>{% endif %}
+<p>These figures are loaded automatically. Enter only the notes and coins used for any pitch fee, then what is physically left in the till.</p></section>
+<fieldset data-pitch-count hidden disabled>
+<legend>1. Notes and coins used to pay the pitch fee</legend>
+<p>Enter quantities taken out of the till. Leave unused denominations at zero.</p>
+{% if closed_event %}<p>No pitch fee paid from the till? Leave every used quantity at zero and count the till below.</p>{% endif %}
+<div class="pitch-count-grid">{% for pence,label in denominations %}<label>{{ '&pound;'|safe ~ (pence//100) if pence >= 100 else label }} used<input type="number" name="denom_pitch_used_{{ pence }}" data-pitch-used="{{ pence }}" min="0" max="999999" step="1" value="0" required></label>{% endfor %}</div>
+<p>Pitch fee paid: <strong data-pitch-paid>&pound;0.00</strong></p>
+</fieldset>
+<fieldset data-pitch-count hidden disabled>
+<legend>2. Count the cash remaining in the till</legend>
+<p>Count every note and coin left after paying the fee.</p>
+<div class="pitch-count-grid">{% for pence,label in denominations %}<label>{{ '&pound;'|safe ~ (pence//100) if pence >= 100 else label }} remaining<input type="number" name="denom_pitch_remaining_{{ pence }}" data-pitch-remaining="{{ pence }}" min="0" max="999999" step="1" value="0" required></label>{% endfor %}</div>
+<div class="pitch-count-summary" aria-live="polite"><p>Expected remaining till: <strong data-pitch-expected></strong></p><p>Counted remaining till: <strong data-pitch-total></strong></p><p data-pitch-difference></p></div>
+<section><h3>3. Put the till float back</h3>
+{% if till_float.target %}<p>Compared with your saved default float of &pound;{{ '%.2f'|format(till_float.target.total) }}. Suggestions update as you count.</p>
+<p data-pitch-plan-total aria-live="polite"></p>
+<div class="table-wrap"><table><thead><tr><th>Denomination</th><th>Previous till</th><th>Safe last counted</th><th>Default</th><th>Move</th></tr></thead><tbody>
+{% for row in till_float.rows %}<tr data-pitch-plan="{{ row.pence }}" data-target="{{ row.desired }}" data-safe="{{ row.safe_quantity if till_float.safe_fresh and row.safe_quantity is not none else '' }}"><th>{{ '&pound;'|safe ~ (row.pence//100) if row.pence >= 100 else row.label }}</th><td>{{ row.actual if till_float.current is not none else 'Unknown' }}</td><td>{{ row.safe_quantity if row.safe_quantity is not none else 'Unknown' }}</td><td>{{ row.desired }}</td><td data-pitch-plan-move></td></tr>{% endfor %}
+</tbody></table></div>
+<p>Check the safe quantities before moving cash. Suggestions do not record a transfer. Save the sheet first, then record each actual transfer once using Move cash.</p>
+{% else %}<p>Set your default float in Till float &amp; coin counts to get guidance for each denomination.</p>{% endif %}</section>
+<label>Explanation of any difference<textarea name="discrepancy_note" maxlength="1000" rows="2"></textarea></label>
+<label><input type="checkbox" name="remaining_checked" value="yes" required> I counted all the cash remaining in the till.</label>
+<p>Saving records the fee and this count together. Any difference stays visible for review.</p>
+</fieldset>

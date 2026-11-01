@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const shortcuts = document.createElement('nav');
         shortcuts.className = 'portal-mobile-shortcuts';
         shortcuts.setAttribute('aria-label', 'Quick navigation');
-        [...navigation.querySelectorAll('a')].filter(link => ['Dashboard', 'Bookings', 'Events'].includes(link.textContent.trim())).forEach(link => {
+        [...navigation.querySelectorAll('a')].filter(link => ['/admin/dashboard', '/admin/bookings', '/admin/events'].includes(link.getAttribute('href'))).forEach(link => {
             const shortcut = link.cloneNode(true);
             if (shortcut.classList.contains('active')) shortcut.setAttribute('aria-current', 'page');
             shortcuts.append(shortcut);

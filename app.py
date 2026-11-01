@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for, abort
+from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for, abort, flash
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
@@ -607,6 +607,9 @@ with app.app_context():
     ensure_creates_schema(db)
     ensure_photo_library_schema(db)
     ensure_kiosk_schema(db)
+    if 'event_id' not in {column['name'] for column in inspect(db.engine).get_columns('cash_movement')}:
+        with db.engine.begin() as connection:
+            connection.exec_driver_sql('ALTER TABLE cash_movement ADD COLUMN event_id INTEGER REFERENCES event(id)')
     event_columns = {
         column["name"]
         for column in inspect(db.engine).get_columns("event")
@@ -2383,7 +2386,7 @@ def admin_create_booking_events(booking_id):
 
     db.session.commit()
     return redirect(url_for(
-        "admin_bookings",
+        "admin_events" if request.form.get('return_to') == 'events' else "admin_bookings",
         events_created=created_count,
         booking=booking.id,
     ))
@@ -2679,14 +2682,43 @@ def admin_events():
         is_current=True
     ).first()
 
+    booking_choices = []
+    for booking in Booking.query.filter_by(status='Accepted').order_by(Booking.id.desc()).all():
+        if any(day.get('publicity_type') == 'Public' for day in booking_schedule_events(booking)):
+            booking_choices.append(booking)
+    event_finances = {}
+    for event in events:
+        booking = db.session.get(Booking, event.booking_id) if event.booking_id else None
+        days = booking_schedule_events(booking) if booking else []
+        index = (event.booking_day_number or 1) - 1
+        day = days[index] if 0 <= index < len(days) else {}
+        due = Decimal(str(day['pitch_fee_amount'])) if day.get('pitch_fee_amount') is not None else None
+        payments = CashMovement.query.filter_by(event_id=event.id, kind='pitch_fee').order_by(CashMovement.id).all()
+        paid = sum((entry.amount for entry in payments), Decimal('0'))
+        event_finances[event.id] = dict(booking=booking, day=day, due=due, paid=paid,
+            remaining=max(Decimal('0'), due-paid) if due is not None else None,
+            payment=app.extensions['payment_summary'](booking) if booking else None, entries=payments)
+
     return render_template(
         "admin_events.html",
         events=events,
         current_event=current_event, archived_view=archived_view,
         loyalty_event=loyalty_event, loyalty_code=loyalty_code,
         moodboard_event=moodboard_event,
+        booking_choices=booking_choices, event_finances=event_finances,
         client_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32))
     )
+
+
+@app.post('/admin/events/from-booking')
+@admin_required
+def admin_event_from_booking():
+    if not session.get('client_csrf') or not secrets.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
+        abort(400)
+    booking_id = request.form.get('booking_id', type=int)
+    if not booking_id:
+        abort(400)
+    return admin_create_booking_events(booking_id)
 
 
 @app.post("/admin/events/create")
@@ -2744,8 +2776,16 @@ def admin_set_event_status(event_id):
     new_status = request.form.get("status", "")
 
     if event.status != 'Archived' and new_status in ["Open", "Closing Soon", "Closed"]:
+        closing_public = (new_status == 'Closed' and event.status in ('Open', 'Closing Soon')
+            and app.extensions['kiosk_public_event'](event))
         event.status = new_status
         db.session.commit()
+        if closing_public:
+            flash('Event closed. Complete the cash workflow below.', 'success')
+            if event.booking_id:
+                return redirect(url_for('admin_booking_cashup', booking_id=event.booking_id,
+                    day=(event.booking_day_number or 1) - 1))
+            return redirect(url_for('admin_cash_movements', closed_event=event.id))
 
     return redirect(url_for("admin_events"))
 
@@ -2890,7 +2930,7 @@ from google_calendar_sync import register as register_google_calendar_sync
 register_google_calendar_sync(app, db, BusinessSetting, Booking, booking_schedule_events, get_business_settings, admin_required)
 from booking_cashup import register as register_booking_cashup
 from cash_journal import register as register_cash_journal
-register_cash_journal(app, db, CashMovement, BookingCashup, BusinessSetting, TillDenominationRecord, admin_required)
+register_cash_journal(app, db, CashMovement, BookingCashup, BusinessSetting, TillDenominationRecord, admin_required, Event)
 register_booking_cashup(app, db, BookingCashup, Booking, booking_schedule_events, admin_required)
 from cashup_invoice_payments import register as register_cashup_invoice_payments
 register_cashup_invoice_payments(app, db, BookingCashup, Booking, tool_models[1], booking_schedule_events, admin_required)

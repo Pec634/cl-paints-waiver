@@ -57,6 +57,115 @@ class CashJournalTest(unittest.TestCase):
         state = main.app.extensions['cash_journal_position']()
         self.assertEqual((state['till'], state['safe']), (Decimal('20'), Decimal('100')))
 
+    def test_till_pitch_fee_reduces_cash_once_and_preserves_client_payments(self):
+        self.opening()
+        before = main.app.extensions['payment_summary'](self.booking)['total']
+        data = dict(self.form(), action='pitch_fee', source='till', amount='12.50',
+            denom_pitch_used_1000='1', denom_pitch_used_200='1', denom_pitch_used_50='1',
+            denom_pitch_remaining_500='1', denom_pitch_remaining_200='1', denom_pitch_remaining_50='1',
+            remaining_checked='yes', pitch_count_version='',
+            reason='Riverside market pitch fee', checked_by='Manager')
+        self.admin.post(self.path, data=data)
+        self.admin.post(self.path, data=data)
+        state = main.app.extensions['cash_journal_position']()
+        self.assertEqual((state['till'], state['safe']), (Decimal('7.50'), Decimal('100')))
+        self.assertEqual(main.CashMovement.query.filter_by(kind='pitch_fee').count(), 1)
+        self.assertEqual(main.app.extensions['payment_summary'](self.booking)['total'], before)
+        page = self.admin.get(self.path).data
+        self.assertIn(b'Pitch fee payment &middot; &pound;12.50 &middot; paid from Till', page)
+        self.assertIn(b'Riverside market pitch fee', page)
+        self.assertIn(b'Counted remaining till: <strong>&pound;7.50', page)
+        self.assertIn(b'Notes and coins used and remaining', page)
+        self.assertEqual(main.TillDenominationRecord.query.filter_by(kind='fee_used').count(), 1)
+        view = main.app.extensions['till_float_view']()
+        self.assertTrue(view['fresh'])
+        self.assertEqual(view['current_total'], Decimal('7.50'))
+        self.move(source='other', destination='till', amount='12.50', reason='Reverse incorrect pitch fee')
+        self.assertEqual(main.app.extensions['cash_journal_position']()['till'], Decimal('20'))
+
+    def test_sumup_pitch_fee_needs_no_cash_setup_and_does_not_change_cash_version(self):
+        before = main.app.extensions['cash_journal_position']()
+        self.move(action='pitch_fee', source='sumup', amount='50', reason='Market pitch fee')
+        after = main.app.extensions['cash_journal_position']()
+        self.assertEqual(before, after)
+        self.assertIn(b'paid from SumUp bank account', self.admin.get(self.path).data)
+        self.opening()
+        self.denominations('count', denom_till_2000='1')
+        self.move(action='pitch_fee', source='sumup', amount='25')
+        self.assertTrue(main.app.extensions['till_float_view']()['fresh'])
+        self.assertEqual(main.app.extensions['cash_journal_position']()['till'], Decimal('20'))
+
+    def test_cash_sheet_without_fee_carries_balances_and_preserves_count(self):
+        self.opening()
+        self.denominations('target', denom_till_100='10', denom_till_1000='1')
+        self.move(action='till_sheet', source='till', denom_pitch_remaining_2000='1',
+            remaining_checked='yes', pitch_count_version='')
+        record = main.CashMovement.query.filter_by(kind='cash_check').one()
+        self.assertEqual(record.amount, Decimal('0'))
+        state = main.app.extensions['cash_journal_position']()
+        self.assertEqual((state['till'], state['safe']), (Decimal('20'), Decimal('100')))
+        view = main.app.extensions['till_float_view']()
+        self.assertEqual(view['current_total'], Decimal('20'))
+        self.assertTrue(view['fresh'])
+        self.assertEqual(view['short_total'], Decimal('20'))
+        self.assertIn(b'Till cash sheet &middot; no pitch fee', self.admin.get(self.path).data)
+
+    @unittest.skipUnless(browsers.EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_live_float_plan_shows_both_transfer_directions_and_safe_uncertainty(self):
+        self.opening()
+        self.denominations('target', denom_till_100='10', denom_till_1000='1')
+        self.browser(self.admin.get(self.path).data, '''
+            const form = document.querySelector('[data-pitch-fee]');
+            assert(form.textContent.includes('Previous cash records carried forward'), 'Show saved cash');
+            assert(form.textContent.includes('100.00'), 'Carry safe balance');
+            form.elements.source.value = 'till'; change(form.elements.source);
+            form.elements.denom_pitch_remaining_2000.value = '1'; input(form.elements.denom_pitch_remaining_2000);
+            const totals = form.querySelector('[data-pitch-plan-total]').textContent;
+            assert(totals.includes('Safe → Till: £20.00') && totals.includes('Till → Safe: £20.00'), 'Keep both transfer directions, even when net movement is zero');
+            const pound = form.querySelector('[data-pitch-plan="100"] [data-pitch-plan-move]').textContent;
+            assert(pound.includes('Safe → Till: 10') && pound.includes('check safe availability'), 'Unknown safe denominations need checking');
+            assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Plan must fit phone');
+        ''', width=390)
+
+    def test_pitch_counts_validate_and_save_explained_difference_atomically(self):
+        self.opening()
+        base = dict(action='pitch_fee', source='till', amount='999', remaining_checked='yes',
+            pitch_count_version='', denom_pitch_used_1000='1', denom_pitch_remaining_500='1')
+        for changes in ({}, dict(denom_pitch_used_1000='-1'), dict(denom_pitch_used_1000='1.5'),
+                        dict(denom_pitch_remaining_500='NaN'), dict(remaining_checked=''),
+                        dict(denom_pitch_used_1000='3'), dict(pitch_count_version='999')):
+            self.move(**dict(base, discrepancy_note='', **changes))
+            self.assertEqual(main.CashMovement.query.count(), 1)
+            self.assertEqual(main.TillDenominationRecord.query.count(), 0)
+        self.move(**dict(base, discrepancy_note='Five pounds missing, investigating'))
+        self.assertEqual(main.CashMovement.query.filter_by(kind='pitch_fee').one().amount, Decimal('10'))
+        self.assertEqual(main.app.extensions['cash_journal_position']()['till'], Decimal('10'))
+        view = main.app.extensions['till_float_view']()
+        self.assertEqual(view['current_total'], Decimal('5'))
+        self.assertTrue(view['fresh'])
+        self.assertIn(b'Five pounds missing, investigating', self.admin.get(self.path).data)
+
+    def test_pitch_fee_validation_and_till_requires_initial_balance(self):
+        self.move(action='pitch_fee', source='till', amount='1')
+        self.assertEqual(main.CashMovement.query.count(), 0)
+        self.opening()
+        for changes in (dict(source='safe'), dict(source='bank'), dict(source='unknown'),
+                        dict(amount='21'), dict(amount='0'), dict(amount='-1'),
+                        dict(amount='NaN'), dict(amount='1.001'), dict(reason=''), dict(checked_by='')):
+            self.move(action='pitch_fee', **dict(dict(source='till', amount='5'), **changes))
+            self.assertEqual(main.CashMovement.query.count(), 1)
+
+    def test_open_event_blocks_till_pitch_fee_but_allows_sumup(self):
+        self.opening()
+        main.db.session.add(main.BookingCashup(booking_id=self.booking.id, event_index=0,
+            event_date=self.date, revision=1, phase='Open', data_json='{}', recorded_by='Manager'))
+        main.db.session.commit()
+        self.move(action='pitch_fee', source='till', amount='5')
+        self.assertEqual(main.CashMovement.query.filter_by(kind='pitch_fee').count(), 0)
+        self.move(action='pitch_fee', source='sumup', amount='50')
+        self.assertEqual(main.CashMovement.query.filter_by(kind='pitch_fee').count(), 1)
+        self.assertEqual(main.app.extensions['cash_journal_position']()['till'], Decimal('20'))
+
     def denominations(self, kind, **changes):
         base = self.form()
         previous = main.TillDenominationRecord.query.filter_by(kind=kind).order_by(main.TillDenominationRecord.id.desc()).first()
@@ -200,13 +309,55 @@ class CashJournalTest(unittest.TestCase):
         self.assertEqual(main.BookingCashup.query.count(), 1)
 
     @unittest.skipUnless(browsers.EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_closed_public_event_cash_workflow_opens_automatically(self):
+        self.opening()
+        event = main.Event(name='Closing fair', event_date=datetime.now(ZoneInfo('Europe/London')).date(), status='Open')
+        main.db.session.add(event)
+        main.db.session.commit()
+        response = self.admin.post(f'/admin/events/{event.id}/status', data={'status':'Closed'})
+        self.browser(self.admin.get(response.location).data, '''
+            const dialog = document.querySelector('.operational-sheet-dialog');
+            assert(dialog && dialog.open, 'Closing a public event must open the cash workflow automatically');
+            const form = dialog.querySelector('[data-pitch-fee]');
+            assert(form && form.elements.reason.value.includes('Closing fair'), 'Prefill the event reference');
+            form.elements.source.value = 'till'; change(form.elements.source);
+            assert(!form.querySelector('[data-pitch-count]').hidden, 'Pitch denomination counts must work in popup');
+            assert(dialog.querySelector('[data-till-denominations]'), 'Allow a till count without a pitch fee');
+            assert(document.documentElement.scrollWidth <= innerWidth + 1, 'Popup must fit a phone');
+            dialog.querySelector('[data-close-sheet]').click();
+            assert(!dialog.open, 'Allow dismissing the workflow without saving');
+            document.querySelector('[data-open-sheet]').click();
+            assert(dialog.open && form.elements.source.value === 'till', 'Reopening preserves entered values');
+        ''', width=390)
+
+    @unittest.skipUnless(browsers.EDGE.is_file(), 'Microsoft Edge is not installed')
     def test_page_fits_phone_and_finance_navigation(self):
         self.opening()
         self.browser(self.admin.get(self.path).data, '''
             const link = document.querySelector('a[href="/admin/cash-movements"]');
             assert(link && link.closest('details').querySelector('summary').textContent.includes('Finance'), 'Cash history must be under Finance & reports');
             const target = [...document.querySelectorAll('[data-till-denominations]')].find(form => form.elements.kind.value === 'target');
-            target.closest('details').open = true;
+            for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+                if (parent.tagName === 'DETAILS') parent.open = true;
+            }
+            const pitch = document.querySelector('#pitch-fees form');
+            assert(pitch && pitch.elements.action.value === 'pitch_fee', 'Pitch fees need a dedicated form');
+            assert(pitch.elements.source.querySelector('option[value="till"]'), 'Till must be a payment source');
+            assert(pitch.elements.source.querySelector('option[value="sumup"]'), 'SumUp must be a payment source');
+            assert(pitch.checkValidity() === false, 'Pitch fee details must be required');
+            pitch.elements.source.value = 'till'; change(pitch.elements.source);
+            assert(!pitch.querySelector('[data-pitch-count]').hidden, 'Till counts must be visible');
+            const used = pitch.elements.denom_pitch_used_1000;
+            used.value = '1'; input(used);
+            const remaining = pitch.elements.denom_pitch_remaining_500;
+            remaining.value = '2'; input(remaining);
+            assert(pitch.elements.amount.value === '10.00' && pitch.elements.amount.readOnly, 'Calculate fee from notes used');
+            assert(pitch.querySelector('[data-pitch-difference]').textContent.includes('matches'), 'Reconcile remaining till');
+            remaining.value = '1'; input(remaining);
+            assert(pitch.elements.discrepancy_note.required, 'Require explanation for a difference');
+            pitch.elements.source.value = 'sumup'; change(pitch.elements.source);
+            assert(pitch.querySelector('[data-pitch-count]').disabled, 'SumUp must not require cash counts');
+            assert(!pitch.elements.amount.readOnly, 'SumUp amount must be editable');
             const pound = target.querySelector('[data-till-pence="100"]');
             pound.value = '12'; pound.dispatchEvent(new Event('input', {bubbles:true}));
             assert(target.querySelector('[data-till-count-total]').textContent.includes('12.00'), 'Default float total must update when quantities change');

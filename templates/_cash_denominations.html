@@ -1,6 +1,6 @@
 {% macro counter(field, label, locked=false) %}
 {% set counts=values.get('denominations',{}).get(field,{}) %}
-{% set enabled=counts or (not latest and field=='opening_till') or (latest and field=='closing_till' and values.get('denominations',{}).get('opening_till')) %}
+{% set enabled=counts or (not latest and field=='opening_till' and values[field]|float == 0) or (latest and field=='closing_till' and values.get('denominations',{}).get('opening_till')) %}
 {% if request.method=='POST' and not locked %}{% set enabled=request.form.get('count_' ~ field)=='yes' %}{% endif %}
 <fieldset class="denomination-counter" data-denomination-counter="{{ field }}"><legend>{{ label }}</legend>
 <label class="sheet-check"><input type="checkbox" name="count_{{ field }}" value="yes" data-count-toggle {% if enabled %}checked{% endif %} {% if locked %}disabled{% endif %}> Count individual notes &amp; coins</label>

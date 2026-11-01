@@ -323,7 +323,7 @@ class BookingCashupTest(unittest.TestCase):
             const form=document.querySelector('[data-cashup-form]');
             const button=form.querySelector('button[value="open"]');
             const message=form.querySelector('[data-safe-difference]');
-            assert(button.disabled,'Mismatched opening safe must block saving');
+            assert(!button.disabled && form.elements.opening_safe.value==='176.00','Previous safe balance should carry forward automatically');
             const input=form.elements.opening_safe;
             input.value='176';input.dispatchEvent(new Event('input',{bubbles:true}));
             assert(!button.disabled && message.textContent.includes('matches'),'Matching count should enable opening');

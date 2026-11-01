@@ -179,6 +179,20 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                          money(previous_safe.values['closing_safe']) if previous_safe else None)
         if latest:
             safe_expected = money(values['opening_safe'])
+        elif request.method == 'GET':
+            # Carry saved balances forward; the operator still confirms physical opening checks.
+            if journal['till'] is not None:
+                values['opening_till'] = str(journal['till'])
+            if safe_expected is not None:
+                values['opening_safe'] = str(safe_expected)
+            previous_counts = app.extensions['till_float_view'](journal)
+            carried = {}
+            if previous_counts['fresh'] and previous_counts['current_total'] == journal['till']:
+                carried['opening_till'] = previous_counts['current']
+            if previous_counts['safe_fresh'] and journal['baseline']:
+                carried['opening_safe'] = journal['baseline'].values['denominations']['closing_safe']
+            if carried:
+                values['denominations'] = carried
         embedded = request.args.get('embed') == '1' or request.form.get('embed') == '1'
         error = None
         if request.method == 'POST':

@@ -9,11 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from booking_cashup import CLOSE_FIELDS, DENOMINATIONS, money, read_counts
 
 LOCATIONS = {'till': 'Till', 'safe': 'Safe', 'bank': 'Bank', 'other': 'Other cash source / use'}
+PAYMENT_LOCATIONS = dict(LOCATIONS, sumup='SumUp bank account')
 
 
 def define_model(db):
     class CashMovement(db.Model):
         id = db.Column(db.Integer, primary_key=True)
+        event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
         token = db.Column(db.String(64), unique=True, nullable=False)
         kind = db.Column(db.String(20), nullable=False)
         source = db.Column(db.String(20), nullable=False)
@@ -45,7 +47,7 @@ def define_till_count_model(db):
     return TillDenominationRecord
 
 
-def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
+def register(app, db, Movement, Cashup, Setting, TillCount, admin_required, Event):
     def lock():
         key = 'cash_journal_lock'
         if not db.session.get(Setting, key):
@@ -81,7 +83,10 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
             till, safe = opening.opening_till, opening.opening_safe
         else:
             at, row, till, safe = None, None, None, None
-        moves = Movement.query.filter_by(kind='transfer')
+        physical_records = Movement.query.filter(db.or_(Movement.kind == 'opening',
+            db.and_(Movement.kind.in_(('transfer', 'pitch_fee', 'cash_check')),
+                db.or_(Movement.source.in_(('till', 'safe')), Movement.destination.in_(('till', 'safe'))))))
+        moves = physical_records.filter(Movement.kind != 'opening')
         if at is not None:
             moves = moves.filter(Movement.recorded_at > at)
         applied = []
@@ -91,7 +96,7 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
             till += movement.amount * ((movement.destination == 'till') - (movement.source == 'till'))
             safe += movement.amount * ((movement.destination == 'safe') - (movement.source == 'safe'))
             applied.append(movement.id)
-        last = Movement.query.order_by(Movement.id.desc()).first()
+        last = physical_records.order_by(Movement.id.desc()).first()
         version = f'{row.id if row else 0}:{last.id if last else 0}'
         return dict(till=till, safe=safe, version=version, movement_ids=applied, baseline=row,
                     has_movements=last is not None,
@@ -169,6 +174,17 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
     @app.route('/admin/cash-movements', methods=['GET', 'POST'])
     @admin_required
     def admin_cash_movements():
+        closed_event = None
+        linked_event = None
+        if request.args.get('event_id'):
+            linked_event = db.get_or_404(Event, request.args.get('event_id', type=int))
+            if not app.extensions['kiosk_public_event'](linked_event):
+                abort(404)
+        if request.args.get('closed_event'):
+            closed_event = db.get_or_404(Event, request.args.get('closed_event', type=int))
+            if closed_event.status != 'Closed' or not app.extensions['kiosk_public_event'](closed_event):
+                abort(404)
+            linked_event = closed_event
         csrf = session.setdefault('cash_journal_csrf', secrets.token_urlsafe(32))
         if request.method == 'POST':
             if not secrets.compare_digest(csrf, request.form.get('csrf_token', '')):
@@ -185,13 +201,46 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
             try:
                 if request.form.get('version') != state['version']:
                     raise ValueError('Cash records changed. Review the latest balances before saving.')
-                if state['active']:
+                action = request.form.get('action')
+                payment_event = None
+                if action in ('pitch_fee', 'till_sheet') and request.form.get('event_id'):
+                    payment_event = db.session.get(Event, request.form.get('event_id', type=int))
+                    if not payment_event or not app.extensions['kiosk_public_event'](payment_event):
+                        raise ValueError('Choose a valid public event for this payment.')
+                bank_pitch = action in ('pitch_fee', 'till_sheet') and request.form.get('source') == 'sumup'
+                if state['active'] and not bank_pitch:
                     raise ValueError('An event cash sheet is open or in draft. Record this movement on that sheet, or close it before making a non-event transfer.')
                 reason, checker = request.form.get('reason', '').strip(), request.form.get('checked_by', '').strip()
                 if not reason or len(reason) > 1000 or not checker or len(checker) > 255:
                     raise ValueError('Enter a reason (up to 1,000 characters) and the person recording/checking the cash (up to 255).')
-                action = request.form.get('action')
-                if action == 'opening':
+                if action in ('pitch_fee', 'till_sheet'):
+                    source = request.form.get('source')
+                    if source not in ('till', 'sumup'):
+                        raise ValueError('Choose Till or SumUp bank account.')
+                    if source == 'till':
+                        if state['till'] is None:
+                            raise ValueError('Set initial cash balances before paying a pitch fee from the till.')
+                        previous = TillCount.query.filter_by(kind='count').order_by(TillCount.id.desc()).first()
+                        if request.form.get('pitch_count_version', '') != (str(previous.id) if previous else ''):
+                            raise ValueError('The till count changed. Reload before recording this payment.')
+                        if request.form.get('remaining_checked') != 'yes':
+                            raise ValueError('Count and confirm the cash remaining in the till.')
+                        used, amount = read_counts(request.form, 'pitch_used')
+                        remaining, remaining_total = read_counts(request.form, 'pitch_remaining')
+                        if amount <= 0 and action != 'till_sheet':
+                            raise ValueError('Enter the notes and coins used to pay the pitch fee.')
+                        if amount > state['till']:
+                            raise ValueError('The pitch fee exceeds the expected till cash. Check the cash history first.')
+                        discrepancy_note = request.form.get('discrepancy_note', '').strip()
+                        if len(discrepancy_note) > 1000 or (remaining_total != state['till'] - amount and not discrepancy_note):
+                            raise ValueError('Explain any difference in the remaining till count (up to 1,000 characters).')
+                    else:
+                        amount = money(request.form.get('amount'))
+                        if amount <= 0:
+                            raise ValueError('Enter a positive pitch fee.')
+                    movement = Movement(token=token, kind='cash_check' if source == 'till' and amount == 0 else 'pitch_fee', source=source, destination='other',
+                        amount=amount, reason=reason, checked_by=checker, event_id=payment_event.id if payment_event else None)
+                elif action == 'opening':
                     if state['till'] is not None:
                         raise ValueError('A cash starting point already exists. Record a transfer rather than replacing balances.')
                     movement = Movement(token=token, kind='opening', source='other', destination='other', amount=0,
@@ -211,8 +260,18 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
                 else:
                     abort(400)
                 db.session.add(movement)
+                if action in ('pitch_fee', 'till_sheet') and source == 'till':
+                    db.session.flush()
+                    cash_version = position()['version']
+                    db.session.add(TillCount(kind='fee_used', counts_json=json.dumps(used), total=amount,
+                        expected_total=state['till'], cash_version=cash_version, checked_by=checker, note=reason))
+                    db.session.add(TillCount(kind='count', counts_json=json.dumps(remaining), total=remaining_total,
+                        expected_total=state['till'] - amount, cash_version=cash_version, checked_by=checker,
+                        note=discrepancy_note or f'Till counted after cash record #{movement.id}'))
                 db.session.commit()
-                flash('Cash record saved. Booking payments and sales income were not changed.', 'success')
+                flash('Till cash sheet saved. Review the float transfer guidance below.' if action == 'till_sheet' else 'Pitch fee payment recorded.' if action == 'pitch_fee' else 'Cash record saved. Booking payments and sales income were not changed.', 'success')
+                if action == 'till_sheet':
+                    return redirect(url_for('admin_cash_movements', show_float=1, _anchor='till-float'))
                 return redirect(url_for('admin_cash_movements'))
             except (ValueError, IntegrityError) as exc:
                 db.session.rollback()
@@ -223,11 +282,15 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
         if request.method == 'GET' and Movement.query.filter_by(token=token).first():
             token = session['cash_movement_token'] = secrets.token_urlsafe(32)
         history = []
+        fee_counts = {}
+        for used in TillCount.query.filter_by(kind='fee_used').all():
+            remaining = TillCount.query.filter_by(kind='count', cash_version=used.cash_version).order_by(TillCount.id).first()
+            fee_counts[int(used.cash_version.rsplit(':', 1)[1])] = dict(used=used, remaining=remaining)
         for item in Movement.query.all():
             history.append(dict(at=item.recorded_at, kind=item.kind, movement=item, sheet=None))
         for sheet in latest_checks():
             history.append(dict(at=sheet.recorded_at, kind='event', movement=None, sheet=sheet))
-        for count in TillCount.query.all():
+        for count in TillCount.query.filter(TillCount.kind.in_(('target', 'count'))).all():
             history.append(dict(at=count.recorded_at, kind='denominations', movement=None, sheet=None, count=count))
         start, end = request.args.get('start', ''), request.args.get('end', '')
         try:
@@ -246,7 +309,12 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required):
         page = max(1, request.args.get('page', 1, type=int))
         response = app.make_response(render_template('admin_cash_movements.html', state=state,
             history=history[(page-1)*25:page*25], has_next=len(history)>page*25, page=page,
-            start=start, end=end, csrf=csrf, movement_token=token, locations=LOCATIONS, cash_fields=CLOSE_FIELDS,
-            till_float=till_view(state)))
+            start=start, end=end, csrf=csrf, movement_token=token, locations=PAYMENT_LOCATIONS,
+            transfer_locations=LOCATIONS, cash_fields=CLOSE_FIELDS,
+            till_float=till_view(state), fee_counts=fee_counts, denominations=DENOMINATIONS,
+            closed_event=closed_event, linked_event=linked_event,
+            event_names={event.id: event.name for event in Event.query.all()},
+            payment_events=[event for event in Event.query.order_by(Event.event_date.desc(), Event.id.desc()).all()
+                if app.extensions['kiosk_public_event'](event)]))
         response.headers['Cache-Control'] = 'private, no-store'
         return response

@@ -54,5 +54,41 @@ class EventDayTest(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn(b'Staff rota could not be loaded', response.data)
 
+    def test_closing_public_event_opens_cash_workflow_once_per_transition(self):
+        path = f'/admin/events/{self.event.id}/status'
+        response = self.admin.post(path, data={'status': 'Closed'})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f'/admin/cash-movements?closed_event={self.event.id}', response.location)
+        self.assertEqual(main.db.session.get(main.Event, self.event.id).status, 'Closed')
+        page = self.admin.get(response.location)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'data-operational-sheet', page.data)
+        self.assertIn(b'No pitch fee? Count the till', page.data)
+        self.assertIn(self.event.name.encode(), page.data)
+        self.assertEqual(self.admin.post(path, data={'status': 'Closed'}).location, '/admin/events')
+        self.assertEqual(main.CashMovement.query.count(), 0)
+
+    def test_linked_public_close_opens_correct_booking_day_and_private_close_does_not(self):
+        booking = self.fixture.booking
+        booking.status = 'Accepted'
+        booking.event_schedule = '[{"date":"2026-11-01","publicity_type":"Public"},{"date":"2026-11-02","publicity_type":"Public"}]'
+        self.event.booking_id = booking.id
+        self.event.booking_day_number = 2
+        main.db.session.commit()
+        path = f'/admin/events/{self.event.id}/status'
+        response = self.admin.post(path, data={'status': 'Closed'})
+        self.assertIn(f'/admin/bookings/{booking.id}/cash-up?day=1', response.location)
+        self.event.status = 'Open'
+        booking.event_schedule = '[{"date":"2026-11-01","publicity_type":"Private"},{"date":"2026-11-02","publicity_type":"Private"}]'
+        main.db.session.commit()
+        self.assertEqual(self.admin.post(path, data={'status': 'Closed'}).location, '/admin/events')
+
+    def test_close_workflow_requires_admin_and_a_closed_public_event(self):
+        path = f'/admin/events/{self.event.id}/status'
+        self.assertEqual(main.app.test_client().post(path, data={'status':'Closed'}).status_code, 302)
+        self.assertEqual(main.db.session.get(main.Event, self.event.id).status, 'Open')
+        self.assertEqual(self.admin.get(f'/admin/cash-movements?closed_event={self.event.id}').status_code, 404)
+        self.assertEqual(self.admin.get('/admin/cash-movements?closed_event=999999').status_code, 404)
+
 
 if __name__ == '__main__': unittest.main()

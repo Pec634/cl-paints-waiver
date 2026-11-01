@@ -1,0 +1,6 @@
+<p>Till before payment (expected): <strong>&pound;{{ '%.2f'|format(fee.used.expected_total) }}</strong></p>
+{% if fee.remaining %}<p>Expected remaining till: <strong>&pound;{{ '%.2f'|format(fee.remaining.expected_total) }}</strong> &middot; Counted remaining till: <strong>&pound;{{ '%.2f'|format(fee.remaining.total) }}</strong></p>
+<p>Difference: <strong>&pound;{{ '%.2f'|format(fee.remaining.total - fee.remaining.expected_total) }}</strong> (positive: over; negative: short).</p><p>{{ fee.remaining.note }}</p>{% endif %}
+<details><summary>Notes and coins used and remaining</summary>
+{% for pence,label in denominations %}<p>{{ '&pound;'|safe ~ (pence//100) if pence >= 100 else label }}: used {{ fee.used.counts.get(pence|string, 0) }}{% if fee.remaining %} &middot; remaining {{ fee.remaining.counts.get(pence|string, 0) }}{% endif %}</p>{% endfor %}
+</details>
