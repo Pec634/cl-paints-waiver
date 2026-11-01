@@ -1,0 +1,6 @@
+<form method="post" class="client-form" data-staff-assignment>
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="assignment">
+<label>Staff member<select name="staff_id" required><option value="">Choose staff</option>{% for staff in staff_map.values() if staff.active %}<option value="{{ staff.id }}">{{ staff.name }}</option>{% endfor %}</select></label>
+<label>Booking / event day<select name="event_key" required><option value="">Choose event</option>{% for event in assignment_choices %}<option value="{{ event.key }}" {% if selected == event.key %}selected{% endif %}>{{ event.date }} &middot; {{ event.name }} &middot; {{ event.venue }}{% if not event.can_clock %} &middot; Provisional{% endif %}</option>{% endfor %}</select></label>
+<div><button class="btn primary" {% if not staff_map.values()|selectattr('active')|list or not assignment_choices %}disabled{% endif %}>Assign staff member</button></div>
+</form>

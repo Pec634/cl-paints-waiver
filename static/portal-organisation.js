@@ -25,6 +25,12 @@
             groups.get(title).append(link);
             if (link.matches('[aria-current="page"]')) groups.get(title).open = true;
         }
+        const alphabetical = new Intl.Collator('en-GB', {sensitivity: 'base', numeric: true});
+        groups.forEach(group => {
+            [...group.querySelectorAll(':scope > a')]
+                .sort((first, second) => alphabetical.compare(first.textContent.trim(), second.textContent.trim()))
+                .forEach(link => group.append(link));
+        });
         const groupOrder = ['Bookings & events','Clients & rewards','Communications','CL Creates','Website & content','Finance & reports','System & settings'];
         // Keep new sections visible even when they are not in the preferred order yet.
         for (const title of new Set([...groupOrder, ...groups.keys()])) {

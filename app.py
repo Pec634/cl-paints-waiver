@@ -521,6 +521,8 @@ from cash_journal import define_model as define_cash_movement_model
 CashMovement = define_cash_movement_model(db)
 from cash_journal import define_till_count_model
 TillDenominationRecord = define_till_count_model(db)
+from staff_timesheets import define_models as define_staff_time_models
+staff_time_models = define_staff_time_models(db)
 from daily_handovers import define_model as define_handover_model
 DailyHandover = define_handover_model(db)
 from historical_finances import define_model as define_financial_correction_model
@@ -600,6 +602,8 @@ MoodboardOrder = define_moodboard_order(db)
 
 with app.app_context():
     db.create_all()
+    from staff_timesheets import ensure_schema as ensure_staff_time_schema
+    ensure_staff_time_schema(db)
     from moodboard_payments import ensure_schema as ensure_moodboard_payment_schema
     ensure_moodboard_payment_schema(db)
     from booking_birth_dates import ensure_nullable_dob
@@ -2328,6 +2332,8 @@ def admin_manage_booking(booking_id):
     db.session.commit()
     status_email_sent = None
     status_email_sent = app.extensions['client_booking_updated'](booking, previous_snapshot, booking_schedule_events)
+    if booking.status in ('Under Review', 'Accepted'):
+        return redirect(url_for('admin_staff_timesheets', assign_booking=booking.id))
     return redirect(url_for(
         "admin_bookings",
         updated=booking.id,
@@ -2683,9 +2689,19 @@ def admin_events():
     ).first()
 
     booking_choices = []
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo('Europe/London')).date()
     for booking in Booking.query.filter_by(status='Accepted').order_by(Booking.id.desc()).all():
-        if any(day.get('publicity_type') == 'Public' for day in booking_schedule_events(booking)):
-            booking_choices.append(booking)
+        for day in booking_schedule_events(booking):
+            if day.get('publicity_type') != 'Public':
+                continue
+            try:
+                event_date = datetime.strptime(day.get('date', ''), '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                continue
+            if event_date >= today:
+                booking_choices.append(booking)
+                break
     event_finances = {}
     for event in events:
         booking = db.session.get(Booking, event.booking_id) if event.booking_id else None
@@ -2931,6 +2947,8 @@ register_google_calendar_sync(app, db, BusinessSetting, Booking, booking_schedul
 from booking_cashup import register as register_booking_cashup
 from cash_journal import register as register_cash_journal
 register_cash_journal(app, db, CashMovement, BookingCashup, BusinessSetting, TillDenominationRecord, admin_required, Event)
+from staff_timesheets import register as register_staff_timesheets
+register_staff_timesheets(app, db, staff_time_models, Event, Booking, booking_schedule_events, admin_required)
 register_booking_cashup(app, db, BookingCashup, Booking, booking_schedule_events, admin_required)
 from cashup_invoice_payments import register as register_cashup_invoice_payments
 register_cashup_invoice_payments(app, db, BookingCashup, Booking, tool_models[1], booking_schedule_events, admin_required)

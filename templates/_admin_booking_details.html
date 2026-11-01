@@ -38,3 +38,4 @@
                                     </dl>
 {% set booking_invoices = invoice_links(booking) %}{% include '_booking_invoices.html' %}
 {% include '_booking_cashup_summary.html' %}
+<p><a class="btn" href="{{ url_for('admin_staff_timesheets') }}">Assign staff &amp; review timesheets</a></p>

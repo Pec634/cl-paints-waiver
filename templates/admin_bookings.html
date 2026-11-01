@@ -102,6 +102,7 @@ Bookings | CL Paints
                             </dl>
                             <div class="booking-card-invoices">{% include '_invoice_documents.html' %}{% for invoice in invoice_links(booking) %}<p><a href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">Invoice {{ invoice.reference }}</a></p>{% endfor %}</div>
                             <div class="booking-card-actions">
+                                {% if booking.status in ['Under Review','Accepted'] %}<a class="btn small" href="{{ url_for('admin_staff_timesheets', assign_booking=booking.id) }}">Select staff</a>{% endif %}
                                 {% if booking.status == 'Accepted' and row.public_event_count %}
                                 <form method="post" action="{{ url_for('admin_create_booking_events', booking_id=booking.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="return_to" value="events"><button class="btn small" type="submit">{{ 'View / create linked events' if row.created_events else 'Create event from booking' }}</button></form>
                                 {% endif %}

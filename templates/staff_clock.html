@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Staff clocking | CL Paints{% endblock %}
+{% block body %}
+<main id="portal-main" class="staff-clock-page" style="max-width:800px;margin:24px auto;padding:0 16px">
+<header class="top"><div><small>CL PAINTS STAFF</small><h1>Hello, {{ staff.name }}</h1><p>{{ today.strftime('%A, %d %B %Y') }} &middot; UK time</p></div></header>
+{% for category,message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>{% endfor %}
+<section class="panel"><h2>{{ 'Your current shift' if active else 'Clock in for today' }}</h2>
+{% if active %}<p><strong>{{ active.event_name }}</strong><br>{{ active.venue }}</p><p>Clocked in {{ local(active.clock_in).strftime('%d/%m/%Y %H:%M') }} &middot; {{ 'On unpaid break' if active.break_started else 'Working' }} &middot; {{ '%.2f'|format(hours(active)) }} net hours so far.</p>{% endif %}
+<form method="post" class="client-form" data-staff-clock>
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+{% if active %}<input type="hidden" name="entry_id" value="{{ active.id }}"><input type="hidden" name="revision" value="{{ active.revision }}">{% else %}<label>Your event<select name="assignment_id" required><option value="">Choose your event</option>{% for assignment in assignments %}{% set event=available[assignment.event_key] %}<option value="{{ assignment.id }}">{{ event.name }} &middot; {{ event.venue }}</option>{% endfor %}</select></label>{% if not assignments %}<p>No assigned events for today. Ask your manager to assign you before clocking in.</p>{% endif %}{% endif %}
+<section><h3>Clocking location</h3><p>Your location is requested only when you clock in or out. It is saved with that clocking record for your manager to review. There is no background tracking or venue boundary check.</p>
+<input type="hidden" name="latitude"><input type="hidden" name="longitude"><input type="hidden" name="accuracy"><input type="hidden" name="location_at">
+<p data-location-status role="status">Your device will ask for permission when you clock in or out. Use HTTPS or localhost for location access.</p>
+<label>If location is unavailable, explain why<textarea name="location_reason" rows="2" maxlength="500" placeholder="e.g. Device location permission denied; manager can confirm arrival"></textarea></label></section>
+<div class="client-action-row">{% if active %}<button class="btn" name="action" value="{{ 'break_end' if active.break_started else 'break_start' }}">{{ 'End break' if active.break_started else 'Start unpaid break' }}</button><button class="btn primary" name="action" value="out">Clock out now</button>{% else %}<button class="btn primary" name="action" value="in" {% if not assignments %}disabled{% endif %}>Clock in now</button>{% endif %}</div>
+</form></section>
+<section class="panel"><h2>Your recent timesheets</h2><p>Times below use UK time. Ask your manager if a time needs correcting.</p>{% for entry in entries %}<article class="client-record"><strong>{{ entry.event_name }}</strong><p>{{ local(entry.clock_in).strftime('%d/%m/%Y %H:%M') }} &rarr; {{ local(entry.clock_out).strftime('%d/%m/%Y %H:%M') if entry.clock_out else 'Still clocked in' }} &middot; {{ '%.2f'|format(hours(entry)) }} net hours</p>{% if entry.manager_note %}<p>Manager correction: {{ entry.manager_note }}</p>{% endif %}</article>{% else %}<p>No clocking records yet.</p>{% endfor %}</section>
+<form method="post" action="{{ url_for('staff_clock_logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn">Sign out</button></form>
+</main><script src="{{ url_for('static',filename='staff-clock.js') }}" defer></script>
+{% endblock %}

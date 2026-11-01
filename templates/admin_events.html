@@ -114,7 +114,8 @@ Event Management | CL Paints
             <p>Create one linked event for each public booking day. Dates and venues carry across; payment figures stay linked to the booking.</p>
             <form method="post" action="{{ url_for('admin_event_from_booking') }}" class="client-form">
                 <input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="return_to" value="events">
-                <label>Booking<select name="booking_id" required><option value="">Choose a confirmed public booking</option>{% for booking in booking_choices %}<option value="{{ booking.id }}">{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }} &middot; {{ booking.event_date }}</option>{% endfor %}</select></label>
+                <label>Booking<select name="booking_id" required><option value="">Choose an upcoming confirmed public booking</option>{% for booking in booking_choices %}<option value="{{ booking.id }}">{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }} &middot; {{ booking.event_date }}</option>{% endfor %}</select></label>
+                <p>Only confirmed bookings with a public event today or later are shown.</p>
                 <div><button class="btn primary" {% if not booking_choices %}disabled{% endif %}>Create event from booking</button></div>
             </form>
             <h3>Standalone public event</h3>

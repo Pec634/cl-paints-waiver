@@ -1,6 +1,8 @@
 import json
 import re
 import unittest
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 import test_business_tools as fixtures
 
@@ -79,3 +81,15 @@ class EventFinancesTest(unittest.TestCase):
         self.assertEqual(main.CashMovement.query.count(), 0)
         self.pay('', '20')
         self.assertIsNone(main.CashMovement.query.one().event_id)
+
+    def test_event_booking_selector_only_includes_upcoming_public_days(self):
+        today = datetime.now(ZoneInfo('Europe/London')).date()
+        marker = f'<option value="{self.booking.id}">'.encode()
+        for offsets, publicity, included in [([-1], 'Public', False), ([0], 'Public', True),
+                ([1], 'Public', True), ([-1, 1], 'Public', True), ([1], 'Private', False)]:
+            self.booking.event_schedule = json.dumps({'events': [dict(date=(today+timedelta(days=offset)).isoformat(),
+                publicity_type=publicity, event_type='Market') for offset in offsets]})
+            main.db.session.commit()
+            page = self.admin.get('/admin/events').data
+            selector = page.split(b'<select name="booking_id"')[1].split(b'</select>')[0]
+            self.assertEqual(marker in selector, included)
