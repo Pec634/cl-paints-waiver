@@ -2624,6 +2624,8 @@ def admin_events():
     loyalty_event_id = request.args.get('loyalty_event_id', type=int)
     loyalty_event = next((event for event in events if event.id == loyalty_event_id), None)
     loyalty_code = db.session.get(loyalty_models[0], loyalty_event.id) if loyalty_event else None
+    moodboard_event_id = request.args.get('moodboard_event_id', type=int)
+    moodboard_event = next((event for event in events if event.id == moodboard_event_id), None)
 
     current_event = Event.query.filter_by(
         is_current=True
@@ -2634,6 +2636,7 @@ def admin_events():
         events=events,
         current_event=current_event, archived_view=archived_view,
         loyalty_event=loyalty_event, loyalty_code=loyalty_code,
+        moodboard_event=moodboard_event,
         client_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32))
     )
 

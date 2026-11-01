@@ -53,7 +53,14 @@ class EventMoodboardTest(unittest.TestCase):
         self.assertIn(b'<svg', qr.data)
         page = self.client.get(root + '/print')
         self.assertEqual(page.status_code, 200)
-        self.assertIn(f'/moodboard/event/{self.event.id}'.encode(), page.data)
+        self.assertIn((root + '/qr').encode(), page.data)
+        self.assertIn(b'Moodboard sign editor', page.data)
+        self.assertIn(b'data-sign-kind="moodboard"', page.data)
+        self.assertNotIn(b'gain loyalty points', page.data)
+        events = self.client.get(f'/admin/events?moodboard_event_id={self.event.id}')
+        self.assertEqual(events.status_code, 200)
+        self.assertIn((root + '/print').encode(), events.data)
+        self.assertIn(f'/moodboard/event/{self.event.id}'.encode(), events.data)
 
 
 if __name__ == '__main__':

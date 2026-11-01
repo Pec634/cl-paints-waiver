@@ -30,6 +30,34 @@ Event Management | CL Paints
         </nav>
         {% if request.args.get('archived') == 'yes' %}<p class="booking-admin-notice" role="status">Event archived. Loyalty visits, points and waiver history are preserved. Public links are closed.</p>{% endif %}
         {% if request.args.get('restored') == 'yes' %}<p class="booking-admin-notice" role="status">Event restored as Closed. Open it when you are ready to accept visitors.</p>{% endif %}
+        <section class="panel" id="event-moodboard-qr">
+            <h2>Moodboard QR code &amp; printables</h2>
+            <p>Print a sign that customers can scan to view the designs selected for their event.</p>
+            <form method="get" action="{{ url_for('admin_events', _anchor='event-moodboard-qr') }}" class="client-form">
+                {% if archived_view %}<input type="hidden" name="view" value="archived">{% endif %}
+                <label>Select an event
+                    <select name="moodboard_event_id" required onchange="this.form.requestSubmit()">
+                        <option value="">Choose an event</option>
+                        {% for event in events %}
+                        <option value="{{ event.id }}" {% if moodboard_event and moodboard_event.id == event.id %}selected{% endif %}>{{ event.name }} &middot; {{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; {{ event.status }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div><button class="btn" type="submit">Show moodboard QR code</button></div>
+            </form>
+            {% if moodboard_event %}
+            <h3>{{ moodboard_event.name }}</h3>
+            <img src="{{ url_for('admin_event_moodboard_qr', event_id=moodboard_event.id) }}" alt="Moodboard QR for {{ moodboard_event.name }}" width="240" height="240" style="max-width:100%;height:auto;background:white">
+            <div class="paint-actions">
+                <a class="btn primary" href="{{ url_for('admin_event_moodboard_print', event_id=moodboard_event.id) }}">Design &amp; print moodboard sign</a>
+                <a class="btn" href="{{ url_for('admin_event_moodboard_qr', event_id=moodboard_event.id) }}" download="moodboard-event-{{ moodboard_event.id }}.svg">Download moodboard QR code</a>
+                <a class="btn" href="{{ url_for('event_moodboard', event_id=moodboard_event.id) }}" target="_blank" rel="noopener">Preview selected moodboard</a>
+                <a class="btn" href="{{ url_for('admin_event_moodboard', event_id=moodboard_event.id) }}">Select event designs</a>
+            </div>
+            <p>The QR code always shows this event's saved selection. Save changes in Manage Moodboard before printing.</p>
+            {% if moodboard_event.status == 'Archived' %}<p>This event is archived. Its public moodboard link is closed.</p>{% endif %}
+            {% else %}<p>Choose an event to preview its QR code and design a printable moodboard sign.</p>{% endif %}
+        </section>
         <section class="panel" id="event-loyalty-qr">
             <h2>Loyalty QR code &amp; printables</h2>
             <form method="get" action="{{ url_for('admin_events', _anchor='event-loyalty-qr') }}" class="client-form">
@@ -247,6 +275,7 @@ Event Management | CL Paints
                                 >
                                     Manage Moodboard
                                 </a>
+                                <a class="btn small" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Print moodboard QR</a>
                                 <a class="btn small" href="{{ url_for('loyalty.event_admin', event_id=event.id) }}">Loyalty QR &amp; visits</a>
                             </td>
 

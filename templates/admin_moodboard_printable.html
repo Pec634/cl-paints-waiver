@@ -1,11 +1,34 @@
 <!doctype html>
-<html lang="en-GB">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ event.name }} | Moodboard QR sign</title>
-<style>
-body{font-family:Arial,sans-serif;color:#10213f;background:#f4f6fa;margin:0;padding:24px;text-align:center}nav{margin-bottom:24px}nav a,button{display:inline-block;padding:12px;font:inherit;cursor:pointer}main{max-width:700px;margin:auto;background:white;padding:48px 24px;border-radius:16px}h1{font-size:36px}.brand{font-size:30px;font-weight:bold}.brand span{color:#f52f83}img{width:320px;max-width:100%;height:auto}p{line-height:1.6}small{display:block;overflow-wrap:anywhere;margin-top:24px}@page{size:A4;margin:18mm}@media print{body{background:white;padding:0}nav{display:none}main{padding:20mm 0}img{width:85mm}}
-</style></head>
-<body><nav><a href="{{ url_for('admin_event_moodboard', event_id=event.id) }}">Back to event moodboard</a><button type="button" onclick="window.print()">Print / save as PDF</button></nav>
-<main><div class="brand">CL <span>Paints</span></div><h1>Choose your face paint</h1><h2>{{ event.name }}</h2><p>Scan to explore this event's moodboard</p>
-<img src="{{ url_for('admin_event_moodboard_qr', event_id=event.id) }}" alt="Moodboard QR code for {{ event.name }}">
-<p>Open your phone camera and scan the QR code to view the designs.</p><small>{{ url_for('event_moodboard', event_id=event.id, _external=True) }}</small></main></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moodboard sign editor | CL Paints</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='loyalty-printable.css') }}">
+<style id="print-page-size">@page{size:A4 portrait;margin:0}</style>
+</head><body data-sign-kind="moodboard" data-event-id="{{ event.id }}">
+<header class="editor-header"><a href="{{ url_for('admin_event_moodboard', event_id=event.id) }}">&larr; Back to event moodboard</a><h1>Moodboard sign editor</h1><p>{{ event.name }} &middot; {{ event.event_date or 'Date not set' }}</p></header>
+<main class="editor-layout">
+<form id="sign-controls" class="editor-controls">
+<h2>Design your printable</h2>
+<label>Heading<textarea name="heading" rows="3" maxlength="140">Scan to view our face-painting designs</textarea></label>
+<label>Message<textarea name="reward" rows="3" maxlength="180">Explore the moodboard selected for this event</textarea></label>
+<label>Instructions<textarea name="instructions" rows="3" maxlength="240">Open your phone camera and scan the QR code to browse the designs. No sign-in needed.</textarea></label>
+<label>Footer<input name="footer" maxlength="140" value="{{ event.name }}"></label>
+<label>Paper size<select name="paper"><option>A4</option><option>A5</option></select></label>
+<label>Orientation<select name="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+<label>Style<select name="theme"><option value="simple">Simple white (like your slide)</option><option value="brand">CL Paints pink</option></select></label>
+<label>Heading size<select name="headingSize"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></label>
+<label>QR size<select name="qrSize"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></label>
+<label class="check"><input type="checkbox" name="logo"> Show CL Paints logo</label>
+<div class="editor-actions"><button type="button" id="save-sign">Save design on this device</button><button type="button" id="reset-sign">Reset design</button><button type="button" id="print-sign" disabled>Print / save as PDF</button></div>
+<p id="editor-status" role="status">Loading event QR codeâ€¦</p>
+<p>Saved designs are remembered for this event in this browser. Choose â€œSave as PDFâ€ in the print window to download a copy.</p>
+</form>
+<section class="preview-area" aria-label="Printable sign preview"><article id="loyalty-sign" class="sign" data-theme="simple" data-orientation="portrait" data-heading-size="medium" data-qr-size="medium">
+<img id="sign-logo" class="sign-logo" src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="CL Paints" hidden>
+<h2 data-sign-text="heading">Scan to view our face-painting designs</h2>
+<p class="sign-reward" data-sign-text="reward">Explore the moodboard selected for this event</p>
+<img id="sign-qr" class="sign-qr" src="{{ url_for('admin_event_moodboard_qr', event_id=event.id) }}" alt="Moodboard QR for {{ event.name }}">
+<p class="sign-instructions" data-sign-text="instructions">Open your phone camera and scan the QR code to browse the designs. No sign-in needed.</p>
+<p class="sign-footer" data-sign-text="footer">{{ event.name }}</p>
+</article></section></main>
+<script src="{{ url_for('static', filename='loyalty-printable.js') }}" defer></script>
+</body></html>

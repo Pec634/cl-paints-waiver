@@ -4,7 +4,7 @@
   const status = document.getElementById('editor-status');
   const print = document.getElementById('print-sign');
   const qr = document.getElementById('sign-qr');
-  const key = `cl-loyalty-sign-v1-${document.body.dataset.eventId}`;
+  const key = `cl-${document.body.dataset.signKind || 'loyalty'}-sign-v1-${document.body.dataset.eventId}`;
   const fields = ['heading', 'reward', 'instructions', 'footer', 'paper', 'orientation', 'theme', 'headingSize', 'qrSize', 'logo'];
   const choices = {paper: ['A4', 'A5'], orientation: ['portrait', 'landscape'], theme: ['simple', 'brand'], headingSize: ['small', 'medium', 'large'], qrSize: ['small', 'medium', 'large']};
   let qrReady = false;
