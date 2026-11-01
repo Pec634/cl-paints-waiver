@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Moodboard payment | CL Paints{% endblock %}
+{% block body %}
+<main style="max-width:800px;margin:auto;padding:24px">
+<h1>{{ 'Payment confirmed' if order.paid else 'Your moodboard order' }}</h1>
+<h2>{{ event.name }}</h2><p>Order reference: MB-{{ order.id }}</p>
+{% if order.paid %}<p role="status">Paid &mdash; £{{ '%.2f'|format(order.amount) }}. Show this confirmation to CL Paints.</p>
+<p><strong>{{ order.fulfilment }}</strong>{% if order.fulfilment == 'Completed' %} &mdash; All paints in this order have been completed.{% endif %}</p>
+<p>Staff will check this order reference against the event payment list.</p>
+{% elif error %}<p role="alert">{{ error }}</p>
+{% elif status in ['FAILED', 'EXPIRED'] %}<p>This payment {{ 'failed' if status == 'FAILED' else 'expired' }}. It has not been confirmed as paid.</p>
+{% else %}<p>Payment has not yet been confirmed. Check its status before starting another order.</p>{% endif %}
+<div class="moodboard-admin-grid">{% for item in order.items %}
+<article class="moodboard-admin-card"><img src="{{ item.image_url }}" alt="{{ item.label }}"><p>{{ item.label }} &times; {{ item.quantity }}</p><p>£{{ item.price }} each</p></article>
+{% endfor %}</div>
+<p>Total: £{{ '%.2f'|format(order.amount) }}</p>
+{% if can_pay and order.payment_url %}<a class="btn primary" href="{{ order.payment_url }}">Continue payment with SumUp</a>{% endif %}
+<a class="btn" href="{{ url_for('moodboard_payment', token=order.token) }}">Refresh order status</a>
+<p><a href="{{ url_for('event_moodboard', event_id=event.id) }}">Back to event moodboard</a></p>
+<p>Payment does not replace your waiver or reserve a place in the queue.</p>
+{% if order.paid %}<script>
+try { sessionStorage.removeItem('cl-moodboard-basket-v1-' + new URL({{ url_for('moodboard_pay', event_id=event.id)|tojson }}, location.origin).href); } catch (_) {}
+</script>{% endif %}
+</main>{% endblock %}

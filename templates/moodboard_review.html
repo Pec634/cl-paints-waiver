@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Review your designs | CL Paints{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static', filename='moodboard.css') }}">
+<main class="moodboard-page">
+<h1>Review your designs</h1><h2>{{ event.name }}</h2>
+{% if changed %}<p role="alert">Your selection, prices or review time changed. Please check this updated summary before paying.</p>{% endif %}
+<div class="moodboard-admin-grid">
+{% for item in items %}<article class="moodboard-admin-card">
+<img src="{{ item.image_url }}" alt="{{ item.label }}" style="object-fit:contain">
+<p class="design-number">{{ item.label }} &times; {{ item.quantity }}</p>
+<p>&pound;{{ item.price }} each</p>
+</article>{% endfor %}</div>
+<h2>{{ count }} paints &middot; &pound;{{ '%.2f'|format(total) }}</h2>
+<p>Payment does not replace your waiver or reserve a place in the queue. Please check availability with CL Paints.</p>
+<form method="post" action="{{ url_for('moodboard_pay', event_id=event.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<input type="hidden" name="basket_token" value="{{ basket_token }}">
+<input type="hidden" name="review_token" value="{{ review_token }}">
+{% for item in items %}<input type="hidden" name="quantity_{{ item.image_id }}" value="{{ item.quantity }}">{% endfor %}
+<button class="btn primary" type="submit">Pay &pound;{{ '%.2f'|format(total) }} with SumUp</button>
+</form>
+<p><a class="btn" href="{{ url_for('event_moodboard', event_id=event.id) }}">Edit basket</a></p>
+</main>{% endblock %}

@@ -581,13 +581,27 @@ app.extensions['profile_ethnicities'] = ETHNICITY_BREAKDOWNS
 
 @app.context_processor
 def billing_address_context():
-    return dict(billing_address_fields=BILLING_ADDRESS_FIELDS, profile_ethnicities=ETHNICITY_BREAKDOWNS)
+    return dict(billing_address_fields=BILLING_ADDRESS_FIELDS, profile_ethnicities=ETHNICITY_BREAKDOWNS,
+                moodboard_prices=get_moodboard_prices)
+
+
+def get_moodboard_prices():
+    prices = {'small': '3.50', 'large': '5.00'}
+    for size in prices:
+        setting = db.session.get(BusinessSetting, 'moodboard_price_' + size)
+        if setting is not None:
+            prices[size] = setting.value
+    return prices
 
 from cl_creates import define_models as define_creates_models, ensure_schema as ensure_creates_schema
 creates_models = define_creates_models(db)
+from moodboard_payments import define_model as define_moodboard_order
+MoodboardOrder = define_moodboard_order(db)
 
 with app.app_context():
     db.create_all()
+    from moodboard_payments import ensure_schema as ensure_moodboard_payment_schema
+    ensure_moodboard_payment_schema(db)
     from booking_birth_dates import ensure_nullable_dob
     ensure_nullable_dob(db)
     ensure_creates_schema(db)
@@ -756,7 +770,7 @@ def waiver_event(event_id):
     moodboard_rows = EventMoodboardImage.query.filter_by(
         event_id=event.id
     ).order_by(
-        EventMoodboardImage.sort_order.asc()
+        EventMoodboardImage.sort_order.asc(), EventMoodboardImage.id.asc()
     ).all()
 
     moodboard_images = [
@@ -797,7 +811,14 @@ def event_moodboard(event_id):
     rows = EventMoodboardImage.query.filter_by(event_id=event.id).order_by(
         EventMoodboardImage.sort_order.asc(), EventMoodboardImage.id.asc()).all()
     images = [row.image for row in rows if row.image is not None and row.image.active]
-    return render_template('event_moodboard.html', event=event, images=images)
+    basket_key = 'moodboard_basket_' + str(event.id)
+    previous = session.get(basket_key)
+    if not previous or MoodboardOrder.query.filter_by(token=previous).first():
+        session[basket_key] = secrets.token_hex(24)
+    response = app.make_response(render_template('event_moodboard.html', event=event, images=images,
+        basket_token=session[basket_key], client_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32))))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @app.get('/admin/events/<int:event_id>/moodboard/qr')
@@ -932,8 +953,35 @@ def admin_moodboard():
 
     return render_template(
         "admin_moodboard.html",
-        images=images
+        images=images,
+        client_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32))
     )
+
+
+@app.post('/admin/moodboard/prices')
+@admin_required
+def admin_moodboard_prices():
+    if not session.get('client_csrf') or not secrets.compare_digest(
+            session['client_csrf'], request.form.get('csrf_token', '')):
+        abort(400)
+    prices = {}
+    for size in ('small', 'large'):
+        try:
+            value = Decimal(request.form.get(size + '_price', ''))
+            if not value.is_finite() or value < 0 or value > 9999 or value != value.quantize(Decimal('0.01')):
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            return 'Enter a price from £0 to £9,999 with up to two decimal places.', 400
+        prices[size] = format(value, '.2f')
+    for size, value in prices.items():
+        key = 'moodboard_price_' + size
+        setting = db.session.get(BusinessSetting, key)
+        if setting is None:
+            db.session.add(BusinessSetting(key=key, value=value))
+        else:
+            setting.value = value
+    db.session.commit()
+    return redirect(url_for('admin_moodboard', prices_saved='yes'))
 
 @app.get("/admin/events/<int:event_id>/moodboard")
 @admin_required
@@ -2731,6 +2779,9 @@ def admin_delete_event(event_id):
     if event is None:
         return redirect(url_for("admin_events"))
 
+    if MoodboardOrder.query.filter_by(event_id=event.id).first():
+        return redirect(url_for('admin_events', deletion_error='linked'))
+
     EventCode, _, Visit, _, _ = loyalty_models
     if Visit.query.filter_by(event_id=event.id).first():
         return redirect(url_for('admin_events', deletion_error='visits'))
@@ -2773,6 +2824,9 @@ register_reports(app, db, Booking, Waiver, Participant, ReportLocation, booking_
 
 from business_settings import register_settings
 get_business_settings = register_settings(app, db, BusinessSetting, AdminCredential, AdminPasswordReset, admin_required, ADMIN_PASSWORD, ADMIN_EMAIL)
+from moodboard_payments import register as register_moodboard_payments
+register_moodboard_payments(app, db, MoodboardOrder, Event, EventMoodboardImage,
+                           get_moodboard_prices, get_business_settings, admin_required, BusinessSetting)
 
 
 def send_client_email(to, subject, body, html_body=None, attachments=None):

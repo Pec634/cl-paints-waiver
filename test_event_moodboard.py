@@ -62,6 +62,29 @@ class EventMoodboardTest(unittest.TestCase):
         self.assertIn((root + '/print').encode(), events.data)
         self.assertIn(f'/moodboard/event/{self.event.id}'.encode(), events.data)
 
+    def test_editable_prices_and_waiver_labels(self):
+        path = '/admin/moodboard/prices'
+        self.assertEqual(self.client.post(path).status_code, 302)
+        with self.client.session_transaction() as session:
+            session['admin_authenticated'] = True
+        self.assertEqual(self.client.post(path).status_code, 400)
+        self.client.get('/admin/moodboard')
+        token = self.fixture.csrf()
+        for invalid in ('NaN', 'Infinity', '-1', '3.555', '10000'):
+            response = self.client.post(path, data={'csrf_token': token, 'small_price': invalid, 'large_price': '6'})
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(main.get_moodboard_prices()['large'], '5.00')
+        response = self.client.post(path, data={'csrf_token': token, 'small_price': '4', 'large_price': '6.50'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(main.get_moodboard_prices(), {'small': '4.00', 'large': '6.50'})
+        gallery = self.client.get(f'/moodboard/event/{self.event.id}')
+        self.assertIn(b'&pound;6.50', gallery.data)
+        waiver = self.client.get(f'/waiver/event/{self.event.id}')
+        self.assertIn(b'Large Designs', waiver.data)
+        self.assertNotIn(b'Full Face', waiver.data)
+        self.assertNotIn(b'Half Face', waiver.data)
+        self.assertIn(b'&pound;6.50', waiver.data)
+
 
 if __name__ == '__main__':
     unittest.main()

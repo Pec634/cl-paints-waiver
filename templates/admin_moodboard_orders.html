@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% block title %}Moodboard orders | CL Paints{% endblock %}
+{% block body %}<div class="admin">{% include '_admin_sidebar.html' %}<main>
+<h1>{{ event.name }}: moodboard payments</h1><p><a class="btn" href="{{ url_for('admin_event_moodboard', event_id=event.id) }}">Back to event moodboard</a></p>
+<section class="panel"><h2>Event payments</h2>
+<p>{{ 'New online orders are paused. The moodboard remains visible.' if moodboard_payments_paused(event) else 'New online orders are enabled when the event is open and SumUp is configured.' }}</p>
+<form method="post" action="{{ url_for('admin_moodboard_payment_control', event_id=event.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<button class="btn" name="action" value="{{ 'resume' if moodboard_payments_paused(event) else 'pause' }}">{{ 'Resume new orders' if moodboard_payments_paused(event) else 'Pause new orders' }}</button></form>
+<p>Already issued SumUp payment links may still be paid until they expire. Existing payments can still be verified.</p>
+</section>
+{% for order in orders %}<article class="panel"><h2>MB-{{ order.id }} &middot; {{ 'Paid' if order.paid else 'Unconfirmed' }}</h2>
+<p>£{{ '%.2f'|format(order.amount) }} &middot; {{ order.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</p>
+{% for item in order.items %}<p>{{ item.label }} &times; {{ item.quantity }} at £{{ item.price }} each</p>{% endfor %}
+<a class="btn" href="{{ url_for('moodboard_payment', token=order.token) }}">Check payment / view confirmation</a>
+{% if order.paid %}
+<p><strong>{{ order.fulfilment }}</strong>{% if order.fulfilment_updated_at %} &middot; Updated {{ order.fulfilment_updated_at.strftime('%d/%m/%Y %H:%M') }} UTC{% endif %}</p>
+{% if order.fulfilment != 'Completed' %}
+<form method="post" action="{{ url_for('admin_moodboard_fulfilment', event_id=event.id, order_id=order.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<input type="hidden" name="expected" value="{{ order.fulfilment }}">
+<button class="btn primary" name="status" value="{{ 'Being painted' if order.fulfilment == 'Waiting' else 'Completed' }}">{{ 'Start painting' if order.fulfilment == 'Waiting' else 'Mark all paints completed' }}</button>
+</form>{% endif %}{% endif %}
+</article>{% else %}<p>No moodboard orders yet.</p>{% endfor %}
+</main></div>{% endblock %}

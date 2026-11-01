@@ -37,6 +37,7 @@ Event Moodboard | CL Paints
                 <a class="btn" href="{{ url_for('event_moodboard', event_id=event.id) }}" target="_blank" rel="noopener">Preview event moodboard</a>
                 <a class="btn" href="{{ url_for('admin_event_moodboard_qr', event_id=event.id) }}" download="moodboard-event-{{ event.id }}.svg">Download QR code</a>
                 <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Print moodboard sign</a>
+                <a class="btn" href="{{ url_for('admin_moodboard_orders', event_id=event.id) }}">Moodboard payments</a>
             </div>
             {% if event.status == 'Archived' %}<p>This event is archived. Its public moodboard link is closed.</p>{% endif %}
         </section>
@@ -62,7 +63,7 @@ Event Moodboard | CL Paints
 
                     {% for design_type, group_title in [("large", "Large Paints"), ("small", "Small Paints")] %}
                     <section class="moodboard-category" aria-labelledby="event-{{ design_type }}-heading">
-                        <h3 id="event-{{ design_type }}-heading">{{ group_title }}</h3>
+                        <h3 id="event-{{ design_type }}-heading">{{ group_title }} &mdash; &pound;{{ moodboard_prices()[design_type] }}</h3>
                     <div class="moodboard-admin-grid">
 
                         {% for image in images if image.design_type == design_type %}

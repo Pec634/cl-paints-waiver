@@ -1,0 +1,19 @@
+.moodboard-page{max-width:1000px;margin:auto;padding:24px}
+.basket-design{position:relative;transition:border-color .15s,box-shadow .15s}
+.basket-design.is-selected{border-color:#c91a65;box-shadow:0 0 0 2px #c91a65}
+.quantity-badge{position:absolute;right:10px;top:10px;background:#ad1254;color:white;border-radius:30px;padding:6px 12px;font-weight:700;pointer-events:none;z-index:1}
+.moodboard-add-image{display:block;width:100%;padding:0;border:0;background:transparent;cursor:pointer}
+.moodboard-add-image:focus-visible,.design-preview-button:focus-visible,.quantity-controls button:focus-visible{outline:3px solid #1755a3;outline-offset:3px}
+.design-preview-button{display:block;margin:8px auto;padding:10px 14px;border:1px solid #ccd3df;border-radius:8px;background:white;color:#10213f;cursor:pointer;font:inherit}
+.quantity-controls{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px}
+.quantity-controls button{min-width:44px;min-height:44px;border:1px solid #ccd3df;border-radius:8px;background:white;color:#10213f;font-size:24px;cursor:pointer}
+.quantity-controls button:disabled{opacity:.4;cursor:default}
+.quantity-controls input{width:68px!important;min-height:44px;text-align:center;margin:0!important}
+.quantity-label{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.moodboard-page:has(.moodboard-sticky-basket){padding-bottom:270px}
+.moodboard-sticky-basket{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(976px,calc(100% - 24px));box-sizing:border-box;z-index:5;margin:0;padding:16px;background:white;border:1px solid #ccd3df;box-shadow:0 -4px 18px #10213f18;border-radius:12px}
+.moodboard-sticky-basket h2{margin:0 0 8px}.moodboard-sticky-basket p{margin:6px 0}
+.design-preview{max-width:min(90vw,800px);max-height:90vh;padding:18px;border:0;border-radius:12px;color:#10213f}
+.design-preview::backdrop{background:#000a}.design-preview img{display:block;max-width:100%;max-height:65vh;object-fit:contain;margin:auto}
+.design-preview button{min-height:44px;padding:8px 16px;cursor:pointer}
+@media(max-width:600px){.moodboard-page{padding:16px 12px}.moodboard-sticky-basket{padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}.moodboard-sticky-basket>p:first-of-type{display:none}.moodboard-sticky-basket .btn{width:100%}}

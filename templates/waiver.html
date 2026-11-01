@@ -93,12 +93,12 @@
         what you'd like when it's your turn.
     </div>
 
-    <!-- LARGE / FULL FACE DESIGNS -->
+    <!-- LARGE DESIGNS -->
     <!-- EVENT MOODBOARD -->
      
     <div class="design-group-header">
-        <h2>Large / Full Face Designs</h2>
-        <span class="design-price">£5</span>
+        <h2>Large Designs</h2>
+        <span class="design-price">&pound;{{ moodboard_prices()['large'] }}</span>
     </div>
 
 
@@ -110,11 +110,13 @@
 
                 <div class="design-card">
 
+
                     <img
                         src="{{ image.image_url }}"
                         alt="{{ image.title }}"
                         loading="lazy"
                     >
+                    <p class="design-number">L - {{ loop.index }}</p>
 
                 </div>
 
@@ -130,10 +132,10 @@
 
     </div>
 
-    <!-- SMALL / HALF FACE DESIGNS -->
+    <!-- SMALL DESIGNS -->
     <div class="design-group-header">
-        <h2>Small / Half Face Designs</h2>
-        <span class="design-price">£3.50</span>
+        <h2>Small Designs</h2>
+        <span class="design-price">&pound;{{ moodboard_prices()['small'] }}</span>
     </div>
     <div class="design-gallery" id="smallDesignGallery">
 
@@ -143,11 +145,13 @@
 
             <div class="design-card">
 
+
                 <img
                     src="{{ image.image_url }}"
                     alt="{{ image.title }}"
                     loading="lazy"
                 >
+                <p class="design-number">S - {{ loop.index }}</p>
 
             </div>
 

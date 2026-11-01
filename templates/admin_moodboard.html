@@ -24,6 +24,19 @@ Moodboard Library | CL Paints
         </div>
 
         <section class="panel">
+            <h2>Moodboard prices</h2>
+            <p>These prices appear on event moodboards and waivers for all events.</p>
+            {% if request.args.get('prices_saved') == 'yes' %}<p role="status">Prices saved.</p>{% endif %}
+            {% set prices = moodboard_prices() %}
+            <form method="post" action="{{ url_for('admin_moodboard_prices') }}" class="client-form">
+                <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+                <label>Small paints (&pound;)<input type="number" name="small_price" min="0" max="9999" step="0.01" value="{{ prices.small }}" required></label>
+                <label>Large paints (&pound;)<input type="number" name="large_price" min="0" max="9999" step="0.01" value="{{ prices.large }}" required></label>
+                <button class="btn" type="submit">Save prices</button>
+            </form>
+        </section>
+
+        <section class="panel">
 
             <div class="panel-heading">
                 <div>
@@ -60,11 +73,11 @@ Moodboard Library | CL Paints
                             required
                         >
                             <option value="large">
-                                Large / Full Face — £5
+                                Large — &pound;{{ moodboard_prices()['large'] }}
                             </option>
 
                             <option value="small">
-                                Small / Half Face — £3.50
+                                Small — &pound;{{ moodboard_prices()['small'] }}
                             </option>
                         </select>
                     </div>
@@ -110,14 +123,14 @@ Moodboard Library | CL Paints
                             value="large"
                             {% if image.design_type == "large" %}selected{% endif %}
                         >
-                            Large / Full Face — £5
+                            Large — &pound;{{ moodboard_prices()['large'] }}
                         </option>
 
                         <option
                             value="small"
                             {% if image.design_type == "small" %}selected{% endif %}
                         >
-                            Small / Half Face — £3.50
+                            Small — &pound;{{ moodboard_prices()['small'] }}
                         </option>
                     </select>
                     <button

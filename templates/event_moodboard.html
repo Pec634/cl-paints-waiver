@@ -1,26 +1,60 @@
 {% extends 'base.html' %}
 {% block title %}{{ event.name }} Moodboard | CL Paints{% endblock %}
 {% block body %}
-<main style="max-width:1000px;margin:auto;padding:24px">
+<link rel="stylesheet" href="{{ url_for('static', filename='moodboard.css') }}">
+<main class="moodboard-page">
     <header><div class="brand">CL <span>Paints</span></div><h1>{{ event.name }} Moodboard</h1>
     <p>Explore the face-painting designs on display at this event.</p></header>
     {% if images %}
+    {% set payments_open = moodboard_payments_available(event) and moodboard_payments_ready() %}
+    {% if payments_open %}<p>Choose quantities for your family, then pay together through SumUp. Payment does not replace your waiver or reserve a place in the queue.</p>{% endif %}
+    <form method="post" action="{{ url_for('moodboard_pay', event_id=event.id) }}" id="moodboard-basket">
+    <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+    <input type="hidden" name="basket_token" value="{{ basket_token }}">
     {% for design_type, group_title in [('large', 'Large Paints'), ('small', 'Small Paints')] %}
     {% set designs = images | selectattr('design_type', 'equalto', design_type) | list %}
     {% if designs %}
     <section class="moodboard-category" aria-labelledby="{{ design_type }}-heading">
-        <h2 id="{{ design_type }}-heading">{{ group_title }}</h2>
+        <h2 id="{{ design_type }}-heading">{{ group_title }} &mdash; &pound;{{ moodboard_prices()[design_type] }}</h2>
         <div class="moodboard-admin-grid">
             {% for image in designs %}
-            <article class="moodboard-admin-card">
+            {% set design_label = ('S' if design_type == 'small' else 'L') ~ ' - ' ~ loop.index %}
+            <article class="moodboard-admin-card basket-design" data-design-card>
+                <span class="quantity-badge" hidden aria-hidden="true"></span>
+                {% if payments_open %}
+                <button type="button" class="moodboard-add-image" data-add-design="quantity_{{ image.id }}" aria-label="Add one {{ design_label }}">
+                    <img src="{{ image.image_url }}" alt="{{ image.title }}" loading="lazy" style="display:block;width:100%;height:240px;object-fit:contain">
+                </button>
+                {% else %}
                 <a href="{{ image.image_url }}" target="_blank" rel="noopener"><img src="{{ image.image_url }}" alt="{{ image.title }}" loading="lazy" style="width:100%;height:240px;object-fit:contain"></a>
-                <h3>{{ image.title }}</h3>
+                {% endif %}
+                <p class="design-number">{{ 'S' if design_type == 'small' else 'L' }} - {{ loop.index }}</p>
+                <button type="button" class="design-preview-button" data-preview-src="{{ image.image_url }}" data-preview-label="{{ design_label }}" aria-label="Enlarge {{ design_label }}">View larger</button>
+                {% if payments_open %}<div class="quantity-controls">
+                    <button type="button" data-adjust-design="quantity_{{ image.id }}" data-step="-1" aria-label="Remove one {{ design_label }}">&minus;</button>
+                    <label><span class="quantity-label">Quantity for {{ design_label }}</span>
+                    <input type="number" name="quantity_{{ image.id }}" aria-label="Quantity for {{ design_label }}" min="0" max="20" step="1" value="0" data-price="{{ moodboard_prices()[design_type] }}" data-label="{{ design_label }}">
+                    </label>
+                    <button type="button" data-adjust-design="quantity_{{ image.id }}" data-step="1" aria-label="Add one {{ design_label }}">+</button>
+                </div>{% endif %}
             </article>
             {% endfor %}
         </div>
     </section>
     {% endif %}
     {% endfor %}
+    {% if payments_open %}<section class="panel moodboard-sticky-basket" aria-label="Your basket">
+        <h2>Your basket</h2><p>Tap an image to add one, or adjust its quantity below the image.</p><p id="basket-total" aria-live="polite">0 paints &middot; £0.00</p>
+        <p>The final total is calculated using current prices when you continue.</p>
+        <p id="basket-message" role="status"></p>
+        <button class="btn primary" type="submit" id="review-basket">Review basket</button>
+    </section>{% else %}<p>{% if moodboard_payments_paused(event) %}Online orders are paused while we manage the queue. You can still browse the designs.{% else %}Online payments are currently unavailable for this event. Please ask CL Paints about paying at the event.{% endif %}</p>{% endif %}
+    </form>
+    <dialog id="design-preview" class="design-preview" aria-labelledby="design-preview-title">
+        <button type="button" id="close-design-preview" autofocus>Close preview</button>
+        <h2 id="design-preview-title"></h2><img id="design-preview-image" alt="">
+    </dialog>
+    <script src="{{ url_for('static', filename='moodboard-basket.js') }}" defer></script>
     {% else %}<p>The designs for this event have not been added yet. Please check back soon.</p>{% endif %}
 </main>
 {% endblock %}
