@@ -1,0 +1,5 @@
+<div style="margin:16px 0">
+    <button class="btn" type="button" data-moodboard-download="{{ moodboard_download_url }}">Download entire moodboard image</button>
+    <p data-moodboard-download-status role="status" aria-live="polite"></p>
+</div>
+<script src="{{ url_for('static', filename='moodboard-export.js') }}" defer></script>

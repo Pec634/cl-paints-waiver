@@ -2825,6 +2825,8 @@ register_reports(app, db, Booking, Waiver, Participant, ReportLocation, booking_
 from business_settings import register_settings
 get_business_settings = register_settings(app, db, BusinessSetting, AdminCredential, AdminPasswordReset, admin_required, ADMIN_PASSWORD, ADMIN_EMAIL)
 from moodboard_payments import register as register_moodboard_payments
+from moodboard_export import register as register_moodboard_export
+register_moodboard_export(app, db, Event, EventMoodboardImage, get_moodboard_prices, admin_required)
 register_moodboard_payments(app, db, MoodboardOrder, Event, EventMoodboardImage,
                            get_moodboard_prices, get_business_settings, admin_required, BusinessSetting)
 

@@ -40,6 +40,9 @@ Event Moodboard | CL Paints
                 <a class="btn" href="{{ url_for('admin_moodboard_orders', event_id=event.id) }}">Moodboard payments</a>
             </div>
             {% if event.status == 'Archived' %}<p>This event is archived. Its public moodboard link is closed.</p>{% endif %}
+            {% set moodboard_download_url = url_for('admin_moodboard_download_data', event_id=event.id) %}
+            {% include '_moodboard_download.html' %}
+            <p>The download includes the saved selection, both groups, design labels and current prices. Save any selection changes first.</p>
         </section>
 
         <section class="panel">

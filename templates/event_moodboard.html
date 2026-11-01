@@ -6,6 +6,8 @@
     <header><div class="brand">CL <span>Paints</span></div><h1>{{ event.name }} Moodboard</h1>
     <p>Explore the face-painting designs on display at this event.</p></header>
     {% if images %}
+    {% set moodboard_download_url = url_for('moodboard_download_data', event_id=event.id) %}
+    {% include '_moodboard_download.html' %}
     {% set payments_open = moodboard_payments_available(event) and moodboard_payments_ready() %}
     {% if payments_open %}<p>Choose quantities for your family, then pay together through SumUp. Payment does not replace your waiver or reserve a place in the queue.</p>{% endif %}
     <form method="post" action="{{ url_for('moodboard_pay', event_id=event.id) }}" id="moodboard-basket">
