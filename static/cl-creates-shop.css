@@ -18,6 +18,9 @@
 .headband-preview-viewport.is-hoverzoom canvas{transform:scale(2)}
 .creates-occasions{margin:24px 0;padding:22px;border-left:4px solid #d82479;border-radius:0 12px 12px 0;background:#ffffffa6}
 .creates-occasions h2{margin-top:0}.creates-occasions p{line-height:1.7}.creates-occasions p:last-child{margin-bottom:0}
+.creates-coming-soon{margin:24px 0;padding:24px;border:1px solid #efc5d9;border-radius:14px;background:#fff4f9;color:#172943}
+.creates-coming-soon h2{margin:0 0 10px;font-size:1.35rem;color:#a61759}
+.creates-coming-soon p{margin:0;line-height:1.7}
 
 .headband-preview{margin:20px 0;border:1px solid #dce3ee;border-radius:14px;overflow:hidden;background:#fff}.headband-preview canvas{display:block;width:100%;height:auto}.headband-preview figcaption{padding:16px}.headband-preview figcaption p{margin:8px 0;line-height:1.5}.headband-preview .headband-preview-disclaimer{font-size:.8rem;color:#626d82}
 

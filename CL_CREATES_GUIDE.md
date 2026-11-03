@@ -22,6 +22,8 @@ Orders receive sequential references such as O-000001. Search by reference, name
 
 ## Automatic SumUp payments
 
+Collection is currently hidden for new customer orders. `CREATES_COLLECTION_ENABLED` defaults to `False` in application configuration; setting it to `True` restores the collection choice and information. While disabled, new collection submissions are rejected, and customers see postage only. Collection calendars, admin tools, existing collection orders and their saved details are retained.
+
 Configure `SUMUP_API_KEY`, `SUMUP_MERCHANT_CODE`, and the HTTPS public application URL in business settings. SumUp sends checkout notifications to the order callback URL; the server retrieves the checkout from SumUp and checks its identity, order reference, merchant, GBP currency and full order amount before recording payment. Customers do not need to return to the website for the callback to record payment.
 
 Opening the admin orders dashboard checks outstanding checkouts for the displayed orders, including customer history groups. Opening an individual order also checks its payment. This recovers missed callbacks without changing orders already paid or in production. Unavailable or mismatched payments remain unpaid and are logged for review. New SumUp checkout descriptions include the order number.

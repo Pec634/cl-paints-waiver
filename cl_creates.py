@@ -163,6 +163,9 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         return json.loads(row.value) if row else dict(headband=list(HEADBAND_COLOURS), glitter=['Gold', 'Silver', 'Pink', 'Blue', 'Purple', 'Red', 'Green'])
 
     app.extensions['creates_collection_lead_days'] = lambda: int(settings()['collection_lead_days'])
+    # Retain collection tools and historical orders while hiding new collection checkout.
+    app.config.setdefault('CREATES_COLLECTION_ENABLED', False)
+    app.jinja_env.globals['creates_collection_enabled'] = lambda: app.config['CREATES_COLLECTION_ENABLED']
 
     def shape_options():
         row = db.session.get(Setting, 'cl_creates_shapes')
@@ -270,7 +273,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         if order.collection_snapshot:
             details = json.loads(order.collection_snapshot)
             when = datetime.fromisoformat(details['starts_at']).replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/London'))
-            body += '\nCollection game: ' + details['title'] + ', ' + when.strftime('%d/%m/%Y %H:%M') + ' UK time. Chloe will confirm the meeting details.'
+            body += '\nCollection game: ' + details['title'] + ', ' + when.strftime('%d/%m/%Y %H:%M') + ' UK time. We will confirm the meeting details.'
         communicate(order, config['subject'].format(**values), body, True)
 
     from creates_payments import register as register_payments
@@ -314,6 +317,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     raise ValueError('Enter your first and last name (up to 100 characters each).')
                 email = validate_email(request.form.get('email', ''), check_deliverability=False).normalized
                 fulfilment = request.form.get('fulfilment')
+                if fulfilment == 'collection' and not app.config['CREATES_COLLECTION_ENABLED']:
+                    raise ValueError('Please choose UK mainland postage. Collection is currently unavailable.')
                 if fulfilment not in ('postage', 'collection'):
                     raise ValueError('Choose postage or collection.')
                 address = ''
@@ -335,9 +340,9 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     if any(len(value)>200 or any(char in value for char in ('\r','\n')) for value in fields.values()):
                         raise ValueError('Keep each address field to one line and no more than 200 characters.')
                     if fields['country'].casefold() not in ('united kingdom','uk','gb','great britain'):
-                        raise ValueError('Postage is available to UK mainland addresses only. Choose collection for other countries.')
+                        raise ValueError('Postage is available to UK mainland addresses only.')
                     if postcode.startswith(('BT', 'GY', 'JE', 'IM', 'HS', 'ZE')) or not request.form.get('mainland'):
-                        raise ValueError('Delivery is available to UK mainland addresses only. Choose collection for other locations.')
+                        raise ValueError('Delivery is available to UK mainland addresses only.')
                     formatted_postcode = postcode[:-3]+' '+postcode[-3:]
                     parts = [fields['address_line2'], fields['address_line1']+' '+fields['address_street'],
                         fields['village'],fields['town'],fields['county'],formatted_postcode,'United Kingdom']

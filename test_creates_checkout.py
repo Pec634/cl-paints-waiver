@@ -70,13 +70,30 @@ class CreatesCheckoutTest(unittest.TestCase):
 
     def setUp(self):
         self.fixture=fixtures.CreatesTest();self.fixture.setUp()
+        self.collection_enabled=main.app.config['CREATES_COLLECTION_ENABLED']
+        main.app.config['CREATES_COLLECTION_ENABLED']=True
         self.client=self.fixture.client;self.admin=self.fixture.admin
         self.Order,self.Message,_,_=main.creates_models
         self.env=patch.dict(os.environ,{'SUMUP_API_KEY':'test','SUMUP_MERCHANT_CODE':'TEST'});self.env.start()
         self.status='PENDING'
 
     def tearDown(self):
+        main.app.config['CREATES_COLLECTION_ENABLED']=self.collection_enabled
         self.env.stop();self.fixture.tearDown()
+
+    def test_collection_hidden_and_cannot_be_submitted_when_disabled(self):
+        main.app.config['CREATES_COLLECTION_ENABLED']=False
+        page=self.client.get('/cl-creates')
+        self.assertNotIn(b'value="collection"',page.data)
+        self.assertNotIn(b'id="collection"',page.data)
+        self.assertNotIn(b'free collection',page.data)
+        self.assertNotIn(b'Collection requires',page.data)
+        self.assertIn(b'UK mainland postage',page.data)
+        response,order=self.draft(fulfilment='collection')
+        self.assertIsNone(order)
+        self.assertIn(b'Collection is currently unavailable',response.data)
+        main.app.config['CREATES_COLLECTION_ENABLED']=True
+        self.assertIn(b'value="collection"',self.client.get('/cl-creates').data)
 
     def provider(self,path,payload=None):
         order=self.Order.query.one()

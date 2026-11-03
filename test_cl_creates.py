@@ -290,7 +290,7 @@ class CreatesTest(unittest.TestCase):
         page = self.client.get('/cl-creates')
         self.assertIn(b'id="creates-form"', page.data)
         self.assertIn(b'Order your custom headbands', page.data)
-        self.assertNotIn(b'coming soon', page.data)
+        self.assertIn(b'More items coming soon', page.data)
         data = self.form()
         data.update(product=['custom', 'custom'], wording=['TEAM BRIDE', 'BRIDE SQUAD'], word_shape=['Heart',''], quantity=['2', '3'])
         response = self.client.post('/cl-creates', data=data, follow_redirects=True)
