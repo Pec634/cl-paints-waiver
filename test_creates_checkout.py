@@ -128,6 +128,53 @@ class CreatesCheckoutTest(unittest.TestCase):
             main.db.session.refresh(order);self.assertEqual(order.paid,0)
         self.assertEqual(self.Message.query.count(),0)
 
+    def test_admin_dashboard_recovers_missed_callback_once(self):
+        _,order=self.draft();self.checkout(order)
+        self.status='PAID'
+        with patch('creates_payments.provider_request',side_effect=self.provider) as provider:
+            self.assertEqual(self.admin.get('/admin/cl-creates').status_code,200)
+            self.assertEqual(self.admin.get(f'/admin/cl-creates/orders/{order.id}').status_code,200)
+        main.db.session.refresh(order)
+        self.assertEqual(order.paid,order.total)
+        self.assertEqual(order.status,'Paid')
+        self.assertEqual(self.Message.query.count(),1)
+        self.assertEqual(provider.call_count,1)
+
+    def test_automatic_sync_does_not_assign_another_orders_payment(self):
+        _,order=self.draft();self.checkout(order)
+        data=self.provider('checkouts/abc123')
+        data.update(status='PAID',checkout_reference='CC-another-order')
+        with patch('creates_payments.provider_request',return_value=data):
+            self.assertEqual(self.admin.get('/admin/cl-creates').status_code,200)
+        main.db.session.refresh(order)
+        self.assertEqual(order.paid,0)
+        self.assertEqual(self.Message.query.count(),0)
+
+    def test_order_view_recovers_checkout_identity_and_preserves_production_status(self):
+        _,order=self.draft();self.checkout(order)
+        order.provider_id=None
+        main.db.session.commit()
+        self.status='PAID'
+        with patch('creates_payments.provider_request',side_effect=self.provider):
+            self.admin.get(f'/admin/cl-creates/orders/{order.id}')
+        main.db.session.refresh(order)
+        self.assertEqual(order.provider_id,'abc123')
+        self.assertEqual(order.paid,order.total)
+        order.status='In production';main.db.session.commit()
+        with patch('creates_payments.provider_request') as provider:
+            self.admin.get('/admin/cl-creates')
+            provider.assert_not_called()
+        self.assertEqual(order.status,'In production')
+
+    def test_scheduled_sync_reports_provider_failure_without_recording_payment(self):
+        _,order=self.draft();self.checkout(order)
+        with patch('creates_payments.provider_request',side_effect=ValueError('Unavailable')):
+            result=main.app.test_cli_runner().invoke(args=['sync-creates-payments'])
+        self.assertNotEqual(result.exit_code,0)
+        self.assertIn(order.number,result.output)
+        main.db.session.refresh(order)
+        self.assertEqual(order.paid,0)
+
     def test_pending_and_failed_payment_never_show_confirmation_or_send_email(self):
         response,order=self.draft();self.checkout(order)
         for status in ('PENDING','FAILED'):

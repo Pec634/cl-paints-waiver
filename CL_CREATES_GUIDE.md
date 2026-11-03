@@ -18,7 +18,15 @@ The public order form is always available, even with no catalogue products. Cust
 
 The public form accepts multiple headbands and quantities, with 11 non-space characters and up to two spaces per wording. Default prices are £5 per headband and £6 postage per order, or free collection. Delivery requires a UK address, postcode and mainland confirmation. Review delivery eligibility before invoicing: postcode validation and customer confirmation do not establish that every address is on the mainland.
 
-Orders receive sequential references such as O-000001. Search by reference, name, email or address. Select a reference to open its details in a dialog; the link also works as a standalone page. Attach the HTTPS SumUp invoice URL and reference, then manually record payments verified in SumUp. Invoice links are supported; PDF uploads and automated SumUp reconciliation are not included.
+Orders receive sequential references such as O-000001. Search by reference, name, email or address. Select a reference to open its details in a dialog; the link also works as a standalone page. Online orders use a SumUp hosted checkout tied to that exact order. Verified paid checkouts automatically update the received amount and status and send one confirmation. Legacy orders with separately attached SumUp invoices still require manual verification and recording.
+
+## Automatic SumUp payments
+
+Configure `SUMUP_API_KEY`, `SUMUP_MERCHANT_CODE`, and the HTTPS public application URL in business settings. SumUp sends checkout notifications to the order callback URL; the server retrieves the checkout from SumUp and checks its identity, order reference, merchant, GBP currency and full order amount before recording payment. Customers do not need to return to the website for the callback to record payment.
+
+Opening the admin orders dashboard checks outstanding checkouts for the displayed orders, including customer history groups. Opening an individual order also checks its payment. This recovers missed callbacks without changing orders already paid or in production. Unavailable or mismatched payments remain unpaid and are logged for review. New SumUp checkout descriptions include the order number.
+
+For unattended recovery across all outstanding orders, schedule `python -m flask --app app sync-creates-payments` on the application server, for example every five minutes, using the same environment and database as the running application. The command reports checked and recorded payments and exits with an error if any cannot be verified. Adding the command does not itself install a scheduled job. Separate invoice links and card-reader payments are not automatically matched by customer name or amount.
 
 Open an unpaid order marked **Under review** to use **Delete order**. Tick the confirmation checkbox to permanently remove the order and its communication history. Orders with a recorded payment or a later status cannot be deleted. Resolve any attached invoice in SumUp and remove its link/reference before deleting; deletion does not cancel a SumUp invoice.
 

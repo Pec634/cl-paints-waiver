@@ -55,6 +55,38 @@ def register(app, db, Order, notify, business_settings, admin_required):
 
     app.extensions['creates_verify_payment'] = verify
 
+    def sync(orders):
+        """Recover missed callbacks without matching unrelated customer payments."""
+        report = dict(checked=0, recorded=0, errors=[])
+        if not os.getenv('SUMUP_API_KEY'):
+            return report
+        for order in orders:
+            if not order.checkout_token or not order.checkout_started or order.paid >= order.total:
+                continue
+            report['checked'] += 1
+            try:
+                if verify(order):
+                    report['recorded'] += 1
+            except ValueError:
+                db.session.rollback()
+                report['errors'].append(order.number)
+                app.logger.warning('CL Creates payment could not be verified for order %s', order.id)
+        return report
+
+    app.extensions['creates_sync_payments'] = sync
+
+    @app.cli.command('sync-creates-payments')
+    def sync_payments_command():
+        """Reconcile outstanding order checkouts; suitable for a scheduled job."""
+        import click
+        if not os.getenv('SUMUP_API_KEY'):
+            raise click.ClickException('SUMUP_API_KEY is not configured.')
+        orders = Order.query.filter(Order.checkout_started.is_(True), Order.paid < Order.total).order_by(Order.id).all()
+        report = sync(orders)
+        click.echo(f"Checked {report['checked']} checkout(s); recorded {report['recorded']} payment(s).")
+        if report['errors']:
+            raise click.ClickException('Could not verify orders: ' + ', '.join(report['errors']))
+
     def private(response):
         response = make_response(response)
         response.headers['Cache-Control'] = 'no-store'
@@ -87,7 +119,7 @@ def register(app, db, Order, notify, business_settings, admin_required):
                     db.session.commit(); db.session.refresh(order)
                     if claimed:
                         data = provider_request('checkouts', dict(checkout_reference=reference(order), amount=float(order.total), currency='GBP',
-                            merchant_code=order.merchant, description='CL Creates personalised headbands', hosted_checkout={'enabled':True},
+                            merchant_code=order.merchant, description='CL Creates order '+order.number, hosted_checkout={'enabled':True},
                             return_url=base+url_for('creates_payment_callback',token=token), redirect_url=base+url_for('creates_payment',token=token)))
                         if not isinstance(data,dict) or not isinstance(data.get('id'),str) or not data['id'] or len(data['id']) > 100:
                             raise ValueError('The payment response could not be confirmed. Refresh to check before retrying.')

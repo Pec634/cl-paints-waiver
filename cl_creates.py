@@ -504,6 +504,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         else:
             page = query.order_by(Order.id.desc()).paginate(page=request.args.get('page', 1, type=int), per_page=50, error_out=False)
             orders = page.items
+        app.extensions['creates_sync_payments'](orders)
         now = datetime.now(ZoneInfo('Europe/London')).date()
         counts = dict(day=0, week=0, month=0, year=0)
         paid = Decimal(0)
@@ -526,6 +527,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
     def creates_order(order_id):
         token = csrf()
         order = Order.query.filter_by(id=order_id).with_for_update().first_or_404()
+        if request.method == 'GET':
+            app.extensions['creates_sync_payments']([order])
         error = None
         if request.method == 'POST':
             try:
