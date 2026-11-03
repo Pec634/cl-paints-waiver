@@ -113,6 +113,8 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
     def available(booking, index, start, end):
         buffer = timedelta(minutes=int(settings()['calendar_buffer_minutes']))
         for row in app.extensions['calendar_rows']():
+            if row.get('collection'):
+                continue
             if row['booking'] and row['booking'].id == booking.id and row['day'] == index + 1:
                 continue
             if row['booking'] and row['booking'].status != 'Accepted':

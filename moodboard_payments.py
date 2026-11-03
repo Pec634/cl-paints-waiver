@@ -46,7 +46,7 @@ def register(app, db, Order, Event, Assignment, prices, settings, admin_required
         return bool(row and row.value == '1')
 
     def available(event):
-        return bool(event and event.status in ('Open', 'Closing Soon') and not paused(event))
+        return False  # New SumUp checkouts now belong to CL Creates headband orders.
 
     def ready():
         base = settings()['public_app_url'].rstrip('/')
@@ -94,79 +94,7 @@ def register(app, db, Order, Event, Assignment, prices, settings, admin_required
 
     @app.post('/moodboard/event/<int:event_id>/pay')
     def moodboard_pay(event_id):
-        event = db.get_or_404(Event, event_id)
-        if not session.get('client_csrf') or not secrets.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
-            abort(400)
-        token = request.form.get('basket_token', '')
-        if not token or token != session.get('moodboard_basket_' + str(event_id)):
-            abort(400)
-        existing = Order.query.filter_by(token=token).first()
-        if existing:
-            return redirect(url_for('moodboard_payment', token=existing.token))
-        if not available(event):
-            return 'Payments are closed for this event.', 409
-        if not ready():
-            return 'Online payment is unavailable. Please ask CL Paints about paying at the event.', 503
-        rows = Assignment.query.filter_by(event_id=event_id).order_by(Assignment.sort_order.asc(), Assignment.id.asc()).all()
-        items, total, count = [], Decimal('0'), 0
-        counters = {'small': 0, 'large': 0}
-        current_prices = prices()
-        allowed = set()
-        for row in rows:
-            image = row.image
-            if image is None or not image.active or image.design_type not in counters:
-                continue
-            counters[image.design_type] += 1
-            key = 'quantity_' + str(image.id)
-            allowed.add(key)
-            try:
-                quantity = int(request.form.get(key, '0'))
-                if quantity < 0 or quantity > 20:
-                    raise ValueError
-            except ValueError:
-                return 'Choose a quantity between 0 and 20 for each design.', 400
-            if quantity:
-                price = Decimal(current_prices[image.design_type])
-                count += quantity
-                total += price * quantity
-                items.append(dict(image_id=image.id, label=('S' if image.design_type == 'small' else 'L') + ' - ' + str(counters[image.design_type]),
-                                  image_url=image.image_url, quantity=quantity, price=str(price)))
-        if any(key.startswith('quantity_') and key not in allowed for key in request.form):
-            return 'The event designs have changed. Reload the moodboard and choose again.', 409
-        if not items or count > 50 or total <= 0:
-            return 'Choose between 1 and 50 paints with a total greater than £0.', 400
-        snapshot = dict(event_id=event_id, basket_token=token, items=items, total=str(total))
-        reviewed = None
-        if request.form.get('review_token'):
-            try:
-                reviewed = signer.loads(request.form['review_token'], max_age=1800)
-            except (BadSignature, SignatureExpired):
-                pass
-        if reviewed != snapshot:
-            response = app.make_response(render_template('moodboard_review.html', event=event, items=items,
-                total=total, count=count, basket_token=token, review_token=signer.dumps(snapshot),
-                changed=bool(request.form.get('review_token')), csrf=session['client_csrf']))
-            response.headers['Cache-Control'] = 'no-store'
-            return response
-        order = Order(event_id=event_id, token=token, items=items, amount=total, merchant=os.environ['SUMUP_MERCHANT_CODE'])
-        db.session.add(order)
-        try:
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            return redirect(url_for('moodboard_payment', token=token))
-        base = settings()['public_app_url'].rstrip('/')
-        try:
-            provider_request('checkouts', dict(checkout_reference=reference(order), amount=float(total), currency='GBP',
-                merchant_code=order.merchant, description='CL Paints event moodboard order ' + str(order.id),
-                hosted_checkout={'enabled': True}, return_url=base + url_for('moodboard_payment_callback', token=token),
-                redirect_url=base + url_for('moodboard_payment', token=token)))
-            # Verification retrieves and validates the provider's amount and merchant before exposing the link.
-            verify(order)
-        except ValueError:
-            db.session.rollback()
-            return redirect(url_for('moodboard_payment', token=token))
-        return redirect(order.payment_url or url_for('moodboard_payment', token=token))
+        return 'Moodboard online payments have been removed. Please ask CL Paints about payment at the event.', 410
 
     @app.get('/moodboard/payment/<token>')
     def moodboard_payment(token):
@@ -207,19 +135,7 @@ def register(app, db, Order, Event, Assignment, prices, settings, admin_required
     @app.post('/admin/events/<int:event_id>/moodboard/payments')
     @admin_required
     def admin_moodboard_payment_control(event_id):
-        event = db.get_or_404(Event, event_id)
-        check_csrf()
-        action = request.form.get('action')
-        if action not in ('pause', 'resume'):
-            abort(400)
-        key = 'moodboard_paused_' + str(event.id)
-        row = db.session.get(Setting, key)
-        if row is None:
-            row = Setting(key=key, value='0')
-            db.session.add(row)
-        row.value = '1' if action == 'pause' else '0'
-        db.session.commit()
-        return redirect(url_for('admin_moodboard_orders', event_id=event.id))
+        return 'New moodboard payments have been removed. Existing payment history remains available.', 410
 
     @app.post('/admin/events/<int:event_id>/moodboard/orders/<int:order_id>/fulfilment')
     @admin_required

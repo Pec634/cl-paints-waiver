@@ -1,0 +1,5 @@
+<div data-creates-address-lookup data-google-key="{{ creates_maps_key }}">
+<p>Find your UK delivery address with Google Maps, or type it into the fields below.</p>
+<div data-address-search-host hidden style="width:100%;margin:12px 0"></div>
+<p data-address-status role="status" aria-live="polite">{% if not creates_maps_key %}Address lookup is unavailable. Please enter your delivery address below.{% else %}Manual entry is always available. After choosing a suggestion, check your house or flat number and postcode.{% endif %}</p>
+</div>

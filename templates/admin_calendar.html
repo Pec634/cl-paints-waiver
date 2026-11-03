@@ -1,11 +1,13 @@
 {% extends 'rewards/base.html' %}
 {% block title %}Availability calendar | CL Paints{% endblock %}
-{% macro status_class(row) -%}{% if not row.booking %}unavailable{% elif row.booking.status == 'Accepted' %}accepted{% else %}review{% endif %}{%- endmacro %}
+{% macro status_class(row) -%}{% if row.get('collection') %}review{% elif not row.booking %}unavailable{% elif row.booking.status == 'Accepted' %}accepted{% else %}review{% endif %}{%- endmacro %}
 {% macro event_title(row) -%}
 {{ row.booking.first_name }} {{ row.booking.last_name }} · {{ row.event.get('event_type') or row.booking.event_type }}{% if row.event.get('theme') or row.booking.theme %} — {{ row.event.get('theme') or row.booking.theme }}{% endif %}
 {%- endmacro %}
 {% macro details(row) %}
-{% if row.booking %}
+{% if row.get('collection') %}
+<p class="calendar-status calendar-status--review">CL Creates collection game</p><h3>{{ row.label }}</h3><p>{{ row.start.strftime('%d/%m/%Y %H:%M') }} UK time. This is a collection option, not a face-painting booking or availability block.</p><a class="btn" href="{{ url_for('creates_collection') }}">Manage home-game collection</a>
+{% elif row.booking %}
 {% set booking = row.booking %}
 <p class="calendar-status calendar-status--{{ status_class(row) }}">{{ booking.status }}</p>
 <h3>{{ event_title(row) }}</h3>
@@ -20,6 +22,7 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='admin-calendar.css') }}">
 <h1>Availability calendar</h1>
+<p><a class="btn primary" href="{{ url_for('admin_shared_calendar') }}">Share CL Paints &amp; CL Creates calendar</a></p>
 <p><a class="btn" href="{{ url_for('admin_import_bookings') }}">Import bookings</a> <a class="btn" href="{{ url_for('admin_google_calendar') }}">Google Calendar sync</a></p>
 <p>UK local times. Accepted bookings and unavailable time reserve space; requests under review are shown for planning. Setup/travel buffers are configured in Settings.</p>
 <div class="calendar-legend" aria-label="Calendar colour key">
@@ -41,7 +44,7 @@
         <a class="calendar-event calendar-event--{{ status_class(item) }}" href="#calendar-detail-{{ rows.index(item) }}" data-calendar-detail="calendar-detail-{{ rows.index(item) }}" aria-haspopup="dialog">
           <span class="calendar-event-time">{{ item.start.strftime('%H:%M') }}–{{ item.end.strftime('%H:%M') }}</span>
           <span>{{ event_title(item) if item.booking else item.label }}</span>
-          <span class="calendar-event-status">{{ item.booking.status if item.booking else 'Unavailable' }}{% if item.conflicts %} · Possible overlap{% endif %}</span>
+          <span class="calendar-event-status">{{ 'Collection game' if item.get('collection') else item.booking.status if item.booking else 'Unavailable' }}{% if item.conflicts %} · Possible overlap{% endif %}</span>
         </a>
         {% endfor %}
       </div>
@@ -53,7 +56,7 @@
   <h2>Schedule &amp; overlaps</h2>
   {% for row in rows %}
   <details class="client-record calendar-schedule" id="calendar-detail-{{ loop.index0 }}">
-    <summary><span class="calendar-status calendar-status--{{ status_class(row) }}">{{ row.booking.status if row.booking else 'Unavailable' }}</span> {{ row.start.strftime('%d/%m/%Y %H:%M') }}–{{ row.end.strftime('%H:%M') }} · {{ event_title(row) if row.booking else row.label }}{% if row.conflicts %} · Possible overlap{% endif %}</summary>
+    <summary><span class="calendar-status calendar-status--{{ status_class(row) }}">{{ 'Collection game' if row.get('collection') else row.booking.status if row.booking else 'Unavailable' }}</span> {{ row.start.strftime('%d/%m/%Y %H:%M') }}–{{ row.end.strftime('%H:%M') }} · {{ event_title(row) if row.booking else row.label }}{% if row.conflicts %} · Possible overlap{% endif %}</summary>
     <div class="calendar-detail-content">{{ details(row) }}</div>
   </details>
   {% else %}<p>No bookings or unavailable times yet.</p>{% endfor %}

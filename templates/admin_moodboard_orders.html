@@ -2,11 +2,7 @@
 {% block body %}<div class="admin">{% include '_admin_sidebar.html' %}<main>
 <h1>{{ event.name }}: moodboard payments</h1><p><a class="btn" href="{{ url_for('admin_event_moodboard', event_id=event.id) }}">Back to event moodboard</a></p>
 <section class="panel"><h2>Event payments</h2>
-<p>{{ 'New online orders are paused. The moodboard remains visible.' if moodboard_payments_paused(event) else 'New online orders are enabled when the event is open and SumUp is configured.' }}</p>
-<form method="post" action="{{ url_for('admin_moodboard_payment_control', event_id=event.id) }}">
-<input type="hidden" name="csrf_token" value="{{ csrf }}">
-<button class="btn" name="action" value="{{ 'resume' if moodboard_payments_paused(event) else 'pause' }}">{{ 'Resume new orders' if moodboard_payments_paused(event) else 'Pause new orders' }}</button></form>
-<p>Already issued SumUp payment links may still be paid until they expire. Existing payments can still be verified.</p>
+<p>New moodboard payments have been removed. These records are retained for existing payments.</p><p>Already issued SumUp payment links may still be paid until they expire. Existing payments can still be verified.</p>
 </section>
 {% for order in orders %}<article class="panel"><h2>MB-{{ order.id }} &middot; {{ 'Paid' if order.paid else 'Unconfirmed' }}</h2>
 <p>£{{ '%.2f'|format(order.amount) }} &middot; {{ order.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</p>

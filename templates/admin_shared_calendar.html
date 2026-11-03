@@ -1,0 +1,11 @@
+{% extends 'rewards/base.html' %}{% block title %}Shared calendar | CL Paints{% endblock %}{% block content %}
+<h1>CL Paints &amp; CL Creates shared calendar</h1><p>One read-only subscription for CL Paints bookings, unavailable periods and enabled CL Creates home-game collection dates. Paid collection order counts are included.</p>
+<section class="panel"><h2>Share the schedule</h2><p>Booking references, dates and status are shared. Client names, contact details, private venue addresses, notes and payment amounts are excluded. Public home-game venues are included. Anyone with the link can read this schedule.</p>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+{% if feed_url %}<label>Subscription URL<input style="width:100%;box-sizing:border-box" value="{{ feed_url }}" readonly aria-label="Shared calendar subscription URL" onclick="this.select()"></label><p><a class="btn primary" href="{{ subscribe_url }}">Subscribe in calendar app</a> <a class="btn" href="{{ feed_url }}" download="cl-paints-and-creates.ics">Download calendar file</a></p>
+<p>For a calendar that stays up to date, add the URL as an internet calendar subscription. A downloaded file is a snapshot. Your calendar app controls when subscribed events refresh.</p>
+{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}">{% if enabled %}<button class="btn" name="action" value="rotate">Replace sharing link</button><button class="btn" name="action" value="disable">Disable sharing</button>{% else %}<button class="btn primary" name="action" value="create">Create sharing link</button>{% endif %}</form>
+{% if enabled %}<p>Replacing or disabling the link stops future access through the old URL. Calendar apps may retain previously downloaded events.</p>{% endif %}</section>
+<p><a class="btn" href="{{ url_for('admin_calendar') }}">CL Paints calendar</a> <a class="btn" href="{{ url_for('creates_collection') }}">CL Creates collection calendar</a></p>
+{% endblock %}

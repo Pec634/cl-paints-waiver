@@ -7,6 +7,6 @@
 <details class="creates-setup-menu"><summary {% if request.endpoint in ['creates_settings','creates_library','creates_colours','creates_shapes'] %}class="creates-setup-active"{% endif %}>Shop setup</summary><div class="creates-setup-links">
 {% for endpoint,label in [('creates_settings','Pricing & showcase'),('creates_library','Image library'),('creates_colours','Colours & glitter'),('creates_shapes','Shapes')] %}<a href="{{ url_for(endpoint) }}" {% if request.endpoint == endpoint %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
 </div></details>
-<a href="{{ url_for('creates_shop') }}">View shop &nearr;</a>
+<a href="{{ url_for('creates_collection') }}" {% if request.endpoint == 'creates_collection' %}aria-current="page"{% endif %}>Collection calendar</a><a href="{{ url_for('creates_shop') }}">View shop &nearr;</a>
 <a class="creates-admin-return" href="{{ url_for('admin_dashboard') }}">&larr; Admin</a>
 </nav>{% endif %}{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% block creates %}{% endblock %}</main></div>{% endblock %}

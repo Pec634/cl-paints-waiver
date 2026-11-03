@@ -1,16 +1,18 @@
 """Independent custom headband orders, catalogue and correspondence."""
 import json
+import os
 import re
 import secrets
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
 from flask import abort, redirect, render_template, request, session, url_for
 from email_validator import validate_email, EmailNotValidError
+from sqlalchemy.exc import IntegrityError
 
-STATUSES = ('Under review', 'Paid', 'In production', 'Shipped', 'Ready for collection')
+STATUSES = ('Under review', 'Awaiting payment', 'Paid', 'In production', 'Shipped', 'Ready for collection')
 HEADBAND_COLOURS = ('Black', 'White', 'Red', 'Blue', 'Green', 'Pink', 'Purple', 'Gold', 'Silver')
 LETTER_FINISHES = ('Plain', 'Glitter')
 CUSTOM_REFUND_POLICY = ('Each headband is personalised and custom-made to your order. We do not accept returns or offer refunds for a change of mind or mistakes in the wording or options you approve. '
@@ -18,6 +20,8 @@ CUSTOM_REFUND_POLICY = ('Each headband is personalised and custom-made to your o
 
 
 def next_order_action(order):
+    if order.status == 'Awaiting payment':
+        return 'Check SumUp payment'
     if order.status in ('Shipped', 'Ready for collection'):
         return 'View order and delivery details'
     if order.status == 'Under review':
@@ -42,6 +46,15 @@ def ensure_schema(db):
                 "ALTER TABLE creates_order ADD COLUMN acknowledgement TEXT NOT NULL "
                 "DEFAULT 'Acknowledgement was not recorded for this legacy order.'"
             ))
+        upgrades = {'checkout_token':'VARCHAR(64)', 'submission_token':'VARCHAR(64)', 'provider_id':'VARCHAR(100)',
+            'payment_url':'TEXT', 'merchant':'VARCHAR(100)', 'confirmation_dispatched':'BOOLEAN NOT NULL DEFAULT FALSE',
+            'collection_slot_id':'INTEGER', 'collection_snapshot':"TEXT NOT NULL DEFAULT ''", 'checkout_started':'BOOLEAN NOT NULL DEFAULT FALSE',
+            'return_path':"TEXT NOT NULL DEFAULT '/'"}
+        for name, definition in upgrades.items():
+            if name not in columns:
+                connection.execute(text(f'ALTER TABLE creates_order ADD COLUMN {name} {definition}'))
+        for name in ('checkout_token','submission_token','provider_id'):
+            connection.execute(text(f'CREATE UNIQUE INDEX IF NOT EXISTS uq_creates_order_{name} ON creates_order ({name})'))
 
 
 def define_models(db):
@@ -60,6 +73,16 @@ def define_models(db):
         invoice_url = db.Column(db.Text, default='', nullable=False)
         invoice_reference = db.Column(db.String(100), default='', nullable=False)
         tracking = db.Column(db.String(200), default='', nullable=False)
+        checkout_token = db.Column(db.String(64), unique=True)
+        submission_token = db.Column(db.String(64), unique=True)
+        provider_id = db.Column(db.String(100), unique=True)
+        merchant = db.Column(db.String(100))
+        payment_url = db.Column(db.Text)
+        confirmation_dispatched = db.Column(db.Boolean, nullable=False, default=False)
+        checkout_started = db.Column(db.Boolean, nullable=False, default=False)
+        collection_slot_id = db.Column(db.Integer, db.ForeignKey('creates_collection_slot.id'))
+        collection_snapshot = db.Column(db.Text, nullable=False, default='')
+        return_path = db.Column(db.Text, nullable=False, default='/')
         acknowledgement = db.Column(db.Text, nullable=False, default='Customer confirmed custom wording and acknowledged order and privacy information (CL Creates v1).')
         @property
         def number(self):
@@ -89,11 +112,11 @@ def define_models(db):
     return CreatesOrder, CreatesMessage, CreatesProduct, CreatesImage
 
 
-def register(app, db, models, Setting, admin_required, send_email, get_current_client=lambda: None):
+def register(app, db, models, Setting, admin_required, send_email, get_current_client=lambda: None, business_settings=lambda: {}):
     app.jinja_env.globals['next_order_action'] = next_order_action
     app.jinja_env.globals['creates_refund_policy'] = CUSTOM_REFUND_POLICY
     Order, Message, Product, LibraryImage = models
-    defaults = {'price': '5.00', 'postage': '6.00', 'emails': True,
+    defaults = {'price': '5.00', 'postage': '6.00', 'emails': True, 'collection_lead_days': 7,
                 'subject': 'CL Creates {order_number}: {status}',
                 'body': 'Hello {first_name},\n\nYour order {order_number} is {status}.\nTotal: £{total}\n{invoice_url}\n{tracking}\n\nThank you, CL Creates'}
 
@@ -138,6 +161,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
     def colour_options():
         row = db.session.get(Setting, 'cl_creates_colours')
         return json.loads(row.value) if row else dict(headband=list(HEADBAND_COLOURS), glitter=['Gold', 'Silver', 'Pink', 'Blue', 'Purple', 'Red', 'Green'])
+
+    app.extensions['creates_collection_lead_days'] = lambda: int(settings()['collection_lead_days'])
 
     def shape_options():
         row = db.session.get(Setting, 'cl_creates_shapes')
@@ -233,10 +258,23 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
             db.session.commit()
 
     def status_email(order):
+        if order.paid < order.total:
+            return
         config = settings()
         values = dict(order_number=order.number, first_name=order.first_name, status=order.status,
                       total=f'{order.total:.2f}', invoice_url=order.invoice_url, tracking=order.tracking)
-        communicate(order, config['subject'].format(**values), config['body'].format(**values), True)
+        body = config['body'].format(**values)
+        if order.checkout_token:
+            base = business_settings().get('public_app_url','').rstrip('/')
+            body += '\n\nTrack your order: ' + base + url_for('creates_payment',token=order.checkout_token)
+        if order.collection_snapshot:
+            details = json.loads(order.collection_snapshot)
+            when = datetime.fromisoformat(details['starts_at']).replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/London'))
+            body += '\nCollection game: ' + details['title'] + ', ' + when.strftime('%d/%m/%Y %H:%M') + ' UK time. Chloe will confirm the meeting details.'
+        communicate(order, config['subject'].format(**values), body, True)
+
+    from creates_payments import register as register_payments
+    register_payments(app, db, Order, status_email, business_settings, admin_required)
 
     @app.route('/cl-creates', methods=['GET', 'POST'])
     def creates_shop():
@@ -254,10 +292,13 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
             if billing:
                 details = billing.details
                 defaults.update(address_line1=details.get('address_property', ''),
-                                address_line2=details.get('address_street', ''),
+                                address_line2=details.get('address_suite', details.get('address_flat', '')),
+                                address_street=details.get('address_street', ''), village=details.get('address_village', ''),
+                                county=details.get('address_county', ''), country=details.get('address_country') or 'United Kingdom',
                                 town=details.get('address_city', ''), postcode=details.get('address_postcode', ''))
         shop_context = dict(client_account=account, client_csrf=session.get('client_csrf', ''),
-                            shop_base='client/base.html' if account else 'base.html', defaults=defaults, back_url=back_url)
+                            shop_base='client/base.html' if account else 'base.html', defaults=defaults, back_url=back_url,
+                            creates_maps_key=os.getenv('GOOGLE_MAPS_API_KEY',''))
         config = settings()
         products = Product.query.filter_by(active=True).all()
         error = None
@@ -265,6 +306,9 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
             try:
                 if not session.get('creates_submission') or request.form.get('submission_token') != session.get('creates_submission'):
                     raise ValueError('This form has already been submitted. Please reload before placing another order.')
+                existing = Order.query.filter_by(submission_token=session['creates_submission']).first()
+                if existing:
+                    return redirect(url_for('creates_payment', token=existing.checkout_token))
                 first, last = (request.form.get(k, '').strip() for k in ('first_name', 'last_name'))
                 if not first or not last or max(len(first), len(last)) > 100:
                     raise ValueError('Enter your first and last name (up to 100 characters each).')
@@ -273,14 +317,33 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                 if fulfilment not in ('postage', 'collection'):
                     raise ValueError('Choose postage or collection.')
                 address = ''
+                collection_slot_id = None
+                collection_snapshot = ''
+                if fulfilment == 'collection':
+                    slots = app.extensions['creates_collection_slots']()
+                    slot = next((s for s in slots if s.id == request.form.get('collection_slot_id', type=int)), None)
+                    if not slot or slot.starts_at < datetime.utcnow()+timedelta(days=int(config['collection_lead_days'])):
+                        raise ValueError('Choose an available home game with enough time to make your headbands.')
+                    collection_slot_id = slot.id
+                    collection_snapshot = json.dumps(dict(title=slot.title, starts_at=slot.starts_at.isoformat(), venue=slot.venue))
                 if fulfilment == 'postage':
-                    parts = [request.form.get(k, '').strip() for k in ('address_line1', 'address_line2', 'town', 'postcode')]
-                    postcode = re.sub(r'\s+', '', parts[-1]).upper()
-                    if not parts[0] or not parts[2] or not re.fullmatch(r'[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}', postcode):
-                        raise ValueError('Enter a full UK delivery address and postcode.')
+                    fields = {key: request.form.get(key, '').strip() for key in
+                        ('address_line1','address_line2','address_street','village','town','county','postcode','country')}
+                    postcode = re.sub(r'\s+', '', fields['postcode']).upper()
+                    if any(not fields[key] for key in ('address_line1','address_street','town','county','country')) or not re.fullmatch(r'[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}', postcode):
+                        raise ValueError('Enter your house name or number, street, town or city, county, postcode and country. Include your suite or flat and village where applicable.')
+                    if any(len(value)>200 or any(char in value for char in ('\r','\n')) for value in fields.values()):
+                        raise ValueError('Keep each address field to one line and no more than 200 characters.')
+                    if fields['country'].casefold() not in ('united kingdom','uk','gb','great britain'):
+                        raise ValueError('Postage is available to UK mainland addresses only. Choose collection for other countries.')
                     if postcode.startswith(('BT', 'GY', 'JE', 'IM', 'HS', 'ZE')) or not request.form.get('mainland'):
                         raise ValueError('Delivery is available to UK mainland addresses only. Choose collection for other locations.')
-                    address = '\n'.join(p for p in parts if p) + '\nUnited Kingdom'
+                    formatted_postcode = postcode[:-3]+' '+postcode[-3:]
+                    parts = [fields['address_line2'], fields['address_line1']+' '+fields['address_street'],
+                        fields['village'],fields['town'],fields['county'],formatted_postcode,'United Kingdom']
+                    address = '\n'.join(part for part in parts if part)
+                    if len(address)>1000:
+                        raise ValueError('Please keep the complete delivery address within 1,000 characters.')
                 if len(address) > 1000 or not request.form.get('consent'):
                     raise ValueError('Please acknowledge the order and privacy information.')
                 if request.form.get('custom_order_declaration') != 'yes':
@@ -294,10 +357,18 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                 finishes = request.form.getlist('letter_finish') or ['Plain'] * len(ids)
                 glitter_colours = request.form.getlist('glitter_colour') or [(options['glitter'][0] if options['glitter'] else '')] * len(ids)
                 shapes = request.form.getlist('word_shape') or [''] * len(ids)
+                backgrounds = request.form.getlist('background_colour') or ['Black'] * len(ids)
+                bolds = request.form.getlist('bold_colour') or ['Black'] * len(ids)
+                if len(backgrounds) != len(ids) or len(bolds) != len(ids) or any(c not in options['headband'] for c in backgrounds+bolds):
+                    raise ValueError('Choose an available background and bold colour for each headband.')
                 available_shapes = shape_options()
                 if len(colours) != len(ids) or len(finishes) != len(ids) or len(glitter_colours) != len(ids) or len(shapes) != len(ids):
                     raise ValueError('Choose a colour and letter finish for each headband.')
                 for pid, wording, quantity, colour, finish, glitter_colour, shape in zip(ids, words, quantities, colours, finishes, glitter_colours, shapes):
+                    if len(wording.split()) < 2:
+                        raise ValueError('Each headband requires at least two words.')
+                    if len(wording.split()) == 3 and not shape:
+                        raise ValueError('Choose a separator shape for every three-word headband.')
                     if shape and shape not in available_shapes:
                         raise ValueError('Choose an available shape between words.')
                     if colour not in options['headband'] or finish not in LETTER_FINISHES or (finish == 'Glitter' and glitter_colour not in options['glitter']):
@@ -309,27 +380,37 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                         if not product or not product.active:
                             raise ValueError('Choose an available headband.')
                         product_name = product.name
-                    if not wording.strip() or sum(c != ' ' for c in wording) > 11 or wording.count(' ') > 2 or any(not c.isprintable() for c in wording):
-                        raise ValueError('Wording allows 11 characters plus up to two spaces.')
+                    if not wording.strip() or wording != wording.strip() or sum(c != ' ' for c in wording) > 16 or wording.count(' ') > 2 or any(not c.isprintable() for c in wording):
+                        raise ValueError('Wording allows 16 characters plus up to two spaces.')
                     qty = int(quantity)
                     if not 1 <= qty <= 100:
                         raise ValueError('Each quantity must be between 1 and 100.')
-                    items.append(dict(product=product_name, wording=wording, colour=colour, letter_finish=finish, glitter_colour=glitter_colour if finish == 'Glitter' else '', word_shape=shape if len(wording.split()) > 1 else '', quantity=qty, price=config['price']))
+                    items.append(dict(product=product_name, wording=wording, background_colour=backgrounds[len(items)], bold_colour=bolds[len(items)], colour=colour, letter_finish=finish, glitter_colour=glitter_colour if finish == 'Glitter' else '', word_shape=shape if len(wording.split()) > 1 else '', quantity=qty, price=config['price']))
                 total = sum(i['quantity'] * money(i['price']) for i in items) + (money(config['postage']) if fulfilment == 'postage' else 0)
                 order = Order(first_name=first, last_name=last, email=email, address=address,
+                              collection_slot_id=collection_slot_id, collection_snapshot=collection_snapshot,
+                              checkout_token=secrets.token_urlsafe(32), submission_token=session['creates_submission'],
+                              merchant=os.environ.get('SUMUP_MERCHANT_CODE',''), status='Awaiting payment',
+                              return_path=back_url,
                               fulfilment=fulfilment, items_json=json.dumps(items), total=total,
                               acknowledgement='Customer confirmed wording, selections, order and privacy information, and accepted the custom-made refund declaration (CL Creates v2): ' + CUSTOM_REFUND_POLICY)
                 db.session.add(order)
                 db.session.commit()
                 session.pop('creates_submission', None)
-                status_email(order)
-                return render_template('creates_confirmation.html', order=order, **shop_context)
+                return redirect(url_for('creates_payment', token=order.checkout_token))
+            except IntegrityError:
+                db.session.rollback()
+                existing = Order.query.filter_by(submission_token=request.form.get('submission_token')).first()
+                if existing:
+                    return redirect(url_for('creates_payment',token=existing.checkout_token))
+                error = 'The checkout changed. Reload the form before trying again.'
             except (ValueError, EmailNotValidError) as exc:
                 error = str(exc)
         session.setdefault('creates_submission', secrets.token_urlsafe(32))
         return render_template('creates_shop.html', products=products, config=config, csrf=token, error=error,
                                headband_colours=colour_options()['headband'], glitter_colours=colour_options()['glitter'], letter_finishes=LETTER_FINISHES if colour_options()['glitter'] else ('Plain',),
-                               word_shapes=shape_options(),
+                               word_shapes=shape_options(), collection_slots=[slot for slot in app.extensions['creates_collection_slots']()
+                                   if slot.starts_at >= datetime.utcnow()+timedelta(days=int(config['collection_lead_days']))],
                                gallery=LibraryImage.query.filter_by(visible=True).order_by(LibraryImage.id).all(), **shop_context)
 
     @app.get('/cl-creates/library/<int:image_id>')
@@ -401,7 +482,28 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
             if re.fullmatch(r'(?:O-)?\d+', search, re.I):
                 conditions.append(Order.id == int(search.upper().removeprefix('O-')))
             query = query.filter(db.or_(*conditions))
-        page = query.order_by(Order.id.desc()).paginate(page=request.args.get('page', 1, type=int), per_page=50, error_out=False)
+        customer_groups = []
+        if search:
+            # Email identifies a customer; names alone can belong to different
+            # people. Include their full history even when one order matched.
+            customer_key = db.func.lower(db.func.trim(Order.email))
+            matching_customers = query.with_entities(customer_key).subquery()
+            customers = db.session.query(customer_key.label('email'), db.func.max(Order.id).label('latest')).filter(
+                customer_key.in_(db.select(matching_customers))).group_by(customer_key)
+            page = customers.order_by(db.func.max(Order.id).desc()).paginate(
+                page=request.args.get('page', 1, type=int), per_page=50, error_out=False)
+            emails = [row.email for row in page.items]
+            histories = {email: [] for email in emails}
+            for order in Order.query.filter(customer_key.in_(emails)).order_by(Order.id.desc()):
+                histories[order.email.strip().lower()].append(order)
+            for email in emails:
+                history = histories[email]
+                customer_groups.append(dict(email=email, name=f'{history[0].first_name} {history[0].last_name}',
+                                            orders=history, total=sum((order.total for order in history), Decimal(0))))
+            orders = [order for group in customer_groups for order in group['orders']]
+        else:
+            page = query.order_by(Order.id.desc()).paginate(page=request.args.get('page', 1, type=int), per_page=50, error_out=False)
+            orders = page.items
         now = datetime.now(ZoneInfo('Europe/London')).date()
         counts = dict(day=0, week=0, month=0, year=0)
         paid = Decimal(0)
@@ -416,7 +518,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
             paid += order.paid
             outstanding += order.total - order.paid
             completed += order.status in ('Shipped', 'Ready for collection')
-        return render_template('creates_admin.html', orders=page.items, pagination=page, counts=counts, paid=paid,
+        return render_template('creates_admin.html', orders=orders, customer_groups=customer_groups, pagination=page, counts=counts, paid=paid,
                                outstanding=outstanding, completed=completed, csrf=token, statuses=STATUSES, search=search)
 
     @app.route('/admin/cl-creates/orders/<int:order_id>', methods=['GET', 'POST'])
@@ -428,6 +530,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         if request.method == 'POST':
             try:
                 if request.form.get('action') == 'delete':
+                    if order.checkout_started:
+                        raise ValueError('This order has a SumUp checkout. Resolve the payment before removing an order; payment records must be retained.')
                     if order.status != 'Under review' or order.paid != 0:
                         raise ValueError('Only unpaid orders under review can be deleted.')
                     if order.invoice_url or order.invoice_reference:
@@ -446,6 +550,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                 else:
                     status = request.form.get('status', order.status)
                     paid = money(request.form.get('paid', str(order.paid)))
+                    if order.checkout_token and paid != order.paid:
+                        raise ValueError('Online payments must be verified with SumUp; the received amount cannot be edited manually.')
                     invoice = request.form.get('invoice_url', order.invoice_url).strip()
                     if invoice:
                         parsed = urlparse(invoice)
@@ -453,11 +559,11 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                             raise ValueError('Use an HTTPS SumUp invoice link.')
                     if status not in STATUSES or paid > order.total:
                         raise ValueError('Check the status and payment amount.')
-                    if status != 'Under review' and paid != order.total:
+                    if status not in ('Under review','Awaiting payment') and paid != order.total:
                         raise ValueError(f'Record the full payment of £{order.total:.2f} in Payment received before selecting {status}. Check the invoice before recording payment.')
                     if (status == 'Shipped' and order.fulfilment != 'postage') or (status == 'Ready for collection' and order.fulfilment != 'collection'):
                         raise ValueError('The status must match the delivery method.')
-                    changed = status != order.status
+                    changed = status != order.status or request.form.get('tracking', order.tracking) != order.tracking or (order.paid < order.total and paid == order.total)
                     order.status, order.paid, order.invoice_url = status, paid, invoice
                     order.invoice_reference = request.form.get('invoice_reference', order.invoice_reference)[:100]
                     order.tracking = request.form.get('tracking', order.tracking)[:200]
@@ -518,7 +624,10 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     product.active = not product.active
                 else:
                     config = dict(price=str(money(request.form.get('price', ''))), postage=str(money(request.form.get('postage', ''))),
+                                  collection_lead_days=int(request.form.get('collection_lead_days', config['collection_lead_days'])),
                                   emails=bool(request.form.get('emails')), subject=request.form.get('subject', ''), body=request.form.get('body', ''))
+                    if not 0 <= config['collection_lead_days'] <= 90:
+                        raise ValueError('Collection notice must be between 0 and 90 days.')
                     values = dict.fromkeys(('order_number', 'first_name', 'status', 'total', 'invoice_url', 'tracking'), 'Example')
                     try:
                         config['subject'].format(**values)

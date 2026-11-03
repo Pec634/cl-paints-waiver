@@ -1,0 +1,12 @@
+<p>Complete every required address field. Add your suite or flat and village if they apply to your address.</p>
+{% for key,label,autocomplete,required in [
+('address_line1','House name or number','address-line1',true),
+('address_line2','Suite / flat / apartment number (if applicable)','address-line2',false),
+('address_street','Street / road','address-line3',true),
+('village','Village (if applicable)','address-level3',false),
+('town','Town / city','address-level2',true),
+('county','County','address-level1',true),
+('postcode','Postcode','postal-code',true),
+('country','Country','country-name',true)] %}
+<label>{{ label }}<input name="{{ key }}" autocomplete="{{ autocomplete }}" maxlength="200" value="{{ request.form.get(key, defaults.get(key, 'United Kingdom' if key == 'country' else '')) }}" {% if required %}required{% endif %}></label>
+{% endfor %}

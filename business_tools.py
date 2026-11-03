@@ -195,13 +195,21 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
         for block in Block.query.all():
             rows.append(dict(booking=None,label=block.reason,start=block.starts_at,end=block.ends_at,
                 occupied_start=block.starts_at,occupied_end=block.ends_at,day=None,conflicts=[]))
+        # Collection games are calendar information, not full-team availability blocks.
+        collection_rows=[]
+        if 'creates_collection_slots' in app.extensions:
+            for slot in app.extensions['creates_collection_slots']():
+                start=slot.starts_at.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/London')).replace(tzinfo=None)
+                end=slot.ends_at.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/London')).replace(tzinfo=None)
+                collection_rows.append(dict(booking=None,label='CL Creates collection · '+slot.title,start=start,end=end,
+                    occupied_start=start,occupied_end=end,day=None,conflicts=[],collection=True))
         for row in rows:
             if row['booking'] and row['booking'].status in ('Under Review', 'Awaiting Payment'):
                 others=[other for other in rows if not other['booking'] or other['booking'].status=='Accepted']
             else:
                 others=rows
             row['conflicts']=[other['label'] for other in others if other is not row and not (row['booking'] and other['booking'] and row['booking'].id==other['booking'].id and row['day']==other['day']) and row['occupied_start']<other['occupied_end'] and other['occupied_start']<row['occupied_end']]
-        return sorted(rows,key=lambda row:row['start'])
+        return sorted(rows+collection_rows,key=lambda row:row['start'])
     app.extensions['calendar_rows']=calendar_rows
 
     @app.get('/booking/calendar')

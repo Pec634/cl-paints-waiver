@@ -596,6 +596,8 @@ def get_moodboard_prices():
     return prices
 
 from cl_creates import define_models as define_creates_models, ensure_schema as ensure_creates_schema
+from creates_collection import define_model as define_creates_collection_model
+CreatesCollectionSlot = define_creates_collection_model(db)
 creates_models = define_creates_models(db)
 from moodboard_payments import define_model as define_moodboard_order
 MoodboardOrder = define_moodboard_order(db)
@@ -1547,6 +1549,7 @@ def booking_availability_check():
     start = datetime.combine(event_date, requested_start.time())
     finish = datetime.combine(event_date, requested_finish.time())
     for row in app.extensions['calendar_rows']():
+        if row.get('collection'): continue
         if row['booking'] and row['booking'].status != 'Accepted': continue
         if start < row['occupied_end'] and finish > row['occupied_start']:
             return jsonify(success=True, available=False, message='Please contact us about this date. We can discuss suitable arrangements.')
@@ -3037,7 +3040,12 @@ register_wedding_followups(app, db, WeddingFollowup, native_form_models[1], mark
                           get_business_settings, lambda *args: send_client_email(*args), BusinessSetting, admin_required)
 
 from cl_creates import register as register_creates
-register_creates(app, db, creates_models, BusinessSetting, admin_required, lambda *args: send_client_email(*args), get_current_client)
+from creates_collection import register as register_creates_collection
+register_creates_collection(app, db, CreatesCollectionSlot, creates_models[0], admin_required)
+register_creates(app, db, creates_models, BusinessSetting, admin_required, lambda *args: send_client_email(*args), get_current_client, get_business_settings)
+from shared_calendar import register as register_shared_calendar
+register_shared_calendar(app, db, BusinessSetting, Booking, tool_models[2], CreatesCollectionSlot,
+    creates_models[0], booking_schedule_events, get_business_settings, admin_required)
 from admin_client_timeline import register as register_client_timeline
 register_client_timeline(app, db, ClientAccount, Booking, BookingMessage, ClientEnquiry, BookingInvoice,
                          tool_models[1], creates_models[0], creates_models[1], admin_required)

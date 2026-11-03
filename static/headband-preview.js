@@ -4,6 +4,27 @@
     if (colours[value.toLowerCase()]) return colours[value.toLowerCase()];
     return CSS.supports('color', value) ? value : '#8e96a8';
   }
+  const zoomReady = new WeakSet();
+  function bindZoom(figure) {
+    if (zoomReady.has(figure)) return;
+    zoomReady.add(figure);
+    const viewport = figure.querySelector('.headband-preview-viewport');
+    viewport.classList.remove('is-hoverzoom');
+    viewport.style.setProperty('--zoom-origin', '50% 50%');
+    viewport.addEventListener('pointerenter', event => {
+      if (event.pointerType === 'mouse') viewport.classList.add('is-hoverzoom');
+    });
+    const reset = () => viewport.classList.remove('is-hoverzoom');
+    viewport.addEventListener('pointerleave', reset);
+    viewport.addEventListener('pointercancel', reset);
+    viewport.addEventListener('pointermove', event => {
+      if (event.pointerType !== 'mouse') return;
+      const box = viewport.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, (event.clientX-box.left)/box.width*100));
+      const y = Math.max(0, Math.min(100, (event.clientY-box.top)/box.height*100));
+      viewport.style.setProperty('--zoom-origin', `${x}% ${y}%`);
+    });
+  }
   function render(line) {
     let figure = line.querySelector('[data-headband-preview]');
     if (!figure) {
@@ -11,9 +32,13 @@
       figure.className = 'headband-preview';
       figure.dataset.headbandPreview = '';
       const canvas = document.createElement('canvas');
-      canvas.width = 800;
-      canvas.height = 500;
+      canvas.width = 1600;
+      canvas.height = 1000;
       canvas.setAttribute('role', 'img');
+      const viewport = document.createElement('div');
+      viewport.className = 'headband-preview-viewport';
+      viewport.setAttribute('aria-label', 'Design preview. Hover to zoom.');
+      viewport.append(canvas);
       const caption = document.createElement('figcaption');
       const title = document.createElement('strong');
       title.textContent = 'Live design preview';
@@ -21,23 +46,29 @@
       description.dataset.previewDescription = '';
       const disclaimer = document.createElement('p');
       disclaimer.className = 'headband-preview-disclaimer';
-      disclaimer.textContent = 'Illustrative preview only. Letters and separator shapes have black backing on a black band. Actual colours, shape details, letter spacing, sizing and glitter finish may vary. Custom colours and shapes are shown approximately.';
-      caption.append(title, description, disclaimer);
-      figure.append(canvas, caption);
+      disclaimer.textContent = 'Preview only. Colours and glitter may look slightly different in person.';
+      const hint=document.createElement('p');hint.className='headband-preview-disclaimer';hint.textContent='Hover over your design to zoom in.';
+      caption.append(title, hint, description, disclaimer);
+      figure.append(viewport, caption);
       line.querySelector('.remove-line').before(figure);
     }
+    bindZoom(figure);
     const canvas = figure.querySelector('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    ctx.setTransform(2, 0, 0, 2, 0, 0);
     const wording = line.querySelector('[name=wording]').value.trim();
     const letterColour = line.querySelector('[name=colour]').value;
+    const backgroundColour = line.querySelector('[name=background_colour]')?.value || 'Black';
+    const boldColour = line.querySelector('[name=bold_colour]')?.value || 'Black';
+    const baseInk = colour(backgroundColour), boldInk = colour(boldColour);
     const finish = line.querySelector('[name=letter_finish]').value;
     const glitterColour = line.querySelector('[name=glitter_colour]').value;
-    const shape = line.querySelector('[name=word_shape]').value;
-    const tokens = Array.from((wording || 'YOUR WORDS').toUpperCase()).slice(0, 30);
+    const selectedShape = line.querySelector('[name=word_shape]').value;
+    const shape = selectedShape || (wording.split(/\s+/).filter(Boolean).length === 3 ? '?' : '');
     const glitter = finish === 'Glitter';
     const ink = glitter ? colour(glitterColour || 'Gold') : colour(letterColour);
-    const description = `${wording || 'Your wording'} — black band and black wording backing, ${glitter ? (glitterColour || 'choose a colour') + ' glitter' : letterColour + ' plain'} letters${shape && wording.split(/\s+/).length > 1 ? ', ' + shape + ' between words' : ''}.`;
+    const description = `${wording || 'Your wording'}: ${backgroundColour} background, ${boldColour} outline, ${glitter ? (glitterColour || 'Choose a colour') + ' glitter' : letterColour + ' plain'} letters${shape && wording.split(/\s+/).length > 1 ? '. ' + shape + ' shapes between words' : ''}.`;
     canvas.setAttribute('aria-label', 'Illustrative headband preview: ' + description);
     figure.querySelector('[data-preview-description]').textContent = description;
     ctx.clearRect(0, 0, 800, 500);
@@ -57,85 +88,150 @@
     ctx.stroke();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Measure the visible glyph plus its backing instead of using fixed spacing:
-    // a narrow I and a wide W must take up different amounts of the arc.
-    const glyphs = tokens.map(token => {
-      const separator = token === ' ' && shape && wording;
-      ctx.font = separator ? 'bold 11px Arial' : '900 31px Georgia, serif';
-      const text = separator ? shape.slice(0, 10) : token;
-      const metrics = ctx.measureText(text);
-      let width = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
-      let offset = (metrics.actualBoundingBoxRight - metrics.actualBoundingBoxLeft) / 2;
-      if (separator && ['heart', 'star'].includes(shape.toLowerCase())) {
-        width = shape.toLowerCase() === 'heart' ? 34 : 32;
-        offset = 0;
-      }
-      if (token === ' ' && !separator) return {token, width: 5, offset: 0};
-      // Pack the outlined glyphs closely so the backing joins visually.
-      return {token, width: Math.max(1, width) + 1, offset};
-    });
-    const totalWidth = glyphs.reduce((sum, glyph) => sum + glyph.width, 0);
-    const glyphScale = Math.min(1, 1.7 * 198 / totalWidth);
-    let cursor = -totalWidth * glyphScale / 2;
-    // Backing follows the individual letters and shapes, leaving gaps open.
-    ctx.lineJoin = 'round';
-    let letterPaint = ink;
-    if (glitter) {
-      const texture = document.createElement('canvas');
-      texture.width = texture.height = 32;
-      const paint = texture.getContext('2d');
-      paint.fillStyle = ink;
-      paint.fillRect(0, 0, 32, 32);
-      paint.fillStyle = '#ffffffaa';
-      for (let fleck = 0; fleck < 28; fleck++) paint.fillRect((fleck * 7) % 32, (fleck * 13) % 32, 1.2, 1.2);
-      letterPaint = ctx.createPattern(texture, 'repeat');
-    }
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    glyphs.forEach(({token, width, offset}) => {
-      const advance = width * glyphScale;
-      const angle = (cursor + advance / 2) / 198;
-      cursor += advance;
-      ctx.save();
-      ctx.translate(400 + Math.sin(angle) * 198, 390 - Math.cos(angle) * 198);
-      ctx.rotate(angle);
-      ctx.scale(glyphScale, glyphScale);
-      ctx.translate(-offset, 0);
-      ctx.fillStyle = letterPaint;
-      if (token === ' ' && shape && wording) {
-        ctx.beginPath();
-        if (shape.toLowerCase() === 'heart') {
-          ctx.moveTo(0, 12);
-          ctx.bezierCurveTo(-30, -6, -8, -23, 0, -9);
-          ctx.bezierCurveTo(8, -23, 30, -6, 0, 12);
-          ctx.closePath();
-        } else if (shape.toLowerCase() === 'star') {
-          for (let point = 0; point < 10; point++) {
-            const theta = point * Math.PI / 5 - Math.PI / 2;
-            const radius = point % 2 ? 7 : 16;
-            ctx.lineTo(Math.cos(theta) * radius, Math.sin(theta) * radius);
-          }
-          ctx.closePath();
-        } else {
-          ctx.font = 'bold 11px Arial';
-          ctx.strokeStyle = '#15151a';
-          ctx.lineWidth = 7;
-          ctx.strokeText(shape.slice(0, 10), 0, 0);
-          ctx.fillText(shape.slice(0, 10), 0, 0);
+    const words=(wording || 'YOUR WORDS').toUpperCase().split(/\s+/).filter(Boolean).slice(0,3);
+    const coils=[290,510], coilTop=205;
+    // Coil positions, wire colour and dimensions are hardware, not design options.
+    for(const x of coils){
+      const bottom=390-Math.sqrt(177**2-(x-400)**2);
+      const drawSpring=(stroke,width)=>{
+        ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.beginPath();
+        ctx.moveTo(x,bottom);ctx.lineTo(x,bottom-6);
+        for(let y=bottom-10;y>coilTop+5;y-=6){
+          ctx.moveTo(x+6,y);ctx.ellipse(x,y,6,2.5,0,0,Math.PI*2);
         }
-        ctx.strokeStyle = '#15151a';
-        ctx.lineWidth = 7;
-        ctx.stroke();
-        ctx.fill();
-      } else if (token !== ' ') {
-        ctx.font = '900 31px Georgia, serif';
-        ctx.lineWidth = 7;
-        ctx.strokeStyle = '#15151a';
-        ctx.strokeText(token, 0, 0);
-        ctx.fillText(token, 0, 0);
+        ctx.moveTo(x,coilTop+7);ctx.lineTo(x,coilTop);ctx.moveTo(x-8,coilTop);ctx.lineTo(x+8,coilTop);ctx.stroke();
+      };
+      drawSpring('#a1a1aa',4);drawSpring('#15151a',2);
+    }
+    let letterPaint=ink;
+    if(glitter){
+      const texture=document.createElement('canvas');texture.width=texture.height=32;
+      const paint=texture.getContext('2d');paint.fillStyle=ink;paint.fillRect(0,0,32,32);paint.fillStyle='#ffffffaa';
+      for(let fleck=0;fleck<28;fleck++)paint.fillRect((fleck*7)%32,(fleck*13)%32,1.2,1.2);
+      letterPaint=ctx.createPattern(texture,'repeat');
+    }
+    const makeGlyph=(token,isShape=false)=>{
+      const name=isShape?shape:token;
+      const font=isShape?'bold 11px Arial':'900 31px Georgia, serif';
+      ctx.font=font;
+      const metrics=ctx.measureText(name.slice(0,10));
+      const offset=isShape&&['heart','star'].includes(shape.toLowerCase())?0:(metrics.actualBoundingBoxRight-metrics.actualBoundingBoxLeft)/2;
+      return {token,name,isShape,font,offset};
+    };
+    const paintGlyph=(paint,glyph,x,y,scale,base=baseInk,bold=boldInk,face=letterPaint,angle=0)=>{
+      paint.save();paint.translate(x,y);paint.rotate(angle);paint.scale(scale,scale);paint.translate(-glyph.offset,0);
+      paint.textAlign='center';paint.textBaseline='middle';paint.lineJoin='round';paint.font=glyph.font;
+      const pathShape=glyph.isShape&&['heart','star'].includes(shape.toLowerCase());
+      if(pathShape){
+        paint.beginPath();
+        if(shape.toLowerCase()==='heart'){
+          paint.moveTo(0,12);paint.bezierCurveTo(-30,-6,-8,-23,0,-9);paint.bezierCurveTo(8,-23,30,-6,0,12);paint.closePath();
+        }else{
+          for(let point=0;point<10;point++){const theta=point*Math.PI/5-Math.PI/2,radius=point%2?7:16;paint.lineTo(Math.cos(theta)*radius,Math.sin(theta)*radius);}paint.closePath();
+        }
+        paint.strokeStyle=base;paint.lineWidth=11;paint.stroke();paint.strokeStyle=bold;paint.lineWidth=7;paint.stroke();paint.fillStyle=face;paint.fill();
+      }else{
+        paint.strokeStyle=base;paint.lineWidth=11;paint.strokeText(glyph.name.slice(0,10),0,0);
+        paint.strokeStyle=bold;paint.lineWidth=7;paint.strokeText(glyph.name.slice(0,10),0,0);
+        paint.fillStyle=face;paint.fillText(glyph.name.slice(0,10),0,0);
       }
-      ctx.restore();
-    });
+      paint.restore();
+    };
+    const geometry=new Map();
+    const measure=glyph=>{
+      const key=(glyph.isShape?'shape:':'letter:')+glyph.name;
+      if(geometry.has(key))return geometry.get(key);
+      const mask=document.createElement('canvas');mask.width=220;mask.height=130;
+      const paint=mask.getContext('2d');paintGlyph(paint,glyph,110,65,1,'white','white','white');
+      const pixels=paint.getImageData(0,0,220,130).data,rows=new Map();
+      let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;
+      for(let y=0;y<130;y++)for(let x=0;x<220;x++)if(pixels[(y*220+x)*4+3]>127){
+        const row=rows.get(y-65)||[Infinity,-Infinity];row[0]=Math.min(row[0],x-110);row[1]=Math.max(row[1],x-110);rows.set(y-65,row);
+        left=Math.min(left,x-110);right=Math.max(right,x-110);top=Math.min(top,y-65);bottom=Math.max(bottom,y-65);
+      }
+      const result={rows,left,right,top,bottom};geometry.set(key,result);return result;
+    };
+    const pack=sequence=>{
+      const positions=[0];
+      for(let index=1;index<sequence.length;index++){
+        const previous=measure(sequence[index-1]),current=measure(sequence[index]);let advance=0;
+        for(const [y,bounds] of previous.rows)for(let offset=-1;offset<=1;offset++){
+          const next=current.rows.get(y+offset);if(next)advance=Math.max(advance,bounds[1]-next[0]);
+        }
+        positions.push(positions[index-1]+advance-.4);
+      }
+      const bounds=(first,last)=>({left:positions[first]+measure(sequence[first]).left,right:positions[last]+measure(sequence[last]).right,
+        bottom:Math.max(...sequence.slice(first,last+1).map(measure).map(value=>value.bottom))});
+      return {positions,bounds};
+    };
+    const letters=word=>Array.from(word).map(token=>makeGlyph(token));
+    // Distances follow the arc, so curvature does not squeeze the lettering.
+    const curveRadius=330;
+    const curveBaseline=coilTop-(curveRadius-Math.sqrt(curveRadius**2-(coils[1]-400)**2));
+    const paintCurved=(glyph,x,bottom,scale)=>{
+      const radius=curveRadius+bottom*scale-2;
+      const angle=(x-400)/radius;
+      paintGlyph(ctx,glyph,400+radius*Math.sin(angle),curveBaseline+curveRadius-radius*Math.cos(angle),scale,baseInk,boldInk,letterPaint,angle);
+    };
+    const packCurved=(sequence,scale,bottom,anchor)=>{
+      const radius=curveRadius+bottom*scale-2,positions=[0];
+      const mask=document.createElement('canvas');mask.width=512;mask.height=320;
+      const paint=mask.getContext('2d',{willReadFrequently:true});
+      paint.setTransform(2,0,0,2,0,0);
+      for(let index=1;index<sequence.length;index++){
+        paint.clearRect(0,0,256,160);
+        paintGlyph(paint,sequence[index-1],80,80,scale,'white','white','white');
+        const previous=paint.getImageData(0,0,512,320).data;
+        const occupied=[];
+        for(let pixel=0;pixel<previous.length;pixel+=4)if(previous[pixel+3]>127)occupied.push(pixel+3);
+        const touches=distance=>{
+          paint.clearRect(0,0,256,160);
+          const angle=distance/radius;
+          paintGlyph(paint,sequence[index],80+radius*Math.sin(angle),80+radius*(1-Math.cos(angle)),scale,'white','white','white',angle);
+          const next=paint.getImageData(0,0,512,320).data;
+          return occupied.some(pixel=>next[pixel]>127);
+        };
+        let low=0,high=(measure(sequence[index-1]).right-measure(sequence[index]).left+12)*scale;
+        while(touches(high))high+=10;
+        // Find actual backing contact after rotation, rather than reusing
+        // straight lettering widths. Only the outer padding has a small join.
+        for(let pass=0;pass<10;pass++){
+          const middle=(low+high)/2;
+          if(touches(middle))low=middle;else high=middle;
+        }
+        positions.push(positions[index-1]+Math.max(0,low-.7));
+      }
+      const center=(measure(sequence[0]).left*scale+positions[positions.length-1]+measure(sequence[sequence.length-1]).right*scale)/2;
+      return positions.map(position=>anchor+position-center);
+    };
+    const mountDescription=words.length===3
+      ? `Left coil: ${words[0]}. Suspended middle word: ${words[1]}, joined by ${selectedShape || 'a shape you must select'}. Right coil: ${words[2]}.`
+      : `Left coil: ${words[0] || 'first word'}. Right coil: ${words[1] || 'second word'}.`;
+    canvas.setAttribute('aria-label','Illustrative headband preview: '+description+` ${boldColour} bold outline. ${shape ? shape+' between words. ' : ''}`+'Two fixed spring coils. '+mountDescription);
+    figure.querySelector('[data-preview-description]').textContent=description;
+    if(words.length===3){
+      const first=letters(words[0]),middle=letters(words[1]),last=letters(words[2]);
+      const sequence=[...first,makeGlyph(' ',true),...middle,makeGlyph(' ',true),...last];
+      const layout=pack(sequence);
+      const left=layout.bounds(0,first.length-1),right=layout.bounds(sequence.length-last.length,sequence.length-1);
+      const leftCenter=(left.left+left.right)/2,rightCenter=(right.left+right.right)/2;
+      const scale=(coils[1]-coils[0])/(rightCenter-leftCenter);
+      // Keep one undistorted letter size across all words, and centre
+      // the complete backing rather than squeezing the longer outer word.
+      const bottom=Math.max(left.bottom,right.bottom);
+      const positions=packCurved(sequence,scale,bottom,400);
+      sequence.forEach((glyph,index)=>paintCurved(glyph,positions[index],bottom,scale));
+    }else{
+      const groups=words.map(letters),layouts=groups.map(pack);
+      const widths=layouts.map((layout,index)=>{const box=layout.bounds(0,groups[index].length-1);return box.right-box.left;});
+      const scale=Math.min(1.2,185/Math.max(...widths,1));
+      groups.forEach((group,index)=>{
+        const layout=layouts[index],box=layout.bounds(0,group.length-1);
+        const positions=packCurved(group,scale,box.bottom,coils[index]);
+        group.forEach((glyph,position)=>paintCurved(glyph,positions[position],box.bottom,scale));
+      });
+      if(selectedShape&&words.length===2)paintCurved(makeGlyph(' ',true),400,12,Math.min(scale,1));
+    }
     ctx.fillStyle = '#69718a';
     ctx.font = '15px Arial';
     ctx.fillText('CL CREATES  ·  DESIGN PREVIEW', 400, 465);

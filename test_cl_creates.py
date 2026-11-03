@@ -48,19 +48,40 @@ class CreatesTest(unittest.TestCase):
     def tearDown(self):
         self.fixture.tearDown()
 
+    def test_customer_search_groups_full_history_without_merging_names(self):
+        saved=[]
+        for email in ['alex@example.com','alex@example.com','another@example.com']:
+            data=self.form();data['email']=email
+            self.client.post('/cl-creates',data=data)
+            saved.append(self.Order.query.order_by(self.Order.id.desc()).first())
+        saved[1].email='Alex@Example.com'
+        saved[1].first_name='Alexander'
+        main.db.session.commit()
+        for search in [saved[0].number,'alex@example.com','Alexander']:
+            response=self.admin.get('/admin/cl-creates',query_string={'q':search})
+            self.assertEqual(response.status_code,200)
+            self.assertIn(saved[0].number.encode(),response.data)
+            self.assertIn(saved[1].number.encode(),response.data)
+            self.assertNotIn(saved[2].number.encode(),response.data)
+            self.assertEqual(response.data.count(b'class="creates-customer-heading"'),1)
+            self.assertIn(b'2 orders',response.data)
+        response=self.admin.get('/admin/cl-creates',query_string={'q':'Smith'})
+        self.assertEqual(response.data.count(b'class="creates-customer-heading"'),2)
+        self.assertEqual(self.admin.get('/admin/cl-creates').status_code,200)
+
     def form(self):
         self.assertEqual(self.client.get('/cl-creates').status_code, 200)
         with self.client.session_transaction() as session:
             return dict(csrf_token=session['creates_csrf'], submission_token=session['creates_submission'],
                         first_name='Alex', last_name='Smith', email='alex@example.com', fulfilment='postage',
-                        address_line1='1 Test Road', town='London', postcode='SW1A 1AA', mainland='on',
-                        consent='on', custom_order_declaration='yes', product=str(self.product.id), wording='HELLO WORLD', quantity='2')
+                        address_line1='1', address_street='Test Road', town='London', county='Greater London', country='United Kingdom', postcode='SW1A 1AA', mainland='on',
+                        consent='on', custom_order_declaration='yes', product=str(self.product.id), wording='HELLO WORLD', word_shape='Heart', quantity='2')
 
     def test_colour_and_glitter_saved_for_each_headband(self):
         data = self.form()
-        data.update(product=['custom', 'custom'], wording=['TEAM BLUE', 'PARTY'], quantity=['2', '1'],
+        data.update(product=['custom', 'custom'], wording=['TEAM BLUE', 'MY PARTY'], word_shape=['Heart', ''], quantity=['2', '1'],
                     colour=['Blue', 'Pink'], letter_finish=['Plain', 'Glitter'])
-        response = self.client.post('/cl-creates', data=data)
+        response = self.client.post('/cl-creates', data=data, follow_redirects=True)
         order = self.Order.query.one()
         self.assertEqual([item['colour'] for item in order.items], ['Blue', 'Pink'])
         self.assertEqual([item['letter_finish'] for item in order.items], ['Plain', 'Glitter'])
@@ -104,8 +125,8 @@ class CreatesTest(unittest.TestCase):
         self.assertIn(b'Butterfly', self.client.get('/cl-creates').data)
         data = self.form()
         data.update(word_shape='Butterfly')
-        response = self.client.post('/cl-creates', data=data)
-        self.assertIn(b'Between words: Butterfly', response.data)
+        response = self.client.post('/cl-creates', data=data, follow_redirects=True)
+        self.assertIn(b'Separator: Butterfly', response.data)
         order = self.Order.query.one()
         self.assertEqual(order.items[0]['word_shape'], 'Butterfly')
         self.admin.post(path, data={'csrf_token':token,'action':'remove','name':'Butterfly'})
@@ -230,7 +251,7 @@ class CreatesTest(unittest.TestCase):
         invalid = self.client.post('/cl-creates', data=data)
         self.assertIn(b'href="/services">&larr; Back</a>', invalid.data)
         data['wording'] = 'HELLO'
-        confirmation = self.client.post('/cl-creates', data=data)
+        confirmation = self.client.post('/cl-creates', data=data, follow_redirects=True)
         self.assertIn(b'href="/services">&larr; Back</a>', confirmation.data)
         for destination in ['https://example.com', '//example.com', '/\\example.com']:
             fallback = self.client.get('/cl-creates', query_string={'return_to': destination})
@@ -241,9 +262,9 @@ class CreatesTest(unittest.TestCase):
 
     def test_order_totals_duplicate_and_private_details(self):
         data = self.form()
-        data.update(product=[str(self.product.id)] * 2, wording=['HELLO WORLD', 'A B C'], quantity=['2', '3'])
-        response = self.client.post('/cl-creates', data=data)
-        self.assertIn(b'O-000001', response.data)
+        data.update(product=[str(self.product.id)] * 2, wording=['HELLO WORLD', 'A B C'], word_shape=['Heart','Star'], quantity=['2', '3'])
+        response = self.client.post('/cl-creates', data=data, follow_redirects=True)
+        self.assertNotIn(b'O-000001', response.data)
         order = self.Order.query.one()
         self.assertEqual(float(order.total), 31)
         self.client.post('/cl-creates', data=data)
@@ -259,7 +280,7 @@ class CreatesTest(unittest.TestCase):
         saved = self.admin.post(path + '?popup=1', data=dict(csrf_token=self.admin_token(), status='Under review', paid='0'))
         self.assertEqual(saved.status_code, 302)
         self.assertIn('popup=1', saved.location)
-        self.assertEqual(self.Message.query.one().result, 'Sent')
+        self.assertEqual(self.Message.query.count(), 0)
         for search in ['O-000001', 'Alex Smith', 'alex@example.com', 'Test Road']:
             self.assertIn(b'O-000001', self.admin.get('/admin/cl-creates', query_string={'q': search}).data)
 
@@ -271,13 +292,13 @@ class CreatesTest(unittest.TestCase):
         self.assertIn(b'Order your custom headbands', page.data)
         self.assertNotIn(b'coming soon', page.data)
         data = self.form()
-        data.update(product=['custom', 'custom'], wording=['TEAM BRIDE', 'BRIDESMAID'], quantity=['2', '3'])
-        response = self.client.post('/cl-creates', data=data)
-        self.assertIn(b'O-000001', response.data)
+        data.update(product=['custom', 'custom'], wording=['TEAM BRIDE', 'BRIDE SQUAD'], word_shape=['Heart',''], quantity=['2', '3'])
+        response = self.client.post('/cl-creates', data=data, follow_redirects=True)
+        self.assertNotIn(b'O-000001', response.data)
         order = self.Order.query.one()
         self.assertEqual(float(order.total), 31)
-        self.assertEqual([item['wording'] for item in order.items], ['TEAM BRIDE', 'BRIDESMAID'])
-        self.assertEqual(order.status, 'Under review')
+        self.assertEqual([item['wording'] for item in order.items], ['TEAM BRIDE', 'BRIDE SQUAD'])
+        self.assertEqual(order.status, 'Awaiting payment')
 
     def test_shipping_label_is_private_and_only_available_for_postage(self):
         self.client.post('/cl-creates', data=self.form())
@@ -310,12 +331,13 @@ class CreatesTest(unittest.TestCase):
         path = f'/admin/cl-creates/orders/{order.id}'
         token = self.admin_token()
         self.admin.post(path, data=dict(csrf_token=token, status='Paid', paid='0'))
-        self.assertEqual(order.status, 'Under review')
+        self.assertEqual(order.status, 'Awaiting payment')
         self.admin.post(path, data=dict(csrf_token=token, status='Paid', paid='16.00', invoice_url='https://evil.example/invoice'))
-        self.assertEqual(order.status, 'Under review')
+        self.assertEqual(order.status, 'Awaiting payment')
         self.admin.post(path, data=dict(csrf_token=token, status='Paid', paid='16.00', invoice_url='https://invoices.sumup.com/test'))
-        self.assertEqual(order.status, 'Paid')
-        self.assertEqual(float(order.paid), 16)
+        self.assertEqual(order.status, 'Awaiting payment')
+        self.assertEqual(float(order.paid), 0)
+        order.paid=16;order.status='Paid';main.db.session.commit()
         self.admin.post(path, data=dict(csrf_token=token, status='Ready for collection', paid='16'))
         self.assertEqual(order.status, 'Paid')
         self.admin.post(path, data=dict(csrf_token=token, status='Shipped', paid='16'))
@@ -325,16 +347,16 @@ class CreatesTest(unittest.TestCase):
         data = self.form()
         with patch.object(main, 'send_client_email', return_value=False):
             self.client.post('/cl-creates', data=data)
-        self.assertEqual(self.Message.query.one().result, 'Failed')
+        self.assertEqual(self.Message.query.count(), 0)
         token = self.admin_token()
         self.admin.post('/admin/cl-creates/settings', data=dict(csrf_token=token, price='8', postage='7',
                         subject='{order_number}: {status}', body='Hello {first_name}'))
         self.assertEqual(float(self.Order.query.one().total), 16)
         data = self.form()
-        data['fulfilment'] = 'collection'
+        data['quantity'] = '2'
         self.client.post('/cl-creates', data=data)
-        self.assertEqual(float(self.Order.query.order_by(self.Order.id.desc()).first().total), 16)
-        self.assertEqual(self.Message.query.order_by(self.Message.id.desc()).first().result, 'Disabled')
+        self.assertEqual(float(self.Order.query.order_by(self.Order.id.desc()).first().total), 23)
+        self.assertEqual(self.Message.query.count(), 0)
         for path in ['/admin/cl-creates', '/admin/cl-creates/settings', '/admin/cl-creates/communications']:
             self.assertEqual(main.app.test_client().get(path).status_code, 302)
 

@@ -1,0 +1,451 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//sebbo.net//ical-generator//EN
+METHOD:PUBLISH
+NAME:Fixtures Calendar
+X-WR-CALNAME:Fixtures Calendar
+TIMEZONE-ID:Europe/London
+X-WR-TIMEZONE:Europe/London
+BEGIN:VEVENT
+UID:081d5f3b-0f5b-4a90-aa7e-29a9c1b7ee46
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261129T160000
+DTEND;TZID=Europe/London:20261129T190000
+SUMMARY:Steelers vs Giants
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Belfast Giants \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/5a68c5e
+ 5-b948-5de9-b5f8-fb98465bea4e
+END:VEVENT
+BEGIN:VEVENT
+UID:5ce668f1-6afd-494b-83b4-f61ffe31dc11
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270321T160000
+DTEND;TZID=Europe/London:20270321T190000
+SUMMARY:Steelers vs Devils
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Cardiff Devils \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/38202ca
+ e-61a7-5afd-b67c-422924bdf244
+END:VEVENT
+BEGIN:VEVENT
+UID:20eda4d7-4a29-4e0d-9f48-bc2557a2a347
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270109T190000
+DTEND;TZID=Europe/London:20270109T220000
+SUMMARY:Steelers vs Flames
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Guildford Flames \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/9d134aa
+ f-7dca-50ef-af63-3e481a691dca
+END:VEVENT
+BEGIN:VEVENT
+UID:75d7d13d-a72d-490f-8307-b9cd3ab2f57c
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20260919T190000
+DTEND;TZID=Europe/London:20260919T220000
+SUMMARY:Steelers vs Panthers
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Nottingham Panthers \nHome cup Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/c8bcc9e
+ d-dd06-50d5-a824-79b8594c4a1c
+END:VEVENT
+BEGIN:VEVENT
+UID:4ede0ff7-ed42-41d3-90b0-b334a7dccc07
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20260830T160000
+DTEND;TZID=Europe/London:20260830T190000
+SUMMARY:Steelers vs Devils
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Cardiff Devils \nHome exhibition Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/a10338c
+ 3-88c8-4c84-8a9e-561488e7f416
+END:VEVENT
+BEGIN:VEVENT
+UID:4199b7e1-b5f3-42b4-97da-c3d894ba73c5
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261107T190000
+DTEND;TZID=Europe/London:20261107T220000
+SUMMARY:Steelers vs Storm
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Manchester Storm \nHome cup Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/4a18191
+ b-6c94-5cb6-9511-6a93bc132a74
+END:VEVENT
+BEGIN:VEVENT
+UID:7f3a34de-386b-4fde-9dcd-fad0b414cf64
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270103T160000
+DTEND;TZID=Europe/London:20270103T190000
+SUMMARY:Steelers vs Clan
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Glasgow Clan \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/92fd727
+ 2-9492-5bec-9f4e-8cf09c984525
+END:VEVENT
+BEGIN:VEVENT
+UID:77228a20-136f-4ab9-9f0b-331df72ffba8
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20260905T190000
+DTEND;TZID=Europe/London:20260905T220000
+SUMMARY:Steelers vs Storm
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Manchester Storm \nHome exhibition Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/6c43642
+ b-ef0d-4a11-ae37-5000df82a415
+END:VEVENT
+BEGIN:VEVENT
+UID:261b7b53-4613-4a52-8eb5-e1b92f6ab30c
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261010T190000
+DTEND;TZID=Europe/London:20261010T220000
+SUMMARY:Steelers vs Clan
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Glasgow Clan \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/b890176
+ e-2d58-5ef2-b63c-49acbcbfe088
+END:VEVENT
+BEGIN:VEVENT
+UID:e9577b3a-2060-4463-9223-5ce6d5b2438e
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20260926T190000
+DTEND;TZID=Europe/London:20260926T220000
+SUMMARY:Steelers vs Devils
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Cardiff Devils \nHome cup Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/c32d1a4
+ 7-631c-5bc0-8590-ccf9d71d64bd
+END:VEVENT
+BEGIN:VEVENT
+UID:f8b36282-87bd-48b3-bbc1-9661fd13c46b
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261025T160000
+DTEND;TZID=Europe/London:20261025T190000
+SUMMARY:Steelers vs Flyers
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Fife Flyers \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/8e228f0
+ 2-bac6-52a2-b1d9-696e12ad2387
+END:VEVENT
+BEGIN:VEVENT
+UID:c2afbf79-0992-4517-ba18-0d39585ec3f9
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270227T190000
+DTEND;TZID=Europe/London:20270227T220000
+SUMMARY:Steelers vs Panthers
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Nottingham Panthers \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/d7ecec9
+ 8-1d45-575f-9ab4-69cdc17416d1
+END:VEVENT
+BEGIN:VEVENT
+UID:e4c8340d-0691-4325-96aa-f1573c3a35fd
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270307T160000
+DTEND;TZID=Europe/London:20270307T190000
+SUMMARY:Steelers vs Giants
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Belfast Giants \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/39e9c25
+ c-f774-53ed-b740-dd64dbc0fde6
+END:VEVENT
+BEGIN:VEVENT
+UID:d56d5f41-02c4-426e-beea-422c92b46601
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270117T160000
+DTEND;TZID=Europe/London:20270117T190000
+SUMMARY:Steelers vs Flyers
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Fife Flyers \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/7ae4af7
+ a-9624-51a1-9c60-e4ca03e5b11d
+END:VEVENT
+BEGIN:VEVENT
+UID:b1dd6b8c-090f-418d-b905-807564f5ba88
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261018T160000
+DTEND;TZID=Europe/London:20261018T190000
+SUMMARY:Steelers vs Flames
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Guildford Flames \nHome cup Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/841892e
+ e-76d4-5013-9d44-032cc60854a3
+END:VEVENT
+BEGIN:VEVENT
+UID:5966f252-67f1-4683-82fe-41bf611b03de
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261205T190000
+DTEND;TZID=Europe/London:20261205T220000
+SUMMARY:Steelers vs Stars
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Dundee Stars \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/06ac3ae
+ b-9a18-5707-99bc-4f90e3f75c27
+END:VEVENT
+BEGIN:VEVENT
+UID:a97646ac-cae0-4a24-a1e1-4833c0fb86da
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270320T190000
+DTEND;TZID=Europe/London:20270320T220000
+SUMMARY:Steelers vs Devils
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Cardiff Devils \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/9a42291
+ 4-bff0-5109-8dd8-0b0a2fb67013
+END:VEVENT
+BEGIN:VEVENT
+UID:573acf60-fffe-41d3-a96e-76d969a18b83
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270221T160000
+DTEND;TZID=Europe/London:20270221T190000
+SUMMARY:Steelers vs Giants
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Belfast Giants \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/b0cece9
+ 6-0621-54ee-9acc-cec245187b23
+END:VEVENT
+BEGIN:VEVENT
+UID:ddb505dd-7d63-4df4-a232-b54c1564a380
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270207T160000
+DTEND;TZID=Europe/London:20270207T190000
+SUMMARY:Steelers vs Clan
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Glasgow Clan \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/4f94113
+ a-796d-59fc-a009-b36002159e26
+END:VEVENT
+BEGIN:VEVENT
+UID:88fd272e-2e3e-40e0-93dd-40179b9facdf
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261226T160000
+DTEND;TZID=Europe/London:20261226T190000
+SUMMARY:Steelers vs Panthers
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Nottingham Panthers \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/0899418
+ 0-f470-5e8b-a53d-5ba6a845e1b0
+END:VEVENT
+BEGIN:VEVENT
+UID:7ba3e9a6-f61f-4206-8494-d85621ad8068
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261115T160000
+DTEND;TZID=Europe/London:20261115T190000
+SUMMARY:Steelers vs Blaze
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Coventry Blaze \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/aef06a5
+ 8-c84c-52da-b13f-e99d592d7ba0
+END:VEVENT
+BEGIN:VEVENT
+UID:015f8b5f-8aac-4f33-b98e-4f8472944791
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261003T190000
+DTEND;TZID=Europe/London:20261003T220000
+SUMMARY:Steelers vs Flyers
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Fife Flyers \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/22edd3a
+ f-601e-57a3-8eaa-98a30bf1d0c9
+END:VEVENT
+BEGIN:VEVENT
+UID:38b2ff20-8c55-4b23-ab70-b5e66593a8f0
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261122T160000
+DTEND;TZID=Europe/London:20261122T190000
+SUMMARY:Steelers vs Devils
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Cardiff Devils \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/080dfa4
+ 4-d926-5ab0-99ba-77f14e49ba35
+END:VEVENT
+BEGIN:VEVENT
+UID:9cb5e8ad-53b9-4f65-8793-b6290280b630
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20260912T190000
+DTEND;TZID=Europe/London:20260912T220000
+SUMMARY:Steelers vs Blaze
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Coventry Blaze \nHome cup Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/6ca78b7
+ e-8f3c-544e-9263-d0bdd0b8b9c3
+END:VEVENT
+BEGIN:VEVENT
+UID:4089d69a-86cb-46cc-ba75-c0b48ac684ac
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270213T190000
+DTEND;TZID=Europe/London:20270213T220000
+SUMMARY:Steelers vs Stars
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Dundee Stars \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/ab6c75d
+ a-37b7-55bd-a27d-9a5b4b88ca7b
+END:VEVENT
+BEGIN:VEVENT
+UID:5b07c288-b75f-4df1-8b00-62ce0861329b
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270131T160000
+DTEND;TZID=Europe/London:20270131T190000
+SUMMARY:Steelers vs Flames
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Guildford Flames \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/0885275
+ 0-5735-580a-95ec-78171bf5983f
+END:VEVENT
+BEGIN:VEVENT
+UID:52dccc24-83b3-43f7-ace6-f94687ee6cce
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261028T193000
+DTEND;TZID=Europe/London:20261028T223000
+SUMMARY:Steelers vs Storm
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Manchester Storm \nHome cup Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/c4e1b24
+ 7-5644-5407-9b65-7f4131e42ba8
+END:VEVENT
+BEGIN:VEVENT
+UID:c5d93fb5-ac73-495f-afcd-e731c5ccdf32
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261031T190000
+DTEND;TZID=Europe/London:20261031T220000
+SUMMARY:Steelers vs Panthers
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Nottingham Panthers \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/f2ef66b
+ 2-e5cb-59cb-87c5-8dad1b204baf
+END:VEVENT
+BEGIN:VEVENT
+UID:8db84a99-e118-4d9e-aba5-8ccdc895ffd3
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261230T193000
+DTEND;TZID=Europe/London:20261230T223000
+SUMMARY:Steelers vs Storm
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Manchester Storm \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/4bdffc2
+ e-b953-5540-9d63-1fdb9edf1bb7
+END:VEVENT
+BEGIN:VEVENT
+UID:f9708a65-6846-4a3f-b2aa-59b4428c44bf
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20261219T190000
+DTEND;TZID=Europe/London:20261219T220000
+SUMMARY:Steelers vs Blaze
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Coventry Blaze \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/f23a88a
+ b-190e-549d-8682-e2a5e4fc34f5
+END:VEVENT
+BEGIN:VEVENT
+UID:b6ee8d17-dffe-4ab9-9ce3-2852911740b6
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270116T190000
+DTEND;TZID=Europe/London:20270116T220000
+SUMMARY:Steelers vs Stars
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Dundee Stars \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/1646008
+ 7-eebc-50ab-a339-91cd2d7abfaf
+END:VEVENT
+BEGIN:VEVENT
+UID:98e1f6a5-71e6-43de-9d6e-548d892bc05c
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270403T190000
+DTEND;TZID=Europe/London:20270403T220000
+SUMMARY:Steelers vs Blaze
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Coventry Blaze \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/1bfdce5
+ d-a3d5-5608-9f4f-8fda726cb12b
+END:VEVENT
+BEGIN:VEVENT
+UID:085d0daa-1dc0-4f92-b944-a05fc16259d4
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270314T160000
+DTEND;TZID=Europe/London:20270314T190000
+SUMMARY:Steelers vs Flames
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Guildford Flames \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/02dced0
+ a-7429-5f4b-992e-1efe6f2d6727
+END:VEVENT
+BEGIN:VEVENT
+UID:5ea0f601-59c2-4e03-bcc1-910c7373185c
+SEQUENCE:0
+DTSTAMP:20261103T004712
+DTSTART;TZID=Europe/London:20270327T190000
+DTEND;TZID=Europe/London:20270327T220000
+SUMMARY:Steelers vs Storm
+LOCATION:Utilita Arena\, Sheffield\, 45 Broughton Lane\, Sheffield\, S9 2D
+ F
+DESCRIPTION:Sheffield Steelers vs Manchester Storm \nHome league Game
+URL;VALUE=URI:https://hub.sheffieldsteelers.co.uk/tickets/purchase/362a358
+ d-285b-5861-8fa3-502e24867668
+END:VEVENT
+END:VCALENDAR
