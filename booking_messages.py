@@ -55,6 +55,11 @@ def register(app, db, Message, Booking, Change, current_client, admin_required):
                     db.session.commit()
                 except IntegrityError:
                     db.session.rollback()
+                    return redirect(target)
+                if role == 'admin':
+                    sent = app.extensions['client_booking_message_notice'](booking)
+                    if not sent:
+                        flash('Message saved, but its email notification could not be sent.', 'error')
                 flash('Message saved in this booking conversation.', 'success')
                 return redirect(target)
         query = Message.query.filter_by(booking_id=booking.id)

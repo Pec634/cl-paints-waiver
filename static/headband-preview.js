@@ -204,7 +204,7 @@
       const center=(measure(sequence[0]).left*scale+positions[positions.length-1]+measure(sequence[sequence.length-1]).right*scale)/2;
       return positions.map(position=>anchor+position-center);
     };
-    const mountDescription=words.length===3
+    const mountDescription=words.length===1 ? `Single word: ${words[0]}, centred across both coils.` : words.length===3
       ? `Left coil: ${words[0]}. Suspended middle word: ${words[1]}, joined by ${selectedShape || 'a shape you must select'}. Right coil: ${words[2]}.`
       : `Left coil: ${words[0] || 'first word'}. Right coil: ${words[1] || 'second word'}.`;
     canvas.setAttribute('aria-label','Illustrative headband preview: '+description+` ${boldColour} bold outline. ${shape ? shape+' between words. ' : ''}`+'Two fixed spring coils. '+mountDescription);
@@ -227,7 +227,7 @@
       const scale=Math.min(1.2,185/Math.max(...widths,1));
       groups.forEach((group,index)=>{
         const layout=layouts[index],box=layout.bounds(0,group.length-1);
-        const positions=packCurved(group,scale,box.bottom,coils[index]);
+        const positions=packCurved(group,scale,box.bottom,words.length===1 ? 400 : coils[index]);
         group.forEach((glyph,position)=>paintCurved(glyph,positions[position],box.bottom,scale));
       });
       if(selectedShape&&words.length===2)paintCurved(makeGlyph(' ',true),400,12,Math.min(scale,1));

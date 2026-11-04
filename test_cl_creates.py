@@ -320,9 +320,46 @@ class CreatesTest(unittest.TestCase):
         self.assertEqual(self.admin.get(label_path).status_code, 404)
         self.assertNotIn(b'Print shipping address', self.admin.get(path + '?popup=1').data)
 
+    def test_seven_character_single_word_is_accepted(self):
+        data = self.form()
+        data['wording'] = 'PAINTER'
+        self.client.post('/cl-creates', data=data)
+        self.assertEqual(self.Order.query.one().items[0]['wording'], 'PAINTER')
+
+    def test_postage_is_per_five_headbands_across_all_designs(self):
+        for quantity, expected in [(1, 11), (5, 31), (6, 42), (7, 47), (10, 62), (11, 73)]:
+            with self.subTest(quantity=quantity):
+                data = self.form()
+                data['quantity'] = str(quantity)
+                response = self.client.post('/cl-creates', data=data)
+                self.assertEqual(response.status_code, 302)
+                order = self.Order.query.order_by(self.Order.id.desc()).first()
+                self.assertEqual(float(order.total), expected)
+        data = self.form()
+        data.update(product=['custom', 'custom'], wording=['TEAM BLUE', 'TEAM PINK'],
+                    word_shape=['', ''], quantity=['3', '4'])
+        self.client.post('/cl-creates', data=data)
+        self.assertEqual(float(self.Order.query.order_by(self.Order.id.desc()).first().total), 47)
+
+    def test_postage_preview_counts_boxes_across_designs(self):
+        self.browser(self.client.get('/cl-creates').data, '''
+            const quantity = document.querySelector('[name=quantity]');
+            const summary = document.getElementById('creates-total');
+            quantity.value = '5'; input(quantity);
+            assert(summary.textContent.includes('£31.00') && summary.textContent.includes('for 1 box,'), 'Five headbands use one box');
+            quantity.value = '7'; input(quantity);
+            assert(summary.textContent.includes('£47.00') && summary.textContent.includes('for 2 boxes,'), 'Seven headbands use two boxes');
+            document.getElementById('add-line').click();
+            const second = document.querySelectorAll('[name=quantity]')[1];
+            second.value = '4'; input(second);
+            assert(summary.textContent.includes('£73.00') && summary.textContent.includes('for 3 boxes,'), 'All designs share the box count');
+            document.querySelectorAll('.remove-line')[1].click();
+            assert(summary.textContent.includes('£47.00'), 'Removing a design recalculates postage');
+        ''')
+
     def test_validation_and_paid_status(self):
         data = self.form()
-        for changes in [dict(wording='ABCDEFGHIJKL'), dict(wording='A B C D'), dict(quantity='0'), dict(postcode='BT1 1AA')]:
+        for changes in [dict(wording='ABCDEF'), dict(wording='A B C D'), dict(quantity='0'), dict(postcode='BT1 1AA')]:
             self.client.post('/cl-creates', data=dict(data, **changes))
             self.assertEqual(self.Order.query.count(), 0)
         self.assertEqual(self.client.post('/cl-creates', data={}).status_code, 400)

@@ -120,6 +120,11 @@ def render_notification(config, name, kind, reference, details, link, preview=Fa
     variables = dict(name=name, reference=reference, details=details)
     subject = config[f'notification_{kind}_subject'].format(**variables)
     body = config[f'notification_{kind}_body'].format(**variables)
+    if kind == 'booking':
+        if details.startswith('You have a new message from CL Paints.'):
+            subject = f'No-reply: New CL Paints message for booking {reference}'
+            body = f'Hello {name},\n\n{details}'
+        body += '\n\nPlease log in to your client portal to review this update. Do not reply to this automatic email.'
     heading = config['notification_heading'].format(**variables)
     footer = config['notification_footer'].format(**variables)
     colour = config['notification_colour']
@@ -175,7 +180,8 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         db.session.commit()
         details = '\n'.join(f'{key}: {value["before"]} → {value["after"]}' for key, value in changes.items())
         return notify(booking.email, booking.first_name, 'booking', booking.public_reference, details,
-                      url_for('client.booking_detail', booking_id=booking.id, _external=True), essential='Status' in changes)
+                      url_for('client.booking_detail', booking_id=booking.id, _external=True),
+                      essential='Status' in changes or before.get('Status') == 'Under Review')
     def reward(email, name, reference, details):
         return notify(email, name, 'reward', reference, details, url_for('client.rewards', _external=True))
     def reward_code(code, details):
@@ -229,6 +235,10 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         db.session.commit()
         return redirect(url_for('client.booking_detail', booking_id=booking_id))
     app.extensions['client_booking_updated'] = booking_updated
+    app.extensions['client_booking_message_notice'] = lambda booking: notify(
+        booking.email, booking.first_name, 'booking', booking.public_reference,
+        'You have a new message from CL Paints. Please log in to your client portal and open your booking conversation to read it. Do not reply to this automatic email.',
+        url_for('client_booking_messages', booking_id=booking.id, _external=True), essential=True)
     app.extensions['client_booking_review_requested'] = lambda booking: notify(booking.email, booking.first_name, 'booking', booking.public_reference,
         'CL Paints has entered this booking on your behalf. Your signature and agreement are still required. Please sign in to your client portal, review the booking details, and complete the client agreement. This booking is Under Review and is not confirmed.',
         url_for('client.booking_detail', booking_id=booking.id, _external=True), essential=True)

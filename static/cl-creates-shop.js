@@ -33,9 +33,11 @@ function updateCreates() {
   lines.querySelectorAll('[name=quantity]').forEach(input => quantity += Number(input.value) || 0);
   lines.querySelectorAll('[name=wording]').forEach(input => {
     const value = input.value;
-    input.setCustomValidity(value.trim().split(/\s+/).filter(Boolean).length < 2 ? 'Enter at least two words.' : [...value].filter(c => c !== ' ').length > 16 || (value.match(/ /g) || []).length > 2 ? 'Use up to 16 characters plus two spaces.' : '');
+    input.setCustomValidity(value.trim().split(/\s+/).filter(Boolean).length === 1 && [...value.trim()].length < 7 ? 'Single-word headbands require at least 7 characters.' : [...value].filter(c => c !== ' ').length > 16 || (value.match(/ /g) || []).length > 2 ? 'Use up to 16 characters plus two spaces.' : '');
   });
-  total.textContent = `Order total: £${((quantity * Math.round(Number(total.dataset.price) * 100) + (posting ? Math.round(Number(total.dataset.postage) * 100) : 0)) / 100).toFixed(2)}`;
+  const boxes = posting ? Math.ceil(Math.max(0, quantity) / 5) : 0;
+  const postage = boxes * Math.round(Number(total.dataset.postage) * 100);
+  total.textContent = `Order total: £${((quantity * Math.round(Number(total.dataset.price) * 100) + postage) / 100).toFixed(2)}${posting ? ` (postage: £${(postage / 100).toFixed(2)} for ${boxes} ${boxes === 1 ? 'box' : 'boxes'}, up to 5 headbands per box)` : ''}`;
 }
 document.getElementById('add-line').addEventListener('click', () => {
   if (lines.children.length >= 30) return;

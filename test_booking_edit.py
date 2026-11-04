@@ -60,6 +60,19 @@ class BookingEditTest(unittest.TestCase):
         self.assertNotIn(b'PRIVATE ADMIN NOTE', page.data)
         self.assertEqual(main.booking_lifecycle_models[0].query.filter_by(change_id=change.id).count(), 1)
 
+    def test_under_review_edit_emails_even_when_optional_updates_disabled(self):
+        Account = main.ClientAccount
+        account = Account.query.filter_by(email=self.booking.email).one()
+        main.db.session.add(main.ClientEmailPreference(client_id=account.id, booking_updates=False))
+        main.db.session.commit()
+        data, headers = self.payload()
+        data['rows'][0]['events'][0]['theme'] = 'Updated theme'
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            response = self.admin.post(self.path, headers=headers, json=data)
+            self.assertEqual(response.status_code, 200)
+            send.assert_called_once()
+            self.assertIn('log in', send.call_args.args[2])
+
     def test_auth_status_csrf_stale_and_invalid_inputs(self):
         self.assertEqual(main.app.test_client().get(self.path).status_code, 302)
         data, headers = self.payload()

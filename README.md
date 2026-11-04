@@ -530,3 +530,7 @@ and balance update, with a booking change record. Stale forms and repeated saves
 cannot duplicate the historical receipt. Unresolved online checkouts must be
 reconciled first. Corrections do not amend external SumUp invoices. Historical
 financial correction records also protect a booking from deletion.
+
+### Client portal notifications
+
+Booking edits under review and admin booking messages send automatic email notifications even if optional booking emails are disabled. Message notifications use a No-reply subject and direct clients to sign in to their booking conversation. Failed sends preserve the booking/message and report the failure to the admin.

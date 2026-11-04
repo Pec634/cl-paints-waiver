@@ -1543,8 +1543,6 @@ def booking_availability_check():
         return jsonify({"success": False, "error": "Choose a future event date."}), 400
     if requested_finish <= requested_start:
         return jsonify({"success": False, "error": "Finish time must be after start time."}), 400
-    if not data.get("address", "").strip() or not data.get("event_type", "").strip():
-        return jsonify({"success": False, "error": "Enter the event address and event type."}), 400
 
     start = datetime.combine(event_date, requested_start.time())
     finish = datetime.combine(event_date, requested_finish.time())

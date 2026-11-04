@@ -11,7 +11,7 @@
             const answer=await response.json();if(current!==version)return;
             if(!response.ok||!answer.success)throw new Error(answer.error||'Please try again.');
             result.textContent=answer.available?'Available to enquire. Your booking still needs confirmation.':'Please contact us about this date. We can discuss suitable arrangements.';
-            if(answer.available){link.href=form.dataset.bookingUrl+'?'+new URLSearchParams({preferred_date:data.date,preferred_start:data.start_time,preferred_finish:data.finish_time,preferred_type:data.event_type,preferred_address:data.address});link.hidden=false;}
+            if(answer.available){link.href=form.dataset.bookingUrl+'?'+new URLSearchParams({preferred_date:data.date,preferred_start:data.start_time,preferred_finish:data.finish_time});link.hidden=false;}
         }catch(error){if(current===version)result.textContent=error.message||'Availability could not be checked. Please contact CL Paints.';}
         finally{button.disabled=false;}
     });

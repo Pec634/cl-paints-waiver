@@ -1,5 +1,6 @@
 import re
 import unittest
+from unittest.mock import patch
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -20,6 +21,17 @@ class BookingMessagesTest(unittest.TestCase):
 
     def tearDown(self):
         self.fixture.tearDown()
+
+    def test_admin_message_emails_once_without_private_message_body(self):
+        data = self.data(self.admin, self.admin_path, 'Private message contents')
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            self.admin.post(self.admin_path, data=data)
+            self.admin.post(self.admin_path, data=data)
+            send.assert_called_once()
+            self.assertEqual(send.call_args.args[0], self.booking.email)
+            self.assertIn('No-reply:', send.call_args.args[1])
+            self.assertIn('log in', send.call_args.args[2])
+            self.assertNotIn('Private message contents', send.call_args.args[2])
 
     def data(self, client, path, body='Please confirm the venue.'):
         page = client.get(path)

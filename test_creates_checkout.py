@@ -101,6 +101,13 @@ class CreatesCheckoutTest(unittest.TestCase):
             amount=str(order.total),status=self.status,hosted_checkout_url='https://checkout.sumup.com/pay/abc123')
         return [data] if path.startswith('checkouts?') else data
 
+    def test_checkout_charges_two_boxes_for_seven_headbands(self):
+        _, order = self.draft(quantity='7')
+        self.assertEqual(order.total, Decimal('47'))
+        _, provider = self.checkout(order)
+        created = next(call for call in provider.call_args_list if call.args[0] == 'checkouts')
+        self.assertEqual(created.args[1]['amount'], 47.0)
+
     def draft(self,**changes):
         data=self.fixture.form();data.update(background_colour='Blue',bold_colour='Pink',colour='White',letter_finish='Glitter',glitter_colour='Gold')
         data.update(changes)
@@ -206,7 +213,7 @@ class CreatesCheckoutTest(unittest.TestCase):
     def test_spaces_require_selected_shape_before_checkout(self):
         response,order=self.draft(wording='HELLO',word_shape='')
         self.assertIsNone(order)
-        self.assertIn(b'at least two words',response.data)
+        self.assertIn(b'at least 7 characters',response.data)
         response,order=self.draft(wording='A B C',word_shape='')
         self.assertIsNone(order)
         self.assertIn(b'Choose a separator shape',response.data)

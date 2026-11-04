@@ -370,8 +370,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                 if len(colours) != len(ids) or len(finishes) != len(ids) or len(glitter_colours) != len(ids) or len(shapes) != len(ids):
                     raise ValueError('Choose a colour and letter finish for each headband.')
                 for pid, wording, quantity, colour, finish, glitter_colour, shape in zip(ids, words, quantities, colours, finishes, glitter_colours, shapes):
-                    if len(wording.split()) < 2:
-                        raise ValueError('Each headband requires at least two words.')
+                    if len(wording.split()) == 1 and len(wording.strip()) < 7:
+                        raise ValueError('Single-word headbands require at least 7 characters.')
                     if len(wording.split()) == 3 and not shape:
                         raise ValueError('Choose a separator shape for every three-word headband.')
                     if shape and shape not in available_shapes:
@@ -391,7 +391,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     if not 1 <= qty <= 100:
                         raise ValueError('Each quantity must be between 1 and 100.')
                     items.append(dict(product=product_name, wording=wording, background_colour=backgrounds[len(items)], bold_colour=bolds[len(items)], colour=colour, letter_finish=finish, glitter_colour=glitter_colour if finish == 'Glitter' else '', word_shape=shape if len(wording.split()) > 1 else '', quantity=qty, price=config['price']))
-                total = sum(i['quantity'] * money(i['price']) for i in items) + (money(config['postage']) if fulfilment == 'postage' else 0)
+                boxes = (sum(i['quantity'] for i in items) + 4) // 5
+                total = sum(i['quantity'] * money(i['price']) for i in items) + (boxes * money(config['postage']) if fulfilment == 'postage' else 0)
                 order = Order(first_name=first, last_name=last, email=email, address=address,
                               collection_slot_id=collection_slot_id, collection_snapshot=collection_snapshot,
                               checkout_token=secrets.token_urlsafe(32), submission_token=session['creates_submission'],
