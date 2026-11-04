@@ -315,7 +315,11 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
             selected=selected, event=event, latest=latest, values=values, result=totals(values),
             opening_fields=OPEN_FIELDS, closing_fields=CLOSE_FIELDS, history=records(booking),
             client_csrf=token, error=error, embedded=embedded, previous_safe=previous_safe,
-            safe_expected=safe_expected, cash_journal=journal))
+            safe_expected=safe_expected, cash_journal=journal,
+            previous_checks=sorted((row for row in current_checks()
+                if (row.booking_id, row.event_index, row.event_date) != key
+                and not row.values.get('no_cash_handled')),
+                key=lambda row: (row.event_date, row.id), reverse=True)))
         response.headers['Cache-Control'] = 'private, no-store'
         return response, 400 if error else 200
 

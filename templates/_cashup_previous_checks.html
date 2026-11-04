@@ -1,0 +1,21 @@
+<aside class="panel cashup-reference" aria-label="Previous till and safe checks">
+<h2>Previous till &amp; safe checks</h2>
+<p>Latest saved check for each other event. Opening amounts are float, not takings. Draft closing amounts are not confirmed.</p>
+<div class="cashup-reference-list">
+{% for record in previous_checks %}
+<article class="client-record">
+<h3>{{ record.event_date }} &middot; Day {{ record.event_index + 1 }}</h3>
+<p>Booking #{{ record.booking_id }} &middot; {{ record.phase }} &middot; Revision {{ record.revision }}</p>
+<dl class="cashup-check-amounts">
+<dt>Opening till</dt><dd>&pound;{{ '%.2f'|format(record.values.get('opening_till','0')|float) }}</dd>
+<dt>Opening safe</dt><dd>&pound;{{ '%.2f'|format(record.values.get('opening_safe','0')|float) }}</dd>
+<dt>Closing till{{ ' (draft)' if record.phase == 'Draft' else '' }}</dt><dd>{% if record.phase != 'Open' %}&pound;{{ '%.2f'|format(record.values.get('closing_till','0')|float) }}{% else %}Not counted{% endif %}</dd>
+<dt>Closing safe{{ ' (draft)' if record.phase == 'Draft' else '' }}</dt><dd>{% if record.phase != 'Open' %}&pound;{{ '%.2f'|format(record.values.get('closing_safe','0')|float) }}{% else %}Not counted{% endif %}</dd>
+</dl>
+<p>Opening checked by {{ record.values.get('opening_checked_by') or record.values.get('checked_by') }}<br>{{ record.values.get('opening_checked_at') or 'Time not recorded' }} (UK time)</p>
+{% if record.values.get('closing_checked_at') %}<p>Closing checked by {{ record.values.get('checked_by') }}<br>{{ record.values.closing_checked_at }} (UK time)</p>{% endif %}
+<a href="{{ url_for('admin_booking_cashup',booking_id=record.booking_id,record=record.id) }}" target="_blank" rel="noopener">Full saved check &amp; notes (new tab)</a>
+</article>
+{% else %}<p>No previous till or safe checks recorded for other events.</p>{% endfor %}
+</div>
+</aside>

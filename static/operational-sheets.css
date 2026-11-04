@@ -46,3 +46,18 @@
  [data-operational-sheet] .sheet-form-layout, [data-operational-sheet] .sheet-fields { grid-template-columns: minmax(0,1fr); }
  [data-operational-sheet] .sheet-form-layout > .panel { padding: 16px; }
 }
+/* Keep saved counts available beside the current cash-up. */
+.cashup-workspace { display:grid; grid-template-columns:minmax(0, 1fr) 320px; gap:20px; align-items:start; }
+.cashup-current { min-width:0; }
+.cashup-reference { position:sticky; top:0; min-width:0; margin:0; }
+.cashup-reference-list { max-height:65vh; overflow:auto; overscroll-behavior:contain; padding-right:8px; }
+.cashup-check-amounts { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+.cashup-check-amounts dd { margin:0; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cashup-reference h3 { font-size:1rem; }
+.cashup-steps { padding:12px; background:#edf3fb; border-radius:10px; }
+.cashup-current .sheet-form-layout, .cashup-current .sheet-closing-stage { grid-template-columns:minmax(0,1fr); }
+@media(max-width:850px) {
+ .cashup-workspace { grid-template-columns:minmax(0,1fr); }
+ .cashup-reference { position:static; grid-row:1; }
+ .cashup-reference-list { max-height:260px; }
+}
