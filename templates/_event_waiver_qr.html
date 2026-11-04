@@ -1,0 +1,24 @@
+<section class="panel" id="event-waiver-qr">
+    <h2>Waiver QR code &amp; printables</h2>
+    <p>Every event has its own QR code linking directly to its waiver.</p>
+    <form method="get" action="{{ url_for('admin_events', _anchor='event-waiver-qr') }}" class="client-form">
+        {% if archived_view %}<input type="hidden" name="view" value="archived">{% endif %}
+        <label>Select an event
+            <select name="waiver_event_id" required onchange="this.form.requestSubmit()">
+                <option value="">Choose an event</option>
+                {% for event in events %}<option value="{{ event.id }}" {% if waiver_qr_event and waiver_qr_event.id == event.id %}selected{% endif %}>{{ event.name }} &middot; {{ event.event_date.strftime('%d/%m/%Y') if event.event_date else 'No date' }} &middot; {{ event.status }}</option>{% endfor %}
+            </select>
+        </label>
+        <div><button class="btn" type="submit">Show waiver QR code</button></div>
+    </form>
+    {% if waiver_qr_event %}
+    <h3>{{ waiver_qr_event.name }}</h3>
+    <img src="{{ url_for('admin_event_waiver_qr', event_id=waiver_qr_event.id) }}" alt="Waiver QR for {{ waiver_qr_event.name }}" width="240" height="240" style="max-width:100%;height:auto;background:white">
+    <div class="paint-actions">
+        <a class="btn primary" href="{{ url_for('admin_event_waiver_print', event_id=waiver_qr_event.id) }}">Design &amp; print waiver sign</a>
+        <a class="btn" href="{{ url_for('admin_event_waiver_qr', event_id=waiver_qr_event.id) }}" download="waiver-event-{{ waiver_qr_event.id }}.svg">Download waiver QR code</a>
+        <a class="btn" href="{{ url_for('waiver_event', event_id=waiver_qr_event.id) }}" target="_blank" rel="noopener">Preview event waiver</a>
+    </div>
+    {% if waiver_qr_event.status == 'Archived' %}<p>This event is archived. Its public waiver link is closed.</p>{% endif %}
+    {% else %}<p>Choose an event to display its waiver QR code and design a printable sign.</p>{% endif %}
+</section>

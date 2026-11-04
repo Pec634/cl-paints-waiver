@@ -830,6 +830,29 @@ def event_moodboard(event_id):
     return response
 
 
+@app.get('/admin/events/<int:event_id>/waiver/qr')
+@admin_required
+def admin_event_waiver_qr(event_id):
+    from io import BytesIO
+    from flask import send_file
+    import qrcode
+    import qrcode.image.svg
+    db.get_or_404(Event, event_id)
+    output = BytesIO()
+    qrcode.make(url_for('waiver_event', event_id=event_id, _external=True),
+                image_factory=qrcode.image.svg.SvgPathImage).save(output)
+    output.seek(0)
+    return send_file(output, mimetype='image/svg+xml',
+                     download_name=f'waiver-event-{event_id}.svg')
+
+
+@app.get('/admin/events/<int:event_id>/waiver/print')
+@admin_required
+def admin_event_waiver_print(event_id):
+    event = db.get_or_404(Event, event_id)
+    return render_template('admin_waiver_printable.html', event=event)
+
+
 @app.get('/admin/events/<int:event_id>/moodboard/qr')
 @admin_required
 def admin_event_moodboard_qr(event_id):
@@ -2684,6 +2707,8 @@ def admin_events():
     loyalty_code = db.session.get(loyalty_models[0], loyalty_event.id) if loyalty_event else None
     moodboard_event_id = request.args.get('moodboard_event_id', type=int)
     moodboard_event = next((event for event in events if event.id == moodboard_event_id), None)
+    waiver_event_id = request.args.get('waiver_event_id', type=int)
+    waiver_qr_event = next((event for event in events if event.id == waiver_event_id), None)
 
     current_event = Event.query.filter_by(
         is_current=True
@@ -2721,7 +2746,7 @@ def admin_events():
         events=events,
         current_event=current_event, archived_view=archived_view,
         loyalty_event=loyalty_event, loyalty_code=loyalty_code,
-        moodboard_event=moodboard_event,
+        moodboard_event=moodboard_event, waiver_qr_event=waiver_qr_event,
         booking_choices=booking_choices, event_finances=event_finances,
         client_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32))
     )

@@ -51,6 +51,31 @@ class LoyaltyTest(unittest.TestCase):
     def post_scan(self, path, ids=None, **extras):
         return self.client.post(path, data=dict(csrf_token=self.fixture.csrf(), member_id=ids or [self.person.id], **extras))
 
+    def test_event_waiver_qr_targets_own_event_and_has_printable(self):
+        import qrcode
+        event, _ = self.event()
+        path = f'/admin/events/{event.id}/waiver'
+        with patch('qrcode.make', wraps=qrcode.make) as make:
+            response = self.admin.get(path + '/qr')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.mimetype, 'image/svg+xml')
+            self.assertTrue(make.call_args.args[0].endswith(f'/waiver/event/{event.id}'))
+        page = self.admin.get(f'/admin/events?waiver_event_id={event.id}')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn((path + '/qr').encode(), page.data)
+        self.assertIn((path + '/print').encode(), page.data)
+        printable = self.admin.get(path + '/print')
+        self.assertEqual(printable.status_code, 200)
+        self.assertIn(b'data-sign-kind="waiver"', printable.data)
+        self.assertIn((path + '/qr').encode(), printable.data)
+        anonymous = main.app.test_client()
+        self.assertEqual(anonymous.get(path + '/qr').status_code, 302)
+        self.assertEqual(anonymous.get(path + '/print').status_code, 302)
+        self.assertEqual(self.admin.get('/admin/events/999999/waiver/qr').status_code, 404)
+        event.status = 'Archived'
+        main.db.session.commit()
+        self.assertEqual(anonymous.get(f'/waiver/event/{event.id}').status_code, 410)
+
     def test_only_selected_once_per_event_and_csrf(self):
         event, path = self.event()
         self.assertEqual(self.client.get(path).status_code, 200)

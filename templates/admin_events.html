@@ -33,7 +33,7 @@ Event Management | CL Paints
         <section class="event-printables" aria-labelledby="event-printables-heading">
         {% if request.args.get('events_created') %}<p class="booking-admin-notice" role="status">{{ request.args.get('events_created') }} linked event(s) created. Existing event links were retained.</p>{% endif %}
         <div class="panel-heading"><div><h2 id="event-printables-heading">Event printables</h2><p>Choose an event, then design, download or print its signs.</p></div></div>
-        <div class="event-printables-grid">
+        <div class="event-printables-grid">{% include '_event_waiver_qr.html' %}
         <section class="panel" id="event-moodboard-qr">
             <h2>Moodboard QR code &amp; printables</h2>
             <p>Print a sign that customers can scan to view the designs selected for their event.</p>
@@ -106,7 +106,7 @@ Event Management | CL Paints
             <div class="panel-heading">
                 <div>
                     <h2>Create an event</h2>
-                    <p>New events are created closed, with a unique loyalty QR code ready for the event date.</p>
+                    <p>New events are created closed, with waiver, moodboard and loyalty QR codes ready to print.</p>
                 </div>
             </div>
 
@@ -169,7 +169,7 @@ Event Management | CL Paints
                             <th>Rename</th>
                             <th>Waiver Status</th>
                             <th>Waiver Link</th>
-                            <th>Moodboard &amp; loyalty</th>
+                            <th>Waiver, moodboard &amp; loyalty</th>
                             <th>Archive / delete</th>
                         </tr>
                     </thead>
@@ -284,14 +284,14 @@ Event Management | CL Paints
                                 </button>
                             </td>
 
-                            <td data-label="Moodboard & loyalty">
+                            <td data-label="Waiver, moodboard & loyalty">
                                 <a
                                     class="btn small"
                                     href="/admin/events/{{ event.id }}/moodboard"
                                 >
                                     Manage Moodboard
                                 </a>
-                                <a class="btn small" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Print moodboard QR</a>
+                                <a class="btn small" href="{{ url_for('admin_event_waiver_print', event_id=event.id) }}">Print waiver QR</a><a class="btn small" href="{{ url_for('admin_events', waiver_event_id=event.id, _anchor='event-waiver-qr') }}">Waiver QR &amp; download</a><a class="btn small" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Print moodboard QR</a>
                                 <a class="btn small" href="{{ url_for('loyalty.event_admin', event_id=event.id) }}">Loyalty QR &amp; visits</a>
                             </td>
 
