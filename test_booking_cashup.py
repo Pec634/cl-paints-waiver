@@ -58,6 +58,28 @@ class BookingCashupTest(unittest.TestCase):
         data.update(changes)
         return data
 
+    def test_opening_save_reports_missing_fields_and_submits_when_complete(self):
+        self.browser(self.admin.get(self.path).data, '''
+            const form=document.querySelector('[data-cashup-form]');
+            const button=form.querySelector('button[value="open"]');
+            let submitted=false;
+            form.addEventListener('submit',event=>{
+                if(!event.defaultPrevented) submitted=new FormData(form,event.submitter).get('action')==='open';
+                event.preventDefault();
+            });
+            button.click();
+            const feedback=form.querySelector('[role="alert"]');
+            assert(!submitted && !feedback.hidden, 'Missing checker must show an error summary');
+            assert(feedback.textContent.includes('Checked by'), 'Error must identify missing checker');
+            form.elements.checked_by.value='Test checker';
+            button.click();
+            assert(!submitted && feedback.textContent.includes('counted and checked'), 'Unchecked counts must be explained');
+            form.elements.till_checked.checked=true;
+            form.elements.safe_checked.checked=true;
+            button.click();
+            assert(submitted && feedback.hidden, 'Complete opening must submit with action=open, without closing fields');
+        ''')
+
     def opening(self, **changes):
         data = self.data(action='open', opening_till='50.00', opening_safe='100.00')
         page=self.admin.get(self.path+'?day='+str(changes.get('event_index','0'))).get_data(as_text=True)

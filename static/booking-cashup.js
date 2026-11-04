@@ -1,7 +1,35 @@
 (() => {
   const form = document.querySelector('[data-cashup-form]');
   const preview = document.querySelector('[data-cashup-preview]');
-  if (!form || !preview) return;
+  if (!form) return;
+  const feedback = document.createElement('p');
+  feedback.className = 'booking-admin-error sheet-wide';
+  feedback.setAttribute('role', 'alert');
+  feedback.setAttribute('tabindex', '-1');
+  feedback.hidden = true;
+  form.prepend(feedback);
+  // Report validation beside the save action, including fields out of view.
+  // Keep the normal POST and its submitter so the server receives action=open.
+  form.noValidate = true;
+  form.addEventListener('submit', event => {
+    const checking = ['open', 'close', 'correct'].includes(event.submitter?.value);
+    for (const name of ['till_checked', 'safe_checked']) {
+      form.elements.namedItem(name).required = checking;
+    }
+    const invalid = [...form.elements].filter(field => field.willValidate && !field.validity.valid);
+    if (!invalid.length) { feedback.hidden = true; return; }
+    event.preventDefault();
+    const names = invalid.map(field => {
+      const label = field.labels?.[0];
+      return label ? label.textContent.trim().replace(/\s+/g, ' ') : field.name;
+    });
+    feedback.textContent = 'Opening / closing checks have not been saved. Check: ' + names.join('; ') + '. ' + invalid[0].validationMessage;
+    feedback.hidden = false;
+    invalid[0].closest('details')?.setAttribute('open', '');
+    feedback.scrollIntoView({block: 'center'});
+    feedback.focus({preventScroll: true});
+  });
+  if (!preview) return;
   const currency = new Intl.NumberFormat('en-GB', {style: 'currency', currency: 'GBP'});
   const amount = name => {
     const input = form.elements.namedItem(name);
