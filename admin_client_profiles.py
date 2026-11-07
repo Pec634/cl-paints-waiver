@@ -100,7 +100,7 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
                 flash('Internal note added. It is visible only to admins.','success')
             return redirect(url_for('admin_client_profile',client_id=account.id,tab='notes'))
         tab=request.args.get('tab','bookings')
-        if tab not in ('bookings','payments','waivers','messages','rewards','notes'):
+        if tab not in ('bookings','payments','waivers','messages','rewards','notes','logins'):
             abort(400)
         page=max(1,request.args.get('page',1,type=int))
         email=account.email.strip().casefold()
@@ -121,6 +121,10 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
             outstanding=sum(payments[b.id]['outstanding'] for b in bookings if b.status in ('Accepted', 'Awaiting Payment')),unread=unread,
             review=sum(b.status=='Under Review' for b in bookings))
         query=None
+        LoginEvent = app.extensions['client_login_event_model']
+        login_query = LoginEvent.query.filter_by(client_id=account.id)
+        summary['login_count'], summary['last_login'] = db.session.query(
+            db.func.count(LoginEvent.id), db.func.max(LoginEvent.signed_in_at)).filter_by(client_id=account.id).one()
         if tab in ('bookings','payments'):
             query=booking_query.order_by(Booking.submitted_at.desc(),Booking.id.desc())
         elif tab=='waivers':
@@ -129,6 +133,8 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
             query=Message.query.filter(Message.booking_id.in_(ids)).order_by(Message.created_at.desc(),Message.id.desc())
         elif tab=='notes':
             query=Note.query.filter_by(client_id=account.id).order_by(Note.created_at.desc(),Note.id.desc())
+        elif tab=='logins':
+            query=login_query.order_by(LoginEvent.signed_in_at.desc(), LoginEvent.id.desc())
         members=[]
         if tab=='rewards':
             legacy_ids=Waiver.query.filter(db.func.lower(db.func.trim(Waiver.responsible_email))==email).with_entities(Waiver.id)

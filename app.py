@@ -348,6 +348,17 @@ class ClientAccount(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
 
+class ClientLoginEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('client_account.id'), nullable=False, index=True)
+    signed_in_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    method = db.Column(db.String(20), nullable=False)
+    remembered = db.Column(db.Boolean, nullable=False, default=False)
+
+
+app.extensions['client_login_event_model'] = ClientLoginEvent
+
+
 class ClientLoginCode(db.Model):
     id = db.Column(db.String(64), primary_key=True)
     email = db.Column(db.String(255), nullable=False, index=True)

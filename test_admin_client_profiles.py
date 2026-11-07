@@ -127,7 +127,8 @@ class AdminClientProfilesTest(unittest.TestCase):
         page=self.admin.get(self.path)
         browsers.NativeFormBrowserTest().browser(page.data, '''
             const nav=document.querySelector('nav[aria-label="Client profile sections"]');
-            assert(nav.querySelectorAll('a').length===6,'All profile sections available');
+            assert(nav.querySelectorAll('a').length===7,'All profile sections available');
+            assert(nav.querySelector('a[href*="tab=logins"]'),'Login history section available');
             assert(nav.querySelector('[aria-current="page"]').textContent==='Bookings','Current section announced');
             assert(nav.getBoundingClientRect().right<=innerWidth+1,'Section navigation fits phone width');
             assert(document.querySelector('.admin aside a[aria-current="page"]').textContent==='Clients','Clients navigation active');

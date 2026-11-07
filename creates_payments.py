@@ -97,6 +97,8 @@ def register(app, db, Order, notify, business_settings, admin_required):
     @app.route('/cl-creates/payment/<token>', methods=['GET','POST'])
     def creates_payment(token):
         order = Order.query.filter_by(checkout_token=token).first_or_404()
+        if order.archived_at:
+            abort(410, description='This order has expired. Please contact CL Creates to place a new order.')
         csrf = session.setdefault('creates_csrf', secrets.token_urlsafe(32))
         error = None
         if request.method == 'POST':
@@ -114,7 +116,7 @@ def register(app, db, Order, notify, business_settings, admin_required):
                         lead = app.extensions['creates_collection_lead_days']()
                         if not slot or slot.starts_at < datetime.utcnow()+timedelta(days=lead) or slot.starts_at.isoformat() != json.loads(order.collection_snapshot)['starts_at']:
                             raise ValueError('This collection game changed or is no longer available. Please contact CL Creates before paying.')
-                    claimed = Order.query.filter_by(id=order.id, checkout_started=False).update(
+                    claimed = Order.query.filter_by(id=order.id, checkout_started=False, archived_at=None, automation_claimed_at=None).update(
                         dict(checkout_started=True, merchant=os.environ['SUMUP_MERCHANT_CODE']), synchronize_session=False)
                     db.session.commit(); db.session.refresh(order)
                     if claimed:

@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block body %}<main id="portal-main">
+<section class="panel">
+<h1>{{ message.subject }}</h1>
+<pre style="white-space:pre-wrap">{{ message.body }}</pre>
+{% if message.viewed_at %}<p>Your first viewing was recorded on {{ message.viewed_at.strftime('%d/%m/%Y %H:%M') }} UTC.</p>
+{% else %}<p data-view-status role="status">CL Creates will be notified automatically when you view this message.</p>
+<form method="post" data-message-view><input type="hidden" name="csrf_token" value="{{ csrf }}"><noscript><p>Enable JavaScript for automatic viewing confirmation, or confirm below.</p><button class="btn primary">I've seen this message</button></noscript></form>
+<script src="{{ url_for('static', filename='creates-message-view.js') }}" defer></script>{% endif %}
+</section>
+</main>{% endblock %}

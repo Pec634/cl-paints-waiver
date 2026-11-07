@@ -9,4 +9,4 @@
 </div></details>
 <a href="{{ url_for('creates_collection') }}" {% if request.endpoint == 'creates_collection' %}aria-current="page"{% endif %}>Collection calendar</a><a href="{{ url_for('creates_shop') }}">View shop &nearr;</a>
 <a class="creates-admin-return" href="{{ url_for('admin_dashboard') }}">&larr; Admin</a>
-</nav>{% endif %}{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% block creates %}{% endblock %}</main></div>{% endblock %}
+</nav>{% endif %}{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% for notice in get_flashed_messages() %}<p class="booking-admin-notice" role="status">{{ notice }}</p>{% endfor %}{% block creates %}{% endblock %}</main></div>{% endblock %}

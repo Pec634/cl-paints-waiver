@@ -1,5 +1,6 @@
 """Email-code authentication and client-scoped views of management records."""
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from functools import wraps
 import hashlib
 import hmac
@@ -22,6 +23,11 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     def client_session_seconds():
         return remembered_seconds if session.get('client_remember') is True else session_seconds
     portal = Blueprint('client', __name__, url_prefix='/client')
+    LoginEvent = app.extensions['client_login_event_model']
+
+    @app.template_filter('client_login_time')
+    def client_login_time(value):
+        return value.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/London')).strftime('%d/%m/%Y %H:%M:%S %Z') if value else 'No recorded logins yet'
     def local_preview_enabled():
         if not app.debug or os.getenv('CLIENT_LOCAL_PREVIEW', '').lower() not in ('1','true') or os.getenv('RENDER'):
             return False
@@ -181,6 +187,9 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                     account = Account(email=challenge.email, first_name=challenge.first_name, last_name=challenge.last_name)
                     db.session.add(account)
                     db.session.flush()
+                db.session.add(LoginEvent(client_id=account.id, signed_in_at=datetime.utcnow(),
+                    method='signup' if challenge.mode == 'signup' else 'email_code',
+                    remembered=session.get('client_pending_remember', False) is True))
                 db.session.commit()
                 session.pop('client_challenge', None)
                 session['client_id'] = account.id
@@ -420,9 +429,14 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 ordering = [column.desc() for column in ordering]
             ordering.append(Account.id)
         pagination=account_query.order_by(*ordering).paginate(page=max(1,request.args.get('page',1,type=int)),per_page=24,error_out=False)
-        return render_template('admin_clients.html', clients=clients, client_rows=pagination.items,pagination=pagination,query=query,account_filter=account_filter,name_sort=name_sort,
+        login_stats = {row.client_id: row for row in db.session.query(LoginEvent.client_id,
+            db.func.count(LoginEvent.id).label('count'), db.func.max(LoginEvent.signed_in_at).label('latest')).filter(
+                LoginEvent.client_id.in_([account.id for account in pagination.items])).group_by(LoginEvent.client_id).all()}
+        response = app.make_response(render_template('admin_clients.html', clients=clients, client_rows=pagination.items,pagination=pagination,query=query,account_filter=account_filter,name_sort=name_sort,login_stats=login_stats,
                                enquiries=Enquiry.query.order_by(Enquiry.created_at.desc()).limit(5).all(),
-                               accounts={a.id: a for a in clients}, owners=Owner.query.all(), client_csrf=csrf())
+                               accounts={a.id: a for a in clients}, owners=Owner.query.all(), client_csrf=csrf()))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
     from studio_community import register as register_studio_community
     register_studio_community(app, portal, db, app.extensions['studio_community_models'], Account, client_required, check_csrf, admin_required)
     app.register_blueprint(portal)

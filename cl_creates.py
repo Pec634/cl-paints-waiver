@@ -49,16 +49,25 @@ def ensure_schema(db):
         upgrades = {'checkout_token':'VARCHAR(64)', 'submission_token':'VARCHAR(64)', 'provider_id':'VARCHAR(100)',
             'payment_url':'TEXT', 'merchant':'VARCHAR(100)', 'confirmation_dispatched':'BOOLEAN NOT NULL DEFAULT FALSE',
             'collection_slot_id':'INTEGER', 'collection_snapshot':"TEXT NOT NULL DEFAULT ''", 'checkout_started':'BOOLEAN NOT NULL DEFAULT FALSE',
-            'return_path':"TEXT NOT NULL DEFAULT '/'"}
+            'return_path':"TEXT NOT NULL DEFAULT '/'", 'archived_at':'TIMESTAMP', 'automation_claimed_at':'TIMESTAMP'}
         for name, definition in upgrades.items():
             if name not in columns:
                 connection.execute(text(f'ALTER TABLE creates_order ADD COLUMN {name} {definition}'))
         for name in ('checkout_token','submission_token','provider_id'):
             connection.execute(text(f'CREATE UNIQUE INDEX IF NOT EXISTS uq_creates_order_{name} ON creates_order ({name})'))
+        if inspector.has_table('creates_message'):
+            columns = {c['name'] for c in inspector.get_columns('creates_message')}
+            for name, definition in {'view_token':'VARCHAR(64)', 'viewed_at':'TIMESTAMP', 'automation_key':'VARCHAR(100)'}.items():
+                if name not in columns:
+                    connection.execute(text(f'ALTER TABLE creates_message ADD COLUMN {name} {definition}'))
+            for name in ('view_token', 'automation_key'):
+                connection.execute(text(f'CREATE UNIQUE INDEX IF NOT EXISTS uq_creates_message_{name} ON creates_message ({name})'))
 
 
 def define_models(db):
     class CreatesOrder(db.Model):
+        archived_at = db.Column(db.DateTime)
+        automation_claimed_at = db.Column(db.DateTime)
         id = db.Column(db.Integer, primary_key=True)
         created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
         first_name = db.Column(db.String(100), nullable=False)
@@ -91,6 +100,9 @@ def define_models(db):
         def items(self):
             return json.loads(self.items_json)
     class CreatesMessage(db.Model):
+        view_token = db.Column(db.String(64), unique=True)
+        viewed_at = db.Column(db.DateTime)
+        automation_key = db.Column(db.String(100), unique=True)
         id = db.Column(db.Integer, primary_key=True)
         order_id = db.Column(db.Integer, db.ForeignKey('creates_order.id'), nullable=False, index=True)
         created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -117,6 +129,9 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
     app.jinja_env.globals['creates_refund_policy'] = CUSTOM_REFUND_POLICY
     Order, Message, Product, LibraryImage = models
     defaults = {'price': '5.00', 'postage': '6.00', 'emails': True, 'collection_lead_days': 7,
+                'reminder_days': '', 'archive_days': 0, 'delete_days': 0,
+                'reminder_subject': 'Payment reminder for {order_number}',
+                'reminder_body': 'Hello {first_name},\n\nOrder {order_number} has an outstanding balance of GBP {balance}.\n{payment_url}\n\nThank you, CL Creates',
                 'subject': 'CL Creates {order_number}: {status}',
                 'body': 'Hello {first_name},\n\nYour order {order_number} is {status}.\nTotal: £{total}\n{invoice_url}\n{tracking}\n\nThank you, CL Creates'}
 
@@ -248,17 +263,31 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         except InvalidOperation:
             raise ValueError('Enter a valid amount.')
 
-    def communicate(order, subject, body, automated=False):
+    def communicate(order, subject, body, automated=False, automation_key=None):
         result = 'Disabled' if automated and not settings()['emails'] else 'Pending'
-        message = Message(order_id=order.id, subject=subject, body=body, result=result)
+        message = Message.query.filter_by(automation_key=automation_key).first() if automation_key else None
+        if message and message.result != 'Failed':
+            return message
+        if message is None:
+            message = Message(order_id=order.id, subject=subject, body=body, result=result,
+                              view_token=secrets.token_urlsafe(32), automation_key=automation_key)
+        else:
+            message.result = result
         db.session.add(message)
         db.session.commit()
         if result == 'Pending':
             try:
-                message.result = 'Sent' if send_email(order.email, subject, body) else 'Failed'
+                base = business_settings().get('public_app_url', '').rstrip('/')
+                link = base + url_for('creates_message_view', token=message.view_token) if base.startswith('https://') else ''
+                content = body + ('\n\nView message (CL Creates is notified when the message page is viewed): ' + link if link else '')
+                message.result = 'Sent' if send_email(order.email, subject, content) else 'Failed'
             except Exception:
                 message.result = 'Failed'
             db.session.commit()
+        return message
+
+    from creates_automation import register as register_automation
+    register_automation(app, db, Order, Message, settings, communicate, business_settings, admin_required, csrf)
 
     def status_email(order):
         if order.paid < order.total:
@@ -480,6 +509,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
     def creates_admin():
         token = csrf()
         query = Order.query
+        if not request.args.get('q', '').strip():
+            query = query.filter(Order.archived_at.is_(None))
         search = request.args.get('q', '').strip()
         if search:
             pattern = '%' + search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
@@ -632,9 +663,11 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     product = Product.query.get_or_404(request.form.get('product_id', type=int))
                     product.active = not product.active
                 else:
-                    config = dict(price=str(money(request.form.get('price', ''))), postage=str(money(request.form.get('postage', ''))),
+                    config = dict(config, price=str(money(request.form.get('price', ''))), postage=str(money(request.form.get('postage', ''))),
                                   collection_lead_days=int(request.form.get('collection_lead_days', config['collection_lead_days'])),
                                   emails=bool(request.form.get('emails')), subject=request.form.get('subject', ''), body=request.form.get('body', ''))
+                    from creates_automation import parse_settings
+                    config.update(parse_settings(request.form, config))
                     if not 0 <= config['collection_lead_days'] <= 90:
                         raise ValueError('Collection notice must be between 0 and 90 days.')
                     values = dict.fromkeys(('order_number', 'first_name', 'status', 'total', 'invoice_url', 'tracking'), 'Example')
