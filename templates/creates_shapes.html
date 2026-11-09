@@ -1,5 +1,36 @@
 {% extends 'creates_base.html' %}{% block creates %}
-<section class="panel"><h2>Shapes between words</h2><p>Add the shapes customers can choose for the spaces between words on their headbands. Customers can also keep plain spaces. Removing a shape affects new orders only.</p>
-<form method="post" class="client-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="add"><label>New shape name<input name="name" maxlength="40" placeholder="e.g. Butterfly" required></label><div><button class="btn primary" type="submit">Add shape</button></div></form>
-{% for shape in shapes %}<div class="client-record" style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px"><strong>{{ shape }}</strong><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="name" value="{{ shape }}"><button class="btn" type="submit" aria-label="Remove {{ shape }}">Remove</button></form></div>{% else %}<p>No shapes available. Customers can still order headbands with plain spaces.</p>{% endfor %}</section>
+<link rel="stylesheet" href="{{ url_for('static', filename='creates-shape-editor.css') }}">
+<section class="panel"><h2>Shapes between words</h2><p>Create a drawing, give it a name and save it. Customers will see the saved drawing in their headband preview. Removing a shape affects new orders only.</p>
+<form method="post" class="client-form" id="shape-editor">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="save"><input type="hidden" name="original" value="{{ request.form.get('original', '') }}"><input type="hidden" name="points" value="{{ request.form.get('points', '') }}">
+<h3 id="shape-editor-title">Create a shape</h3>
+<div class="shape-editor-layout"><div class="shape-editor-settings">
+<label>Shape name<input name="name" maxlength="40" placeholder="e.g. Oval" required value="{{ request.form.get('name', '') }}"></label>
+<div class="shape-controls"><label>Starting shape<select id="shape-preset">{% for kind in ['Oval','Circle','Heart','Star','Rectangle','Diamond'] %}<option value="{{ kind|lower }}">{{ kind }}</option>{% endfor %}</select></label><button type="button" class="btn" id="shape-use-preset">Use starting shape</button></div>
+<div class="shape-dimensions">
+<label for="shape-width">Width (mm)</label><input id="shape-width-range" aria-label="Width in millimetres" type="range" min="1" max="48" step="0.1" value="32"><input id="shape-width" type="number" min="1" max="48" step="0.1" value="32">
+<label for="shape-height">Height (mm)</label><input id="shape-height-range" aria-label="Height in millimetres" type="range" min="1" max="48" step="0.1" value="22"><input id="shape-height" type="number" min="1" max="48" step="0.1" value="22">
+<label for="shape-stroke">Stroke (px)</label><input id="shape-stroke-range" aria-label="Stroke width in pixels" type="range" min="0" max="20" step="0.1" value="7"><input id="shape-stroke" name="stroke_width" type="number" min="0" max="20" step="0.1" value="{{ request.form.get('stroke_width', '7') }}" required>
+</div>
+<p><output id="shape-measurements" for="shape-width shape-height" aria-live="polite"></output><br><small>Measurements are for the shape outline, excluding the backing and bold border. One design unit equals 1 mm. The shop preview scales the design to fit the headband.</small></p>
+<small>Stroke sets the bold border thickness. Use 0 for no bold border.</small>
+<fieldset class="shape-grid-controls"><legend>Canvas grid</legend><div class="shape-dimensions">
+<label for="shape-grid-spacing">Square size</label><input id="shape-grid-spacing" type="range" min="1" max="10" step="1" value="5"><output id="shape-grid-spacing-value" for="shape-grid-spacing">5 mm</output>
+<label for="shape-canvas-padding">Padding</label><input id="shape-canvas-padding" type="range" min="2" max="24" step="1" value="12"><output id="shape-canvas-padding-value" for="shape-canvas-padding">12 mm</output>
+</div><small>Padding adjusts the space around the drawing area. These controls change your view, keeping the saved shape measurements intact.</small></fieldset>
+<p id="shape-help">Drag a dot to change the outline. Click an edge to add a dot. Select a dot and use the arrow keys to move it, or Delete to remove it.</p>
+</div><div class="shape-editor-preview">
+<svg id="shape-canvas" viewBox="-40 -40 80 80" role="group" aria-label="Shape outline editor" aria-describedby="shape-help"></svg>
+<p id="shape-grid-scale">Each square represents 5 mm. Screen preview scales to fit.</p>
+<div class="shape-controls"><button type="button" class="btn" id="shape-delete-point">Remove selected dot</button><button type="button" class="btn" id="shape-undo">Undo</button></div>
+</div></div>
+<p id="shape-status" role="status" aria-live="polite"></p>
+<div class="shape-controls"><button class="btn primary" type="submit">Save shape</button><button class="btn" type="button" id="shape-new">Create another shape</button></div>
+</form></section>
+<section class="panel"><h2>Saved shapes</h2>
+{% for shape in shapes %}<div class="client-record shape-record"><div><strong>{{ shape }}</strong><span class="shape-thumbnail" data-shape-thumbnail="{{ shape }}"></span>{% if shape not in drawings and shape|lower not in ['heart','star'] %}<small>No drawing saved yet. Edit this shape to create one.</small>{% endif %}</div><div class="shape-controls"><button type="button" class="btn" data-edit-shape="{{ shape }}">Edit</button><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="name" value="{{ shape }}"><button class="btn" type="submit" aria-label="Remove {{ shape }}">Remove</button></form></div></div>{% else %}<p>No shapes saved yet.</p>{% endfor %}
+</section>
+<script id="creates-shape-drawings" type="application/json">{{ drawings|tojson }}</script>
+<script id="creates-shape-strokes" type="application/json">{{ strokes|tojson }}</script>
+<script src="{{ url_for('static', filename='creates-shape-editor.js') }}" defer></script>
 {% endblock %}

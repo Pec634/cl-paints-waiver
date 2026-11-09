@@ -1,4 +1,6 @@
 (() => {
+  const shapeDrawings = Object.assign(Object.create(null), JSON.parse(document.getElementById('creates-shape-drawings')?.textContent || '{}'));
+  const shapeStrokes = Object.assign(Object.create(null), JSON.parse(document.getElementById('creates-shape-strokes')?.textContent || '{}'));
   const colours = {black:'#20212a',white:'#f5f1e9',red:'#c92739',blue:'#2760b0',green:'#27845d',pink:'#ec71a7',purple:'#8652ae',gold:'#cda34e',silver:'#abb4c4','rose gold':'#c68d80',orange:'#ed8b32',yellow:'#efd04a'};
   function colour(value) {
     if (colours[value.toLowerCase()]) return colours[value.toLowerCase()];
@@ -25,7 +27,7 @@
       viewport.style.setProperty('--zoom-origin', `${x}% ${y}%`);
     });
   }
-  function render(line) {
+  function render(line, drawings=shapeDrawings, strokes=shapeStrokes) {
     let figure = line.querySelector('[data-headband-preview]');
     if (!figure) {
       figure = document.createElement('figure');
@@ -41,8 +43,8 @@
       viewport.append(canvas);
       const caption = document.createElement('figcaption');
       const title = document.createElement('strong');
-      title.textContent = 'Live design preview';
-      const description = document.createElement('p');
+      title.textContent = 'Your design at a glance';
+      const description = document.createElement('div');
       description.dataset.previewDescription = '';
       const disclaimer = document.createElement('p');
       disclaimer.className = 'headband-preview-disclaimer';
@@ -68,7 +70,7 @@
     const shape = selectedShape || (wording.split(/\s+/).filter(Boolean).length === 3 ? '?' : '');
     const glitter = finish === 'Glitter';
     const ink = glitter ? colour(glitterColour || 'Gold') : colour(letterColour);
-    const description = `${wording || 'Your wording'}: ${backgroundColour} background, ${boldColour} outline, ${glitter ? (glitterColour || 'Choose a colour') + ' glitter' : letterColour + ' plain'} letters${shape && wording.split(/\s+/).length > 1 ? '. ' + shape + ' shapes between words' : ''}.`;
+    let description = `${wording || 'Your wording'}: ${backgroundColour} background, ${boldColour} outline, ${glitter ? (glitterColour || 'Choose a colour') + ' glitter' : letterColour + ' plain'} letters${shape && wording.split(/\s+/).length > 1 ? '. ' + shape + ' shapes between words' : ''}.`;
     canvas.setAttribute('aria-label', 'Illustrative headband preview: ' + description);
     figure.querySelector('[data-preview-description]').textContent = description;
     ctx.clearRect(0, 0, 800, 500);
@@ -89,6 +91,12 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const words=(wording || 'YOUR WORDS').toUpperCase().split(/\s+/).filter(Boolean).slice(0,3);
+    for(const [kind,count] of [['word',words.length],['shape',selectedShape?words.length-1:0]]){
+      for(let index=1;index<=count;index++){
+        const value=line.querySelector(`[name=${kind}_colour_${index}]`)?.value;
+        if(value)description+=` ${kind==='word'?'Word':'Shape'} ${index}: ${value}${glitter?' glitter':''}.`;
+      }
+    }
     const coils=[290,510], coilTop=205;
     // Coil positions, wire colour and dimensions are hardware, not design options.
     for(const x of coils){
@@ -103,33 +111,43 @@
       };
       drawSpring('#a1a1aa',4);drawSpring('#15151a',2);
     }
-    let letterPaint=ink;
-    if(glitter){
+    const paints=new Map();
+    const makePaint=value=>{
+      if(!glitter)return value;
+      if(paints.has(value))return paints.get(value);
       const texture=document.createElement('canvas');texture.width=texture.height=32;
-      const paint=texture.getContext('2d');paint.fillStyle=ink;paint.fillRect(0,0,32,32);paint.fillStyle='#ffffffaa';
+      const paint=texture.getContext('2d');paint.fillStyle=value;paint.fillRect(0,0,32,32);paint.fillStyle='#ffffffaa';
       for(let fleck=0;fleck<28;fleck++)paint.fillRect((fleck*7)%32,(fleck*13)%32,1.2,1.2);
-      letterPaint=ctx.createPattern(texture,'repeat');
-    }
-    const makeGlyph=(token,isShape=false)=>{
+      const pattern=ctx.createPattern(texture,'repeat');paints.set(value,pattern);return pattern;
+    };
+    const letterPaint=makePaint(ink);
+    const makeGlyph=(token,isShape=false,index=0)=>{
       const name=isShape?shape:token;
       const font=isShape?'bold 11px Arial':'900 31px Georgia, serif';
       ctx.font=font;
       const metrics=ctx.measureText(name.slice(0,10));
-      const offset=isShape&&['heart','star'].includes(shape.toLowerCase())?0:(metrics.actualBoundingBoxRight-metrics.actualBoundingBoxLeft)/2;
-      return {token,name,isShape,font,offset};
+      const offset=isShape&&(drawings[shape]||['heart','star'].includes(shape.toLowerCase()))?0:(metrics.actualBoundingBoxRight-metrics.actualBoundingBoxLeft)/2;
+      const chosen=line.querySelector(`[name=${isShape?'shape':'word'}_colour_${index+1}]`)?.value;
+      return {token,name,isShape,font,offset,face:chosen?makePaint(colour(chosen)):letterPaint};
     };
     const paintGlyph=(paint,glyph,x,y,scale,base=baseInk,bold=boldInk,face=letterPaint,angle=0)=>{
       paint.save();paint.translate(x,y);paint.rotate(angle);paint.scale(scale,scale);paint.translate(-glyph.offset,0);
       paint.textAlign='center';paint.textBaseline='middle';paint.lineJoin='round';paint.font=glyph.font;
-      const pathShape=glyph.isShape&&['heart','star'].includes(shape.toLowerCase());
+      const customPoints=glyph.isShape ? drawings[shape] : null;
+      const pathShape=glyph.isShape&&(customPoints||['heart','star'].includes(shape.toLowerCase()));
       if(pathShape){
         paint.beginPath();
-        if(shape.toLowerCase()==='heart'){
+        if(customPoints){
+          customPoints.forEach(([x,y],index)=>index ? paint.lineTo(x,y) : paint.moveTo(x,y));paint.closePath();
+        }else if(shape.toLowerCase()==='heart'){
           paint.moveTo(0,12);paint.bezierCurveTo(-30,-6,-8,-23,0,-9);paint.bezierCurveTo(8,-23,30,-6,0,12);paint.closePath();
         }else{
           for(let point=0;point<10;point++){const theta=point*Math.PI/5-Math.PI/2,radius=point%2?7:16;paint.lineTo(Math.cos(theta)*radius,Math.sin(theta)*radius);}paint.closePath();
         }
-        paint.strokeStyle=base;paint.lineWidth=11;paint.stroke();paint.strokeStyle=bold;paint.lineWidth=7;paint.stroke();paint.fillStyle=face;paint.fill();
+        const stroke=strokes[shape]??7;
+        paint.strokeStyle=base;paint.lineWidth=stroke+4;paint.stroke();
+        if(stroke>0){paint.strokeStyle=bold;paint.lineWidth=stroke;paint.stroke();}
+        paint.fillStyle=face;paint.fill();
       }else{
         paint.strokeStyle=base;paint.lineWidth=11;paint.strokeText(glyph.name.slice(0,10),0,0);
         paint.strokeStyle=bold;paint.lineWidth=7;paint.strokeText(glyph.name.slice(0,10),0,0);
@@ -164,14 +182,14 @@
         bottom:Math.max(...sequence.slice(first,last+1).map(measure).map(value=>value.bottom))});
       return {positions,bounds};
     };
-    const letters=word=>Array.from(word).map(token=>makeGlyph(token));
+    const letters=(word,index=0)=>Array.from(word).map(token=>makeGlyph(token,false,index));
     // Distances follow the arc, so curvature does not squeeze the lettering.
     const curveRadius=330;
     const curveBaseline=coilTop-(curveRadius-Math.sqrt(curveRadius**2-(coils[1]-400)**2));
     const paintCurved=(glyph,x,bottom,scale)=>{
       const radius=curveRadius+bottom*scale-2;
       const angle=(x-400)/radius;
-      paintGlyph(ctx,glyph,400+radius*Math.sin(angle),curveBaseline+curveRadius-radius*Math.cos(angle),scale,baseInk,boldInk,letterPaint,angle);
+      paintGlyph(ctx,glyph,400+radius*Math.sin(angle),curveBaseline+curveRadius-radius*Math.cos(angle),scale,baseInk,boldInk,glyph.face,angle);
     };
     const packCurved=(sequence,scale,bottom,anchor)=>{
       const radius=curveRadius+bottom*scale-2,positions=[0];
@@ -208,10 +226,44 @@
       ? `Left coil: ${words[0]}. Suspended middle word: ${words[1]}, joined by ${selectedShape || 'a shape you must select'}. Right coil: ${words[2]}.`
       : `Left coil: ${words[0] || 'first word'}. Right coil: ${words[1] || 'second word'}.`;
     canvas.setAttribute('aria-label','Illustrative headband preview: '+description+` ${boldColour} bold outline. ${shape ? shape+' between words. ' : ''}`+'Two fixed spring coils. '+mountDescription);
-    figure.querySelector('[data-preview-description]').textContent=description;
+    const summary=figure.querySelector('[data-preview-description]');summary.replaceChildren();
+    const wordingSummary=document.createElement('p');wordingSummary.className='preview-wording';wordingSummary.textContent=wording||'Enter your wording to see your design';summary.append(wordingSummary);
+    const segments=document.createElement('div');segments.className='preview-summary-segments';summary.append(segments);
+    const makeSegment=heading=>{
+      const section=document.createElement('section'),title=document.createElement('h4'),details=document.createElement('dl');
+      section.className='preview-summary-segment';title.textContent=heading;details.className='preview-design-details';
+      section.append(title,details);segments.append(section);return details;
+    };
+    const addDetail=(details,label,value,swatch='')=>{
+      const row=document.createElement('div'),term=document.createElement('dt'),definition=document.createElement('dd');
+      term.textContent=label;
+      if(swatch){const chip=document.createElement('span');chip.className='preview-colour-swatch';chip.style.backgroundColor=colour(swatch);chip.setAttribute('aria-hidden','true');definition.append(chip);}
+      definition.append(document.createTextNode(value));row.append(term,definition);details.append(row);
+    };
+    const baseDetails=makeSegment('Headband & finish');
+    addDetail(baseDetails,'Headband','Black');
+    addDetail(baseDetails,'Background backing',backgroundColour,backgroundColour);
+    addDetail(baseDetails,'Bold border',boldColour,boldColour);
+    addDetail(baseDetails,'Finish',glitter?'Glitter':'Plain');
+    if(wording){
+      const originalWords=wording.split(/\s+/);
+      const wordDetails=makeSegment('Word colours');
+      const shapeDetails=originalWords.length>1?makeSegment('Shapes between words'):null;
+      originalWords.forEach((word,index)=>{
+        const wordColour=line.querySelector(`[name=word_colour_${index+1}]`)?.value||(glitter?glitterColour:letterColour);
+        addDetail(wordDetails,`Word ${index+1}: ${word}`,wordColour||'Choose a colour',wordColour);
+        if(index<originalWords.length-1){
+          if(selectedShape){
+            const shapeColour=line.querySelector(`[name=shape_colour_${index+1}]`)?.value||(glitter?glitterColour:letterColour);
+            addDetail(shapeDetails,`Shape ${index+1}: ${selectedShape}`,shapeColour||'Choose a colour',shapeColour);
+            const placement=document.createElement('small');placement.className='preview-shape-placement';placement.textContent=`Between words ${index+1} and ${index+2}`;shapeDetails.lastElementChild.querySelector('dt').append(placement);
+          }else addDetail(shapeDetails,`Between words ${index+1} and ${index+2}`,originalWords.length===3?'Choose a shape':'Plain space');
+        }
+      });
+    }
     if(words.length===3){
-      const first=letters(words[0]),middle=letters(words[1]),last=letters(words[2]);
-      const sequence=[...first,makeGlyph(' ',true),...middle,makeGlyph(' ',true),...last];
+      const first=letters(words[0],0),middle=letters(words[1],1),last=letters(words[2],2);
+      const sequence=[...first,makeGlyph(' ',true,0),...middle,makeGlyph(' ',true,1),...last];
       const layout=pack(sequence);
       const left=layout.bounds(0,first.length-1),right=layout.bounds(sequence.length-last.length,sequence.length-1);
       const leftCenter=(left.left+left.right)/2,rightCenter=(right.left+right.right)/2;
@@ -224,13 +276,20 @@
     }else{
       const groups=words.map(letters),layouts=groups.map(pack);
       const widths=layouts.map((layout,index)=>{const box=layout.bounds(0,groups[index].length-1);return box.right-box.left;});
-      const scale=Math.min(1.2,185/Math.max(...widths,1));
+      // A single backing must bridge both springs, with a little overhang.
+      // The per-coil width limit is only appropriate for separate words.
+      const scale=words.length===1
+        ? (coils[1]-coils[0]+50)/Math.max(widths[0],1)
+        : Math.min(1.2,185/Math.max(...widths,1));
       groups.forEach((group,index)=>{
         const layout=layouts[index],box=layout.bounds(0,group.length-1);
         const positions=packCurved(group,scale,box.bottom,words.length===1 ? 400 : coils[index]);
         group.forEach((glyph,position)=>paintCurved(glyph,positions[position],box.bottom,scale));
       });
-      if(selectedShape&&words.length===2)paintCurved(makeGlyph(' ',true),400,12,Math.min(scale,1));
+      if(selectedShape&&words.length===2){
+        const separator=makeGlyph(' ',true);
+        paintCurved(separator,400,measure(separator).bottom,Math.min(scale,1));
+      }
     }
     ctx.fillStyle = '#69718a';
     ctx.font = '15px Arial';

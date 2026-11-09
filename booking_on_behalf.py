@@ -61,7 +61,9 @@ def register(app, db, Booking, current_client, schedule, settings):
         booking.liability_acknowledged = True
         booking.is_over_18 = True
         booking.terms_accepted_at = datetime.utcnow()
-        booking.terms_version = '2026-10-01'
+        booking.terms_version = app.jinja_env.globals['booking_terms_version']()
+        data['booking_legal'] = app.extensions['booking_terms_snapshot']()
+        booking.event_schedule = json.dumps(data)
         app.extensions['client_booking_updated'](booking, before, schedule)
         db.session.commit()
         flash('Your signature and agreement have been saved. CL Paints will review and confirm your booking separately.', 'success')

@@ -41,6 +41,7 @@
             ('payments_overview', 'Payments, deposits & invoices', current in ['payments_overview','admin_payments','admin_booking_invoices']),
             ('admin_qr_analytics', 'QR analytics', current == 'admin_qr_analytics'),
             ('admin_settings', 'Settings', current == 'admin_settings' and request.args.get('tab')!='email'),
+            ('admin_booking_terms', 'Booking terms & conditions', current == 'admin_booking_terms'),
             ('studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin'),
             ('admin_website_builder', 'Website builder', current == 'admin_website_builder'),
             ('backups', 'Backup & recovery', current == 'backups'),

@@ -1,6 +1,7 @@
 const form = document.getElementById('creates-form');
 const lines = document.getElementById('creates-lines');
 const total = document.getElementById('creates-total');
+const partPalettes=JSON.parse(document.getElementById('creates-part-palettes').textContent);
 function updateCreates() {
   const posting = form.fulfilment.value === 'postage';
   document.getElementById('shipping').disabled = !posting;
@@ -28,12 +29,35 @@ function updateCreates() {
     const glitter = line.querySelector('[name=letter_finish]').value === 'Glitter';
     line.querySelector('[data-glitter-colour]').hidden = !glitter;
     line.querySelector('[name=glitter_colour]').required = glitter;
+    const words=line.querySelector('[name=wording]').value.trim().split(/\s+/).filter(Boolean);
+    const palette=glitter?partPalettes.glitter:partPalettes.headband;
+    line.querySelectorAll('[data-part-colour]').forEach(label=>{
+      const index=Number(label.dataset.partIndex),isWord=label.dataset.partColour==='word';
+      label.hidden=isWord?index>words.length:!separator.value||index>=words.length;
+      const select=label.querySelector('select'),current=select.value;
+      if(JSON.stringify([...select.options].slice(1).map(option=>option.value))!==JSON.stringify(palette)){
+        select.replaceChildren(new Option('Use overall colour',''),...palette.map(value=>new Option(value,value)));
+        select.value=palette.includes(current)?current:'';
+      }
+      label.querySelector('[data-part-label]').textContent=isWord?`Word ${index}${words[index-1]?' ('+words[index-1]+')':''} colour`:`Shape ${index} (between words ${index} and ${index+1}) colour`;
+    });
     if (window.renderHeadbandPreview) window.renderHeadbandPreview(line);
   });
   lines.querySelectorAll('[name=quantity]').forEach(input => quantity += Number(input.value) || 0);
-  lines.querySelectorAll('[name=wording]').forEach(input => {
+  lines.querySelectorAll('[name=wording]').forEach((input,index) => {
     const value = input.value;
-    input.setCustomValidity(value.trim().split(/\s+/).filter(Boolean).length === 1 && [...value.trim()].length < 7 ? 'Single-word headbands require at least 7 characters.' : [...value].filter(c => c !== ' ').length > 16 || (value.match(/ /g) || []).length > 2 ? 'Use up to 16 characters plus two spaces.' : '');
+    const missing=7-[...value.trim()].length;
+    const tooShort=value.trim().split(/\s+/).filter(Boolean).length===1&&missing>0;
+    const message=tooShort?`A single word must have at least 7 characters. Add ${missing} more character${missing===1?'':'s'}.`:[...value].filter(c=>c!==' ').length>16||(value.match(/ /g)||[]).length>2?'Use up to 16 characters plus two spaces.':'';
+    input.setCustomValidity(message);
+    input.setAttribute('aria-invalid',String(Boolean(message)));
+    input.classList.toggle('creates-wording-invalid',Boolean(message));
+    let warning=input.parentElement.querySelector('[data-wording-warning]');
+    if(!warning){warning=document.createElement('small');warning.dataset.wordingWarning='';warning.setAttribute('role','status');warning.setAttribute('aria-live','polite');input.after(warning);}
+    warning.id=`creates-wording-error-${index+1}`;
+    const descriptions=(input.getAttribute('aria-describedby')||'').split(/\s+/).filter(id=>id&&!id.startsWith('creates-wording-error-'));
+    input.setAttribute('aria-describedby',[...descriptions,warning.id].join(' '));
+    warning.textContent=message;warning.hidden=!message;
   });
   const boxes = posting ? Math.ceil(Math.max(0, quantity) / 5) : 0;
   const postage = boxes * Math.round(Number(total.dataset.postage) * 100);

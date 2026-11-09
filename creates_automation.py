@@ -5,6 +5,24 @@ import secrets
 import click
 from flask import abort, has_request_context, make_response, redirect, render_template, request, session, url_for
 from sqlalchemy import or_
+from datetime import timezone
+from zoneinfo import ZoneInfo
+from threading import Event, Lock, Thread
+
+
+def working_day_time(created_at, days):
+    """Add Monday–Friday days, preserving the placement time in the UK."""
+    local = created_at.replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Europe/London')) if created_at.tzinfo is None else created_at.astimezone(ZoneInfo('Europe/London'))
+    remaining = days
+    while remaining:
+        local += timedelta(days=1)
+        if local.weekday() < 5:
+            remaining -= 1
+    return local.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def unpaid_deadline(created_at):
+    return working_day_time(created_at, 3)
 
 
 def parse_settings(form, current):
@@ -40,6 +58,7 @@ def parse_settings(form, current):
 
 
 def register(app, db, Order, Message, settings, communicate, business_settings, admin_required, csrf):
+    app.jinja_env.globals['creates_payment_deadline'] = lambda order: unpaid_deadline(order.created_at).replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Europe/London'))
     @app.route('/cl-creates/message/<token>', methods=['GET', 'POST'])
     def creates_message_view(token):
         message = Message.query.filter_by(view_token=token).first_or_404()
@@ -58,13 +77,13 @@ def register(app, db, Order, Message, settings, communicate, business_settings, 
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
         return response
 
-    def process(apply=False, now=None):
+    def process(apply=False, now=None, expiry_only=False):
         if has_request_context():
-            return process_orders(apply, now)
+            return process_orders(apply, now, expiry_only)
         with app.test_request_context('/'):
-            return process_orders(apply, now)
+            return process_orders(apply, now, expiry_only)
 
-    def process_orders(apply=False, now=None):
+    def process_orders(apply=False, now=None, expiry_only=False):
         now = now or datetime.utcnow()
         config = settings()
         report = dict(reminders=0, archived=0, deleted=0, protected=0, errors=0)
@@ -74,6 +93,16 @@ def register(app, db, Order, Message, settings, communicate, business_settings, 
         days = [int(day) for day in config['reminder_days'].split(',') if day]
         orders = Order.query.filter(Order.paid < Order.total, Order.status.in_(('Under review', 'Awaiting payment'))).order_by(Order.id).all()
         for order in orders:
+            expired = order.status == 'Awaiting payment' and unpaid_deadline(order.created_at) <= now
+            reminder_due = order.status == 'Awaiting payment' and working_day_time(order.created_at, 2) <= now
+            if expiry_only and not (expired or reminder_due):
+                continue
+            if expiry_only and not expired:
+                previous = Message.query.filter_by(automation_key=f'payment-day2:{order.id}').first()
+                if previous and previous.result != 'Failed':
+                    continue
+                if not config['emails'] or order.archived_at or order.paid or order.invoice_url or order.invoice_reference:
+                    continue
             order_id = order.id
             claimed = False
             try:
@@ -94,10 +123,29 @@ def register(app, db, Order, Message, settings, communicate, business_settings, 
                         continue
                 if order.paid >= order.total:
                     continue
+                expired = order.status == 'Awaiting payment' and unpaid_deadline(order.created_at) <= now
+                if expired:
+                    if order.paid or order.invoice_url or order.invoice_reference:
+                        report['protected'] += 1
+                        continue
+                    if apply:
+                        app.extensions['creates_deactivate_unpaid_checkout'](order)
+                        order = Order.query.filter_by(id=order_id).populate_existing().with_for_update().first()
+                        if order is None:
+                            continue
+                        if order.paid or order.status != 'Awaiting payment' or order.invoice_url or order.invoice_reference:
+                            report['protected'] += 1
+                            continue
+                        Message.query.filter_by(order_id=order_id).delete(synchronize_session=False)
+                        db.session.delete(order)
+                        db.session.commit()
+                        app.logger.info('CL Creates deleted unpaid order %s after three working days', order_id)
+                    report['deleted'] += 1
+                    continue
                 age = (now - order.created_at).total_seconds() / 86400
                 # Never remove a record while an external payment can still arrive.
                 protected = bool(order.checkout_started or order.provider_id or order.payment_url or order.invoice_url or order.invoice_reference or order.paid)
-                if config['archive_days'] and age >= config['archive_days']:
+                if order.status != 'Awaiting payment' and config['archive_days'] and age >= config['archive_days']:
                     if protected:
                         report['protected'] += 1
                     else:
@@ -116,6 +164,37 @@ def register(app, db, Order, Message, settings, communicate, business_settings, 
                         if apply:
                             db.session.commit()
                         continue
+                if order.status == 'Awaiting payment':
+                    if not reminder_due or order.archived_at or order.paid or order.invoice_url or order.invoice_reference or not config['emails']:
+                        continue
+                    key = f'payment-day2:{order.id}'
+                    previous = Message.query.filter_by(automation_key=key).first()
+                    if previous and previous.result != 'Failed':
+                        continue
+                    if not valid_base or not order.checkout_token:
+                        report['errors'] += 1
+                        app.logger.warning('CL Creates day-two reminder needs a private payment link and HTTPS public app URL for order %s', order_id)
+                        continue
+                    deadline = unpaid_deadline(order.created_at).replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Europe/London')).strftime('%A %d %B %Y at %H:%M')
+                    subject = 'Your CL Creates order is waiting for payment'
+                    body = (f'Hello {order.first_name},\n\n'
+                            'Your custom headband order is saved, but we have not received your payment.\n\n'
+                            f'Amount to pay: GBP {order.total - order.paid:.2f}\n'
+                            f'Please pay by {deadline} UK time to keep your order.\n\n'
+                            'Continue your order and pay securely here:\n'
+                            f'{base}/cl-creates/payment/{order.checkout_token}\n\n'
+                            'Unpaid orders are automatically cancelled and permanently deleted after '
+                            '3 working days (Monday–Friday, excluding weekends). '
+                            'If payment is not received by the deadline, your saved design and order details will be removed and you will need to place a new order.\n\n'
+                            'If you have already paid, please open the link to check your payment status or contact CL Creates. Please do not pay twice.\n\n'
+                            'Thank you,\nCL Creates')
+                    if apply:
+                        message = communicate(order, subject, body, True, key)
+                        if message.result != 'Sent':
+                            report['errors'] += 1
+                            continue
+                    report['reminders'] += 1
+                    continue
                 if order.archived_at or not days or not config['emails'] or not valid_base:
                     continue
                 due = [day for day in days if age >= day]
@@ -150,6 +229,34 @@ def register(app, db, Order, Message, settings, communicate, business_settings, 
         return report
 
     app.extensions['creates_automation'] = process
+
+    # Start lazily in serving processes, avoiding import-time threads in CLI jobs.
+    worker_lock = Lock()
+    worker_started = False
+    worker_stop = Event()
+    app.extensions['creates_expiry_stop'] = worker_stop
+
+    def expiry_worker():
+        if worker_stop.wait(5):
+            return
+        while not worker_stop.is_set():
+            try:
+                with app.app_context():
+                    process(apply=True, expiry_only=True)
+            except Exception:
+                app.logger.exception('CL Creates unpaid-order expiry check failed')
+            if worker_stop.wait(300):
+                return
+
+    @app.before_request
+    def start_expiry_worker():
+        nonlocal worker_started
+        if app.testing or db.engine.url.database in (None, '', ':memory:'):
+            return
+        with worker_lock:
+            if not worker_started:
+                Thread(target=expiry_worker, name='creates-unpaid-expiry', daemon=True).start()
+                worker_started = True
 
     @app.cli.command('process-creates-orders')
     @click.option('--apply', is_flag=True, help='Send due reminders and apply configured retention; otherwise preview only.')

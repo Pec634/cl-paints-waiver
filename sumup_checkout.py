@@ -30,11 +30,11 @@ def define_model(db):
     return SumupCheckout
 
 
-def provider_request(path,payload=None):
+def provider_request(path,payload=None,method=None):
     key=os.getenv('SUMUP_API_KEY','')
     if not key:raise ValueError('SumUp online payments have not been configured.')
     req=Request('https://api.sumup.com/v0.1/'+path,data=json.dumps(payload).encode() if payload is not None else None,
-        headers={'Authorization':'Bearer '+key,'Content-Type':'application/json','Accept':'application/json'},method='POST' if payload is not None else 'GET')
+        headers={'Authorization':'Bearer '+key,'Content-Type':'application/json','Accept':'application/json'},method=method or ('POST' if payload is not None else 'GET'))
     try:
         with urlopen(req,timeout=10) as response:
             data=json.loads(response.read(100001))

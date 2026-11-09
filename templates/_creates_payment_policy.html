@@ -1,0 +1,5 @@
+<section class="creates-payment-policy" aria-label="Payment deadline and cancellation">
+<h3>Pay within 3 working days to keep your order</h3>
+<ul><li>We save your design while you arrange payment.</li><li>If you have not paid, we email a reminder on the <strong>second working day</strong>, with a link to return and pay.</li><li>After <strong>3 working days</strong> without payment, your order is <strong>cancelled and permanently deleted</strong>. You will need to place a new order.</li></ul>
+<p>Working days are Monday–Friday, excluding weekends.{% if order is defined and order.paid == 0 %} Your payment deadline is <strong>{{ creates_payment_deadline(order).strftime('%A %d %B %Y at %H:%M') }}</strong> UK time.{% endif %}</p>
+</section>

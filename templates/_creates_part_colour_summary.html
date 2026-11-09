@@ -1,0 +1,1 @@
+{% if item.get('word_colours') or item.get('shape_colours') %}<span class="creates-part-colour-summary">{% for part_colour in item.get('word_colours', []) %}<br>Word {{ loop.index }} colour: {{ part_colour }}{% endfor %}{% for part_colour in item.get('shape_colours', []) %}<br>Shape {{ loop.index }} colour: {{ part_colour }}{% endfor %}</span>{% endif %}

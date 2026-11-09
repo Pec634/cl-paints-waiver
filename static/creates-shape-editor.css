@@ -1,0 +1,27 @@
+#shape-canvas{display:block;width:min(100%,440px);aspect-ratio:1;background:#faf7fc;border:1px solid #c8bdd1;border-radius:12px;touch-action:none}
+#shape-canvas polygon{fill:#edb4d2;stroke:#30263a;stroke-width:.5;cursor:crosshair}
+#shape-canvas circle{fill:white;stroke:#67417f;stroke-width:.3;cursor:grab}
+#shape-canvas circle[aria-pressed=true],#shape-canvas circle:focus{fill:#e73e91;stroke:#241230;stroke-width:.5;outline:none}
+.shape-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.shape-controls label{flex:1;min-width:120px}.shape-record{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.shape-thumbnail{display:inline-block;vertical-align:middle;margin:0 12px}.shape-thumbnail svg{width:64px;height:64px}.shape-record small{display:block}
+#shape-editor{max-width:940px;gap:10px}
+.shape-editor-layout{display:grid;grid-template-columns:minmax(250px,1fr) minmax(280px,440px);gap:22px;align-items:start}
+#shape-editor .shape-editor-settings{display:grid;gap:12px;min-width:0}
+#shape-editor label{margin:0;font-size:.88rem}
+#shape-editor input:not([type=hidden]):not([type=range]),#shape-editor select{box-sizing:border-box;padding:7px 9px;min-height:36px;margin:0;border-radius:6px}
+#shape-editor input[name=name]{width:100%;max-width:280px}
+#shape-editor .shape-controls{gap:8px;margin:0}
+#shape-editor .shape-controls label{flex:0 1 170px;min-width:100px}
+#shape-editor .shape-controls select{width:100%}
+#shape-editor .btn{width:auto;min-height:36px;padding:7px 10px;font-size:.85rem}
+#shape-editor .shape-dimensions{display:grid;grid-template-columns:82px minmax(65px,1fr) 72px;gap:10px 8px;align-items:center}
+#shape-editor .shape-dimensions input[type=number]{width:72px;min-width:0}
+#shape-editor input[type=range]{width:100%;min-width:0;min-height:28px;padding:0;margin:0;accent-color:#b71963;cursor:pointer}
+#shape-editor p{margin:0;font-size:.85rem;line-height:1.5}
+#shape-editor small{font-size:.78rem;line-height:1.5;color:#626070}
+#shape-editor .shape-grid-controls{min-width:0;padding:10px;margin:0;border:1px solid #d8d0df;border-radius:8px}
+#shape-editor .shape-grid-controls legend{font-size:.85rem;font-weight:600}
+#shape-editor .shape-grid-controls output{font-size:.85rem;white-space:nowrap}
+#shape-editor .shape-editor-preview{display:grid;gap:10px;min-width:0}
+#shape-editor #shape-canvas{width:100%;max-width:440px}
+#shape-grid-scale{color:#626070}
+@media(max-width:1000px){.shape-editor-layout{grid-template-columns:minmax(0,1fr);gap:16px}#shape-editor .shape-editor-settings{max-width:440px}#shape-editor .shape-editor-preview{max-width:440px}}

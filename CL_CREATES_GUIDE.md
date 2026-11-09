@@ -4,6 +4,14 @@ Restart the application to create the four new database tables. Existing booking
 
 Startup also upgrades existing CL Creates orders with the acknowledgement field. Older orders are labelled as having no recorded acknowledgement; their customer details, totals and payment records are preserved. The upgrade can safely run on every restart.
 
+## Shape creator
+
+Width and height have synchronised sliders and compact number fields in millimetres; stroke uses pixels. The canvas grid starts at 5 mm squares. Change **Square size** to adjust grid spacing and **Padding** to adjust the viewing margin. These canvas controls preserve the shape's saved measurements. The screen view scales to fit, so the grid labels provide the design scale rather than a physical ruler on your monitor.
+
+Open **CL Creates → Shop setup → Shapes**. Choose a starting shape (Oval, Circle, Heart, Star, Rectangle or Diamond), adjust its width and height, and drag outline dots to customise it. Click near an edge to add a dot; select a dot and use the arrow keys to move it or Delete to remove it. Undo restores the previous outline.
+
+Enter a custom name and click **Save shape**. The shop dropdown and headband preview use the saved drawing. Use **Edit** beside a saved shape to change its drawing or name, including adding drawings for older name-only shapes. **Create another shape** starts a new entry. New orders retain a copy of the selected custom outline so later changes do not alter their recorded design. Drawings are stored in database settings and require no database migration.
+
 ## Image library
 
 The **CL Creates image library** supports up to ten uploads at once, previews, captions, public gallery visibility, and permanent deletion. Files must be valid JPEG, PNG or WebP images, at most 5 MB and 20 megapixels each. Uploads are resized, metadata is removed, and image content is validated before storage. Images are stored in the database; include the new image table in backups.
@@ -30,7 +38,7 @@ Opening the admin orders dashboard checks outstanding checkouts for the displaye
 
 For unattended recovery across all outstanding orders, schedule `python -m flask --app app sync-creates-payments` on the application server, for example every five minutes, using the same environment and database as the running application. The command reports checked and recorded payments and exits with an error if any cannot be verified. Adding the command does not itself install a scheduled job. Separate invoice links and card-reader payments are not automatically matched by customer name or amount.
 
-Open an unpaid order marked **Under review** to use **Delete order**. Tick the confirmation checkbox to permanently remove the order and its communication history. Orders with a recorded payment or a later status cannot be deleted. Resolve any attached invoice in SumUp and remove its link/reference before deleting; deletion does not cancel a SumUp invoice.
+Open an unpaid order marked **Under review** or **Awaiting payment** to use **Delete order**. Tick the confirmation checkbox to permanently remove the order and its communication history. For online checkouts, deletion checks for payment, deactivates the unpaid SumUp checkout and verifies that it is expired before removing the order. If SumUp is unavailable or the checkout remains active, the order is kept. Orders with any recorded payment or a later status cannot be deleted. Resolve any attached invoice in SumUp and remove its link/reference before deleting; deletion does not cancel a SumUp invoice.
 
 Status choices are Under review, Paid, In production, Shipped and Ready for collection. Full recorded payment is required after Under review. Fulfilment statuses must match postage or collection. Shipped and Ready for collection count as completed in the statistics. Payment statistics show recorded amounts and outstanding balances across all orders. Order counts use current UK calendar day, Monday-start week, month and year.
 

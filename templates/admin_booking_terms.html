@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% block title %}Booking terms & conditions{% endblock %}{% block body %}
+<div class="admin">{% include '_admin_sidebar.html' %}<main id="portal-main"><h1>Booking terms &amp; conditions</h1>
+<p>Edit the terms customers read and accept on the booking form. Publishing also updates the agreement page for bookings awaiting a client's signature. Existing accepted agreements keep their recorded wording.</p>
+{% for message in get_flashed_messages() %}<p class="booking-admin-notice" role="status">{{ message }}</p>{% endfor %}
+{% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
+<section class="panel"><h2>Edit booking terms</h2><p>Start a heading with <strong># </strong> (for example, <code># 1. Booking eligibility</code>). Leave a blank line between paragraphs. Text is displayed safely; HTML is shown as text.</p>
+<form method="post" class="client-form" data-warn-unsaved><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="version" value="{{ version }}">
+<label for="booking-terms-text">Terms shown to customers</label><textarea id="booking-terms-text" name="terms" rows="24" maxlength="50000" required style="width:100%;box-sizing:border-box;line-height:1.6">{{ text }}</textarea>
+<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" name="action" value="preview">Preview changes</button><button class="btn primary" name="action" value="publish">Publish to booking form</button><a class="btn" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">View booking form</a></div></form></section>
+<section class="panel"><h2>Preview</h2><p>Previewing does not change the live form. Use <strong>Publish to booking form</strong> to save your changes.</p><div class="booking-legal-copy">{{ preview }}</div></section>
+</main></div>{% endblock %}

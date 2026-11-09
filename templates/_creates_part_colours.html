@@ -1,0 +1,4 @@
+<fieldset class="creates-part-colours"><legend>Colours for individual words and shapes</legend><p>Leave a choice on “Use overall colour” to match the letter colour above. The selected plain or glitter finish applies to all words and shapes.</p><div class="creates-colour-options">
+{% for kind,count in [('word',3),('shape',2)] %}{% for i in range(1,count+1) %}
+<label data-part-colour="{{ kind }}" data-part-index="{{ i }}"><span data-part-label>{{ kind|title }} {{ i }} colour</span><select name="{{ kind }}_colour_{{ i }}"><option value="">Use overall colour</option>{% for colour in headband_colours %}<option value="{{ colour }}" {% if request.form.get(kind ~ '_colour_' ~ i) == colour %}selected{% endif %}>{{ colour }}</option>{% endfor %}</select></label>
+{% endfor %}{% endfor %}</div></fieldset>

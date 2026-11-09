@@ -1,5 +1,6 @@
 """Independent custom headband orders, catalogue and correspondence."""
 import json
+import math
 import os
 import re
 import secrets
@@ -186,35 +187,80 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         row = db.session.get(Setting, 'cl_creates_shapes')
         return json.loads(row.value) if row else ['Heart', 'Star']
 
+    def shape_drawings():
+        row = db.session.get(Setting, 'cl_creates_shape_drawings')
+        return json.loads(row.value) if row else {}
+
+    def shape_strokes():
+        row = db.session.get(Setting, 'cl_creates_shape_strokes')
+        return json.loads(row.value) if row else {}
+
     @app.route('/admin/cl-creates/shapes', methods=['GET', 'POST'])
     @admin_required
     def creates_shapes():
         token = csrf()
         shapes = shape_options()
+        drawings = shape_drawings()
+        strokes = shape_strokes()
         error = None
         if request.method == 'POST':
             try:
                 name = request.form.get('name', '').strip()
                 action = request.form.get('action')
-                if action == 'add':
+                if action in ('add', 'save'):
                     if not name or len(name) > 40 or any(not char.isprintable() for char in name):
                         raise ValueError('Enter a shape name between 1 and 40 characters.')
-                    if name.casefold() in {shape.casefold() for shape in shapes}:
+                    original = request.form.get('original', '') if action == 'save' else ''
+                    if action == 'save' and original and original not in shapes:
+                        raise ValueError('Choose an existing shape to edit.')
+                    if name.casefold() in {shape.casefold() for shape in shapes if shape != original}:
                         raise ValueError('That shape is already available.')
-                    if len(shapes) >= 50:
+                    if not original and len(shapes) >= 50:
                         raise ValueError('You can list up to 50 shapes.')
-                    shapes.append(name)
+                    if action == 'save':
+                        try:
+                            points = json.loads(request.form.get('points', ''))
+                            if not isinstance(points, list) or not 3 <= len(points) <= 120:
+                                raise ValueError()
+                            for point in points:
+                                if not isinstance(point, list) or len(point) != 2 or any(type(v) not in (float, int) or not math.isfinite(v) or abs(v) > 24 for v in point):
+                                    raise ValueError()
+                            area = abs(sum(points[i-1][0]*p[1]-p[0]*points[i-1][1] for i,p in enumerate(points))) / 2
+                            if area < 4:
+                                raise ValueError()
+                        except (ValueError, TypeError):
+                            raise ValueError('Draw a shape with at least three points and a visible filled area.')
+                        try:
+                            stroke = float(request.form.get('stroke_width', '7'))
+                            if not math.isfinite(stroke) or not 0 <= stroke <= 20:
+                                raise ValueError()
+                        except (ValueError, TypeError):
+                            raise ValueError('Enter a stroke width from 0 to 20 pixels.')
+                        if original:
+                            shapes[shapes.index(original)] = name
+                            drawings.pop(original, None)
+                            strokes.pop(original, None)
+                        else:
+                            shapes.append(name)
+                        drawings[name] = points
+                        strokes[name] = stroke
+                    else:
+                        shapes.append(name)
                 elif action == 'remove':
                     if name in shapes:
                         shapes.remove(name)
+                    drawings.pop(name, None)
+                    strokes.pop(name, None)
                 else:
                     abort(400)
                 db.session.merge(Setting(key='cl_creates_shapes', value=json.dumps(shapes)))
+                db.session.merge(Setting(key='cl_creates_shape_drawings', value=json.dumps(drawings)))
+                db.session.merge(Setting(key='cl_creates_shape_strokes', value=json.dumps(strokes)))
                 db.session.commit()
                 return redirect(url_for('creates_shapes'))
             except ValueError as exc:
                 error = str(exc)
-        return render_template('creates_shapes.html', shapes=shapes, csrf=token, error=error)
+        return render_template('creates_shapes.html', shapes=shapes, drawings=drawings, strokes=strokes, csrf=token, error=error)
 
     @app.route('/admin/cl-creates/colours', methods=['GET', 'POST'])
     @admin_required
@@ -333,6 +379,9 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                             creates_maps_key=os.getenv('GOOGLE_MAPS_API_KEY',''))
         config = settings()
         products = Product.query.filter_by(active=True).all()
+        resume_order = Order.query.filter_by(checkout_token=session.get('creates_return_token', '')).first()
+        if resume_order and resume_order.archived_at:
+            resume_order = None
         error = None
         if request.method == 'POST':
             try:
@@ -340,6 +389,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     raise ValueError('This form has already been submitted. Please reload before placing another order.')
                 existing = Order.query.filter_by(submission_token=session['creates_submission']).first()
                 if existing:
+                    session['creates_return_token'] = existing.checkout_token
                     return redirect(url_for('creates_payment', token=existing.checkout_token))
                 first, last = (request.form.get(k, '').strip() for k in ('first_name', 'last_name'))
                 if not first or not last or max(len(first), len(last)) > 100:
@@ -393,6 +443,14 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                 shapes = request.form.getlist('word_shape') or [''] * len(ids)
                 backgrounds = request.form.getlist('background_colour') or ['Black'] * len(ids)
                 bolds = request.form.getlist('bold_colour') or ['Black'] * len(ids)
+                part_colours = {}
+                for kind, count in (('word', 3), ('shape', 2)):
+                    for index in range(1, count+1):
+                        key = f'{kind}_colour_{index}'
+                        values = request.form.getlist(key) or [''] * len(ids)
+                        if len(values) != len(ids):
+                            raise ValueError('Choose colours for each headband separately.')
+                        part_colours[key] = values
                 if len(backgrounds) != len(ids) or len(bolds) != len(ids) or any(c not in options['headband'] for c in backgrounds+bolds):
                     raise ValueError('Choose an available background and bold colour for each headband.')
                 available_shapes = shape_options()
@@ -419,7 +477,21 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     qty = int(quantity)
                     if not 1 <= qty <= 100:
                         raise ValueError('Each quantity must be between 1 and 100.')
+                    palette = options['glitter'] if finish == 'Glitter' else options['headband']
+                    overall = glitter_colour if finish == 'Glitter' else colour
+                    selected_parts = {}
+                    for kind, count in (('word', len(wording.split())), ('shape', len(wording.split())-1 if shape else 0)):
+                        selected_parts[kind+'_colours'] = []
+                        for index in range(1, count+1):
+                            choice = part_colours[f'{kind}_colour_{index}'][len(items)]
+                            if choice and choice not in palette:
+                                raise ValueError('Choose an available colour for each word and shape.')
+                            selected_parts[kind+'_colours'].append(choice or overall)
                     items.append(dict(product=product_name, wording=wording, background_colour=backgrounds[len(items)], bold_colour=bolds[len(items)], colour=colour, letter_finish=finish, glitter_colour=glitter_colour if finish == 'Glitter' else '', word_shape=shape if len(wording.split()) > 1 else '', quantity=qty, price=config['price']))
+                    items[-1].update(selected_parts)
+                    if len(wording.split()) > 1 and shape in shape_drawings():
+                        items[-1]['word_shape_points'] = shape_drawings()[shape]
+                        items[-1]['word_shape_stroke_width'] = shape_strokes().get(shape, 7)
                 boxes = (sum(i['quantity'] for i in items) + 4) // 5
                 total = sum(i['quantity'] * money(i['price']) for i in items) + (boxes * money(config['postage']) if fulfilment == 'postage' else 0)
                 order = Order(first_name=first, last_name=last, email=email, address=address,
@@ -431,20 +503,22 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                               acknowledgement='Customer confirmed wording, selections, order and privacy information, and accepted the custom-made refund declaration (CL Creates v2): ' + CUSTOM_REFUND_POLICY)
                 db.session.add(order)
                 db.session.commit()
+                session['creates_return_token'] = order.checkout_token
                 session.pop('creates_submission', None)
                 return redirect(url_for('creates_payment', token=order.checkout_token))
             except IntegrityError:
                 db.session.rollback()
                 existing = Order.query.filter_by(submission_token=request.form.get('submission_token')).first()
                 if existing:
+                    session['creates_return_token'] = existing.checkout_token
                     return redirect(url_for('creates_payment',token=existing.checkout_token))
                 error = 'The checkout changed. Reload the form before trying again.'
             except (ValueError, EmailNotValidError) as exc:
                 error = str(exc)
         session.setdefault('creates_submission', secrets.token_urlsafe(32))
-        return render_template('creates_shop.html', products=products, config=config, csrf=token, error=error,
+        return render_template('creates_shop.html', products=products, config=config, csrf=token, error=error, resume_order=resume_order,
                                headband_colours=colour_options()['headband'], glitter_colours=colour_options()['glitter'], letter_finishes=LETTER_FINISHES if colour_options()['glitter'] else ('Plain',),
-                               word_shapes=shape_options(), collection_slots=[slot for slot in app.extensions['creates_collection_slots']()
+                               word_shapes=shape_options(), shape_drawings=shape_drawings(), shape_strokes=shape_strokes(), collection_slots=[slot for slot in app.extensions['creates_collection_slots']()
                                    if slot.starts_at >= datetime.utcnow()+timedelta(days=int(config['collection_lead_days']))],
                                gallery=LibraryImage.query.filter_by(visible=True).order_by(LibraryImage.id).all(), **shop_context)
 
@@ -559,6 +633,12 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         return render_template('creates_admin.html', orders=orders, customer_groups=customer_groups, pagination=page, counts=counts, paid=paid,
                                outstanding=outstanding, completed=completed, csrf=token, statuses=STATUSES, search=search)
 
+    @app.get('/admin/cl-creates/orders/<int:order_id>/preview')
+    @admin_required
+    def creates_order_preview(order_id):
+        order = Order.query.get_or_404(order_id)
+        return render_template('creates_order_preview.html', order=order)
+
     @app.route('/admin/cl-creates/orders/<int:order_id>', methods=['GET', 'POST'])
     @admin_required
     def creates_order(order_id):
@@ -570,14 +650,16 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
         if request.method == 'POST':
             try:
                 if request.form.get('action') == 'delete':
-                    if order.checkout_started:
-                        raise ValueError('This order has a SumUp checkout. Resolve the payment before removing an order; payment records must be retained.')
-                    if order.status != 'Under review' or order.paid != 0:
-                        raise ValueError('Only unpaid orders under review can be deleted.')
+                    if order.status not in ('Under review', 'Awaiting payment') or order.paid != 0:
+                        raise ValueError('Only unpaid orders under review or awaiting payment can be deleted.')
                     if order.invoice_url or order.invoice_reference:
                         raise ValueError('This order has an attached invoice. Resolve the invoice in SumUp and remove its details before deleting the order.')
                     if request.form.get('confirm_delete') != 'yes':
                         raise ValueError('Confirm that you want to permanently delete this order.')
+                    app.extensions['creates_deactivate_unpaid_checkout'](order)
+                    order = Order.query.filter_by(id=order_id).populate_existing().with_for_update().first_or_404()
+                    if order.paid != 0 or order.status not in ('Under review', 'Awaiting payment'):
+                        raise ValueError('This order has been paid or progressed and cannot be deleted.')
                     Message.query.filter_by(order_id=order.id).delete(synchronize_session=False)
                     db.session.delete(order)
                     db.session.commit()

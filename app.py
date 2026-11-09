@@ -2004,6 +2004,8 @@ def booking_request():
                 raise ValueError("Read and acknowledge the liability statement.")
             if not on_behalf and request.form.get("terms_accepted") != "yes":
                 raise ValueError("Accept the booking terms and conditions to continue.")
+            if not on_behalf and request.form.get('booking_terms_version') and request.form['booking_terms_version'] != app.jinja_env.globals['booking_terms_version']():
+                raise ValueError('The booking terms changed while you were completing the form. Read the updated terms and submit again.')
 
             promo_code = request.form.get("promo_code", "").strip() or None
             referral_verified = None
@@ -2034,6 +2036,7 @@ def booking_request():
                 additional_event_dates=", ".join(item["date"] for item in normalized_schedule[1:]) or None,
                 event_schedule=json.dumps({
                     "pricing_rules": pricing_rules,
+                    "booking_legal": app.extensions['booking_terms_snapshot']() if not on_behalf else None,
                     "intake_options": intake_options,
                     "seasonal_form": {'id': seasonal_form.id, 'title': seasonal_form.title, 'terms': seasonal_form.terms, 'answers': seasonal_answers, 'snapshot': app.extensions['native_form_records']['snapshot'](seasonal_form)} if seasonal_form else None,
                     "same_details": all_dates_same_details,
@@ -2062,7 +2065,7 @@ def booking_request():
                 signature=signature,
                 liability_acknowledged=not on_behalf,
                 terms_accepted_at=datetime.min if on_behalf else datetime.now(),
-                terms_version='pending-client' if on_behalf else "2026-10-01",
+                terms_version='pending-client' if on_behalf else app.jinja_env.globals['booking_terms_version'](),
                 total_event_cost=total_event_cost,
                 status="Under Review",
             )
@@ -3088,6 +3091,8 @@ from booking_import import register as register_booking_import
 register_booking_import(app, db, Booking, admin_required)
 from booking_edit import register as register_booking_edit
 register_booking_edit(app, db, Booking, Event, admin_required, booking_schedule_events, get_business_settings)
+from booking_terms import register as register_booking_terms
+register_booking_terms(app, db, BusinessSetting, admin_required)
 from booking_on_behalf import register as register_booking_on_behalf
 register_booking_on_behalf(app, db, Booking, get_current_client, booking_schedule_events, get_business_settings)
 

@@ -148,6 +148,228 @@ class CreatesTest(unittest.TestCase):
         self.assertIn('change of mind', order.acknowledgement)
         self.assertIn('statutory rights', order.acknowledgement)
 
+    def test_custom_shape_drawing_save_edit_validation_and_order_snapshot(self):
+        import json
+        path = '/admin/cl-creates/shapes'
+        token = self.admin_token()
+        points = [[-16, 0], [0, -10], [16, 0], [0, 10]]
+        def save(name, drawing, original='', stroke='12.5'):
+            return self.admin.post(path, data=dict(csrf_token=token, action='save',
+                name=name, original=original, points=json.dumps(drawing), stroke_width=stroke))
+        self.assertEqual(save('Oval', points).status_code, 302)
+        page = self.client.get('/cl-creates').get_data(as_text=True)
+        import re
+        drawing_json = re.search(r'<script id="creates-shape-drawings" type="application/json">(.*?)</script>', page).group(1)
+        self.assertEqual(json.loads(drawing_json)['Oval'], points)
+        self.browser(page.encode(), '''
+            const line=document.querySelector('.creates-line');
+            line.querySelector('[name=word_shape]').value='Oval';
+            let shapeText=false,paths=0,customStroke=false;
+            const stroke=CanvasRenderingContext2D.prototype.stroke;
+            CanvasRenderingContext2D.prototype.stroke=function(...args){if(this.lineWidth===12.5)customStroke=true;return stroke.apply(this,args);};
+            const fillText=CanvasRenderingContext2D.prototype.fillText;
+            const lineTo=CanvasRenderingContext2D.prototype.lineTo;
+            CanvasRenderingContext2D.prototype.fillText=function(text,...args){if(text==='Oval')shapeText=true;return fillText.call(this,text,...args);};
+            CanvasRenderingContext2D.prototype.lineTo=function(x,y){if(x===16&&y===0)paths++;return lineTo.call(this,x,y);};
+            for(const wording of ['TEAM BRIDE','TEAM BRIDE SQUAD']){
+                line.querySelector('[name=wording]').value=wording;
+                window.renderHeadbandPreview(line);
+            }
+            assert(paths>0&&!shapeText,'Custom shape must draw its outline rather than its name');
+            assert(customStroke,'Saved pixel stroke width missing from shop preview');
+        ''')
+        data = self.form()
+        data['word_shape'] = 'Oval'
+        self.client.post('/cl-creates', data=data)
+        order = self.Order.query.one()
+        self.assertEqual(order.items[0]['word_shape_points'], points)
+        self.assertEqual(order.items[0]['word_shape_stroke_width'], 12.5)
+        for invalid_stroke in ('-1','21','NaN','Infinity','abc'):
+            self.assertIn(b'Enter a stroke width from 0 to 20 pixels', save('Invalid stroke', points, stroke=invalid_stroke).data)
+        for invalid in ([], [[0,0]]*3, [[0,0],[99,1],[2,3]], [[0,0],[True,1],[2,3]], 'bad'):
+            response = save('Invalid', invalid)
+            self.assertIn(b'Draw a shape with at least three points', response.data)
+        self.assertIn(b'already available', save('oval', points).data)
+        changed = [[-12,0],[0,-12],[12,0],[0,12]]
+        self.assertEqual(save('Custom oval', changed, 'Oval', stroke='0').status_code, 302)
+        self.assertEqual(order.items[0]['word_shape_points'], points)
+        self.assertEqual(order.items[0]['word_shape_stroke_width'], 12.5)
+        self.assertEqual(order.items[0]['word_shape'], 'Oval')
+        self.admin.post(path, data=dict(csrf_token=token, action='remove', name='Custom oval'))
+        self.assertNotIn(b'Custom oval', self.client.get('/cl-creates').data)
+
+    def test_shape_editor_browser(self):
+        self.browser(self.admin.get('/admin/cl-creates/shapes').data, '''
+            const form=document.getElementById('shape-editor');
+            const points=()=>JSON.parse(form.elements.points.value);
+            const initial=points();
+            assert(initial.length===32,'Oval starting outline missing');
+            const stroke=document.getElementById('shape-stroke');
+            stroke.dispatchEvent(new InputEvent('beforeinput',{bubbles:true}));stroke.value=5.5;input(stroke);
+            assert(document.querySelector('#shape-canvas polygon').style.strokeWidth==='5.5px','Pixel stroke not applied');
+            document.getElementById('shape-undo').click();assert(stroke.value==='7','Stroke undo failed');
+            stroke.value=0;input(stroke);assert(document.querySelector('#shape-canvas polygon').style.strokeWidth==='0px','Zero stroke failed');
+            const measurements=document.getElementById('shape-measurements');
+            assert(measurements.textContent==='32.0 mm wide × 22.0 mm high','Initial millimetre measurements missing');
+            const width=document.getElementById('shape-width');width.value=38;input(width);
+            assert(Math.abs(Math.max(...points().map(p=>p[0]))-Math.min(...points().map(p=>p[0]))-38)<.01,'Width not applied');
+            assert(measurements.textContent.startsWith('38.0 mm wide'),'Millimetre width not updated');
+            const dot=document.querySelector('#shape-canvas circle');dot.focus();
+            dot.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+            assert(points()[0][0]>initial[0][0],'Keyboard editing failed');
+            assert(measurements.textContent.startsWith('38.5 mm wide'),'Outline edit did not update measurement');
+            document.getElementById('shape-delete-point').click();
+            assert(points().length===31,'Dot removal failed');
+            document.getElementById('shape-undo').click();assert(points().length===32,'Undo failed');
+            document.querySelector('[data-edit-shape="Heart"]').click();
+            assert(form.elements.original.value==='Heart'&&points().length===48,'Existing shape editing failed');
+            document.getElementById('shape-new').click();
+            assert(!form.elements.original.value&&!form.elements.name.value,'New shape did not reset');
+        ''')
+
+    def test_shape_editor_sliders_grid_and_compact_mobile_layout(self):
+        page=self.admin.get('/admin/cl-creates/shapes').data
+        for viewport in (1280,390):
+            self.browser(page, '''
+                const form=document.getElementById('shape-editor');
+                const slider=document.getElementById('shape-width-range');
+                slider.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));slider.value=36.5;input(slider);
+                assert(document.getElementById('shape-width').value==='36.5','Width slider did not update number');
+                assert(document.getElementById('shape-measurements').textContent.startsWith('36.5 mm wide'),'Width slider did not resize outline');
+                document.getElementById('shape-undo').click();
+                assert(slider.value==='32','Undo did not synchronise slider');
+                const stroke=document.getElementById('shape-stroke-range');stroke.value=3.5;input(stroke);
+                assert(document.getElementById('shape-stroke').value==='3.5','Stroke slider did not synchronise');
+                assert(document.querySelector('#shape-canvas polygon').style.strokeWidth==='3.5px','Stroke slider did not update outline');
+                const saved=form.elements.points.value,canvas=document.getElementById('shape-canvas');
+                const spacing=document.getElementById('shape-grid-spacing');spacing.value=2;input(spacing);
+                assert(canvas.querySelector('pattern').getAttribute('width')==='2','Grid spacing did not change');
+                assert(document.getElementById('shape-grid-scale').textContent.includes('2 mm'),'Grid scale label missing');
+                const before=canvas.viewBox.baseVal.width;
+                const padding=document.getElementById('shape-canvas-padding');padding.value=24;input(padding);
+                assert(canvas.viewBox.baseVal.width>before,'Padding did not increase viewing margin');
+                assert(form.elements.points.value===saved,'Canvas settings altered saved shape');
+                assert(document.getElementById('shape-width').getBoundingClientRect().width<=80,'Number fields are too wide');
+                assert(canvas.getBoundingClientRect().right<=innerWidth,'Canvas overflows viewport');
+                assert(document.querySelector('.shape-dimensions').getBoundingClientRect().right<=innerWidth,'Controls overflow viewport');
+            ''', width=viewport)
+
+    def test_order_preview_images_use_recorded_designs_and_require_admin(self):
+        import json
+        order = self.review_order()
+        order.items_json = json.dumps([
+            dict(product='Custom wording headband', wording='TEAM BRIDE', quantity=2, price='5.00',
+                 colour='Pink', background_colour='Black', bold_colour='Gold', letter_finish='Plain',
+                 word_shape='Custom oval', word_shape_points=[[-16,0],[0,-10],[16,0],[0,10]]),
+            dict(product='Custom wording headband', wording='TEAM PARTY', quantity=1, price='5.00',
+                 colour='White', letter_finish='Glitter', glitter_colour='Silver', word_shape='Butterfly')])
+        main.db.session.commit()
+        path = f'/admin/cl-creates/orders/{order.id}/preview'
+        self.assertEqual(self.client.get(path).status_code, 302)
+        self.assertEqual(self.admin.get('/admin/cl-creates/orders/999999/preview').status_code, 404)
+        detail = self.admin.get(f'/admin/cl-creates/orders/{order.id}?popup=1')
+        self.assertIn(path.encode(), detail.data)
+        self.assertIn(b'View design preview', detail.data)
+        page = self.admin.get(path)
+        self.assertEqual(page.status_code, 200)
+        self.browser(page.data, '''
+            const images=[...document.querySelectorAll('#order-design-previews img')];
+            assert(images.length===2,'Every ordered design needs an image');
+            assert(images.every(image=>image.src.startsWith('data:image/png;base64,')),'Preview must be a PNG image');
+            assert(images[0].alt.includes('TEAM BRIDE')&&images[0].alt.includes('Pink'),'Recorded wording and colours missing');
+            assert(images[1].alt.includes('Silver glitter'),'Recorded glitter missing');
+            const links=[...document.querySelectorAll('#order-design-previews a[download]')];
+            assert(links.length===2&&links[0].href===images[0].src,'Image downloads missing');
+            assert(document.getElementById('order-design-previews').textContent.includes('no saved drawing'),'Legacy shape limitation missing');
+            const items=JSON.parse(document.getElementById('order-preview-items').textContent);
+            assert(items[0].word_shape_points[0][0]===-16,'Saved custom outline missing');
+        ''')
+
+    def test_individual_word_and_shape_colours_saved_for_each_line(self):
+        data = self.form()
+        data.update(product=['custom','custom'], wording=['A B C','TEAM BRIDE'], quantity=['1','1'],
+                    word_shape=['Heart','Star'], colour=['White','White'], letter_finish=['Plain','Glitter'],
+                    glitter_colour=['','Gold'], word_colour_1=['Red','Silver'], word_colour_2=['Blue','Pink'],
+                    word_colour_3=['Green',''], shape_colour_1=['Gold','Blue'], shape_colour_2=['Pink',''])
+        self.client.post('/cl-creates', data=data)
+        order = self.Order.query.one()
+        self.assertEqual(order.items[0]['word_colours'], ['Red','Blue','Green'])
+        self.assertEqual(order.items[0]['shape_colours'], ['Gold','Pink'])
+        self.assertEqual(order.items[1]['word_colours'], ['Silver','Pink'])
+        self.assertEqual(order.items[1]['shape_colours'], ['Blue'])
+        detail = self.admin.get(f'/admin/cl-creates/orders/{order.id}').data
+        self.assertIn(b'Word 2 colour: Blue', detail)
+        self.assertIn(b'Shape 2 colour: Pink', detail)
+        self.browser(self.admin.get(f'/admin/cl-creates/orders/{order.id}/preview').data, '''
+            const images=document.querySelectorAll('#order-design-previews img');
+            assert(images[0].alt.includes('Word 1: Red')&&images[0].alt.includes('Shape 2: Pink'),'Saved individual colours missing');
+            assert(images[1].alt.includes('Word 1: Silver glitter'),'Saved glitter colours missing');
+        ''')
+        invalid=self.form();invalid['word_colour_1']='Not a colour'
+        self.assertIn(b'Choose an available colour for each word and shape', self.client.post('/cl-creates',data=invalid).data)
+        self.assertEqual(self.Order.query.count(),1)
+        invalid['word_colour_1']=['Red','Blue']
+        self.assertIn(b'Choose colours for each headband separately',self.client.post('/cl-creates',data=invalid).data)
+
+    def test_individual_colour_shop_controls_and_rendering(self):
+        self.browser(self.client.get('/cl-creates').data, '''
+            const line=document.querySelector('.creates-line');
+            const field=name=>line.querySelector(`[name=${name}]`);
+            field('wording').value='A B C';field('word_shape').value='Heart';input(field('wording'));
+            const chosen={word_colour_1:'Red',word_colour_2:'Blue',word_colour_3:'Green',shape_colour_1:'Gold',shape_colour_2:'Pink'};
+            Object.entries(chosen).forEach(([name,value])=>field(name).value=value);
+            const faces={},shapeFaces=[];
+            const fillText=CanvasRenderingContext2D.prototype.fillText,fill=CanvasRenderingContext2D.prototype.fill;
+            CanvasRenderingContext2D.prototype.fillText=function(text,...args){if(['A','B','C'].includes(text)&&this.fillStyle!=='#ffffff')faces[text]=this.fillStyle;return fillText.call(this,text,...args);};
+            CanvasRenderingContext2D.prototype.fill=function(...args){if(['#cda34e','#ec71a7'].includes(this.fillStyle))shapeFaces.push(this.fillStyle);return fill.apply(this,args);};
+            input(field('word_colour_1'));
+            assert(faces.A==='#c92739'&&faces.B==='#2760b0'&&faces.C==='#27845d','Words did not render in separate colours');
+            assert(shapeFaces.includes('#cda34e')&&shapeFaces.includes('#ec71a7'),'Shapes did not render in separate colours');
+            const details=line.querySelector('.preview-summary-segments');
+            assert(details.children.length===3,'Design description must have three separate segments');
+            const detailRows=[...details.querySelectorAll('.preview-design-details>div')];
+            assert(detailRows.length===9,'Design details should have separate rows for base, finish, words and shapes');
+            const rows=detailRows.map(row=>[row.querySelector('dt').textContent,row.querySelector('dd').textContent]);
+            assert(rows.some(([label,value])=>label==='Word 1: A'&&value==='Red'),'Word colour summary unclear');
+            assert(rows.some(([label,value])=>label.startsWith('Shape 2: Heart')&&value==='Pink'),'Shape colour summary unclear');
+            const headings=[...details.querySelectorAll('h4')].map(heading=>heading.textContent);
+            assert(headings.join('|')==='Headband & finish|Word colours|Shapes between words','Segment headings missing');
+            assert(details.querySelectorAll('.preview-colour-swatch').length===7,'Colour swatches missing');
+            assert(!field('shape_colour_2').closest('label').hidden,'Second separator colour missing');
+            field('wording').value='TEAM BRIDE';input(field('wording'));
+            assert(getComputedStyle(field('word_colour_3').closest('label')).display==='none','Unused word colour visible');
+            assert(getComputedStyle(field('shape_colour_2').closest('label')).display==='none','Unused shape colour visible');
+            document.getElementById('add-line').click();
+            assert(document.querySelectorAll('.creates-line').length===2,'Multiple designs failed');
+            field('letter_finish').value='Glitter';change(field('letter_finish'));
+            assert([...field('word_colour_1').options].some(option=>option.value==='Silver'),'Glitter colour palette missing');
+        ''')
+
+    def test_short_single_word_shows_inline_error_until_corrected(self):
+        self.browser(self.client.get('/cl-creates').data, '''
+            const first=document.querySelector('.creates-line'),wording=first.querySelector('[name=wording]');
+            const warning=()=>first.querySelector('[data-wording-warning]');
+            assert(warning().hidden,'Empty wording should not show minimum-length error');
+            wording.value='STE';input(wording);
+            assert(!warning().hidden&&warning().textContent.includes('Add 4 more characters'),'Short word needs an immediate visible error');
+            assert(wording.getAttribute('aria-invalid')==='true'&&!wording.checkValidity(),'Short word must block submission');
+            assert(wording.getAttribute('aria-describedby')===warning().id,'Error must be linked to the wording field');
+            wording.value='ABCDEF';input(wording);assert(warning().textContent.includes('Add 1 more character.'),'Remaining character count incorrect');
+            document.getElementById('add-line').click();
+            const second=document.querySelectorAll('.creates-line')[1],secondInput=second.querySelector('[name=wording]');
+            assert(second.querySelector('[data-wording-warning]').hidden,'New headband inherited an error');
+            secondInput.value='SHORT';input(secondInput);
+            assert(second.querySelector('[data-wording-warning]').id!==warning().id,'Errors need unique identifiers');
+            wording.value='STEELERS';input(wording);
+            assert(warning().hidden&&wording.checkValidity()&&wording.getAttribute('aria-invalid')==='false','Valid single word must clear error');
+            wording.value='GO TEAM';input(wording);assert(warning().hidden&&wording.checkValidity(),'Two words must not require 7 characters per word');
+            wording.value='';input(wording);assert(warning().hidden,'Clearing wording must clear the short-word error');
+        ''')
+        data=self.form();data['wording']='STE'
+        response=self.client.post('/cl-creates',data=data)
+        self.assertIn(b'Single-word headbands require at least 7 characters.',response.data)
+        self.assertEqual(self.Order.query.count(),0)
+
     def admin_token(self):
         self.assertEqual(self.admin.get('/admin/cl-creates').status_code, 200)
         with self.admin.session_transaction() as session:
@@ -177,6 +399,15 @@ class CreatesTest(unittest.TestCase):
         self.assertEqual(self.Message.query.filter_by(order_id=order_id).count(), 0)
         self.assertIsNotNone(main.db.session.get(self.Order, other_id))
         self.assertEqual(self.admin.get(path).status_code, 404)
+
+    def test_delete_unpaid_order_awaiting_payment_without_checkout(self):
+        order=self.review_order();order.status='Awaiting payment'
+        main.db.session.commit();identity=order.id
+        token=self.admin_token();path=f'/admin/cl-creates/orders/{identity}'
+        self.assertIn(b'name="action" value="delete"',self.admin.get(path).data)
+        response=self.admin.post(path,data=dict(csrf_token=token,action='delete',confirm_delete='yes'))
+        self.assertEqual(response.status_code,302)
+        self.assertIsNone(main.db.session.get(self.Order,identity))
 
     @unittest.skipUnless(browser_helpers.EDGE.is_file(), 'Microsoft Edge is not installed')
     def test_delete_order_layout_in_popup_and_standalone(self):
@@ -289,7 +520,7 @@ class CreatesTest(unittest.TestCase):
         main.db.session.commit()
         page = self.client.get('/cl-creates')
         self.assertIn(b'id="creates-form"', page.data)
-        self.assertIn(b'Order your custom headbands', page.data)
+        self.assertIn(b'Create your headband in 3 steps', page.data)
         self.assertIn(b'More items coming soon', page.data)
         data = self.form()
         data.update(product=['custom', 'custom'], wording=['TEAM BRIDE', 'BRIDE SQUAD'], word_shape=['Heart',''], quantity=['2', '3'])

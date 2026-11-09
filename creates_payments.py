@@ -7,6 +7,7 @@ from urllib.parse import quote, urlsplit
 from flask import abort, jsonify, redirect, render_template, request, session, url_for, make_response
 from sumup_checkout import provider_request
 from sumup_invoices import validate_link
+from creates_automation import unpaid_deadline
 
 
 def register(app, db, Order, notify, business_settings, admin_required):
@@ -21,11 +22,7 @@ def register(app, db, Order, notify, business_settings, admin_required):
     def reference(order):
         return 'CC-' + order.checkout_token
 
-    def verify(order):
-        if order.paid >= order.total and order.total > 0:
-            return True
-        if not order.checkout_started:
-            return False
+    def checkout_data(order):
         path = 'checkouts/' + quote(order.provider_id, safe='') if order.provider_id else 'checkouts?checkout_reference=' + quote(reference(order), safe='')
         data = provider_request(path)
         if not order.provider_id:
@@ -40,6 +37,14 @@ def register(app, db, Order, notify, business_settings, admin_required):
         except (InvalidOperation, TypeError, KeyError): valid = False
         if not valid:
             raise ValueError('Payment details did not match your order. Please contact CL Creates.')
+        return data
+
+    def verify(order):
+        if order.paid >= order.total and order.total > 0:
+            return True
+        if not order.checkout_started:
+            return False
+        data = checkout_data(order)
         order.provider_id = data['id']
         if data.get('hosted_checkout_url'):
             order.payment_url = validate_link(data['hosted_checkout_url'])
@@ -54,6 +59,27 @@ def register(app, db, Order, notify, business_settings, admin_required):
         return True
 
     app.extensions['creates_verify_payment'] = verify
+
+    def deactivate_unpaid_checkout(order):
+        if not (order.checkout_started or order.provider_id or order.payment_url):
+            return
+        if not order.checkout_started or not order.checkout_token:
+            raise ValueError('The payment checkout could not be verified. Check SumUp before deleting this order.')
+        if verify(order):
+            raise ValueError('This order has been paid and cannot be deleted.')
+        data = checkout_data(order)
+        if data.get('status') == 'PAID':
+            verify(order)
+            raise ValueError('This order has been paid and cannot be deleted.')
+        if data.get('status') != 'EXPIRED':
+            provider_request('checkouts/' + quote(order.provider_id, safe=''), method='DELETE')
+            data = checkout_data(order)
+        if data.get('status') != 'EXPIRED':
+            if data.get('status') == 'PAID':
+                verify(order)
+            raise ValueError('SumUp has not confirmed that the payment link is inactive. This order has been kept; please try again.')
+
+    app.extensions['creates_deactivate_unpaid_checkout'] = deactivate_unpaid_checkout
 
     def sync(orders):
         """Recover missed callbacks without matching unrelated customer payments."""
@@ -99,6 +125,14 @@ def register(app, db, Order, notify, business_settings, admin_required):
         order = Order.query.filter_by(checkout_token=token).first_or_404()
         if order.archived_at:
             abort(410, description='This order has expired. Please contact CL Creates to place a new order.')
+        if order.status == 'Awaiting payment' and order.paid == 0 and unpaid_deadline(order.created_at) <= datetime.utcnow():
+            if order.checkout_started:
+                try:
+                    verify(order)
+                except ValueError:
+                    abort(503, description='We could not check this payment. Please contact CL Creates before paying again.')
+            if order.paid == 0:
+                abort(410, description='The 3-working-day payment period has ended. Please place a new CL Creates order.')
         csrf = session.setdefault('creates_csrf', secrets.token_urlsafe(32))
         error = None
         if request.method == 'POST':

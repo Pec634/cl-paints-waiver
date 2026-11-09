@@ -1,0 +1,12 @@
+{% extends 'creates_base.html' %}{% block creates %}
+<link rel="stylesheet" href="{{ url_for('static', filename='cl-creates-shop.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='cl-creates-order.css') }}">
+<h2>{{ order.number }} &mdash; Design preview</h2>
+<p><a class="btn" href="{{ url_for('creates_order', order_id=order.id) }}">Back to order</a></p>
+<p>Preview recreated from the design options recorded on this order. Colours and glitter may look slightly different in person.</p>
+<div id="order-design-previews" data-order-number="{{ order.number }}"></div>
+<noscript><p>Enable JavaScript to view the preview images.</p></noscript>
+<script id="order-preview-items" type="application/json">{{ order.items|tojson }}</script>
+<script src="{{ url_for('static', filename='headband-preview.js') }}" defer></script>
+<script src="{{ url_for('static', filename='creates-order-preview.js') }}" defer></script>
+{% endblock %}

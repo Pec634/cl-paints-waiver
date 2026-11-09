@@ -101,6 +101,85 @@ class CreatesCheckoutTest(unittest.TestCase):
             amount=str(order.total),status=self.status,hosted_checkout_url='https://checkout.sumup.com/pay/abc123')
         return [data] if path.startswith('checkouts?') else data
 
+    def test_delete_awaiting_payment_deactivates_checkout_before_removing_order(self):
+        token=self.fixture.admin_token()
+        _,order=self.draft();self.checkout(order)
+        identity,checkout_token=order.id,order.checkout_token
+        main.db.session.add(self.Message(order_id=identity,subject='Test',body='Test',result='sent'));main.db.session.commit()
+        def provider(path,payload=None,method=None):
+            if method=='DELETE':self.status='EXPIRED'
+            return self.provider(path,payload)
+        with patch('creates_payments.provider_request',side_effect=provider) as calls:
+            response=self.admin.post(f'/admin/cl-creates/orders/{identity}',data=dict(csrf_token=token,action='delete',confirm_delete='yes'))
+        self.assertEqual(response.status_code,302)
+        self.assertTrue(any(call.kwargs.get('method')=='DELETE' for call in calls.call_args_list))
+        self.assertIsNone(main.db.session.get(self.Order,identity))
+        self.assertEqual(self.Message.query.filter_by(order_id=identity).count(),0)
+        self.assertEqual(self.client.get(f'/cl-creates/payment/{checkout_token}').status_code,404)
+
+    def test_checkout_deactivation_transport_uses_delete(self):
+        from io import BytesIO
+        from sumup_checkout import provider_request
+        with patch('sumup_checkout.urlopen',return_value=BytesIO(b'{"status":"EXPIRED"}')) as send:
+            self.assertEqual(provider_request('checkouts/abc123',method='DELETE')['status'],'EXPIRED')
+        self.assertEqual(send.call_args.args[0].get_method(),'DELETE')
+        self.assertIsNone(send.call_args.args[0].data)
+
+    def test_delete_checkout_keeps_paid_unverified_or_still_active_order(self):
+        token=self.fixture.admin_token()
+        _,order=self.draft();self.checkout(order);identity=order.id
+        path=f'/admin/cl-creates/orders/{identity}'
+        data=dict(csrf_token=token,action='delete',confirm_delete='yes')
+        with patch('creates_payments.provider_request',side_effect=ValueError('SumUp unavailable')):
+            self.assertIn(b'SumUp unavailable',self.admin.post(path,data=data).data)
+        self.assertIsNotNone(main.db.session.get(self.Order,identity))
+        def provider(path,payload=None,method=None):return self.provider(path,payload)
+        with patch('creates_payments.provider_request',side_effect=provider):
+            self.assertIn(b'payment link is inactive',self.admin.post(path,data=data).data)
+        self.assertIsNotNone(main.db.session.get(self.Order,identity))
+        self.status='PAID'
+        with patch('creates_payments.provider_request',side_effect=provider) as calls:
+            self.assertIn(b'has been paid',self.admin.post(path,data=data).data)
+        main.db.session.refresh(order)
+        self.assertEqual(order.paid,order.total)
+        self.assertEqual(order.status,'Paid')
+        self.assertFalse(any(call.kwargs.get('method')=='DELETE' for call in calls.call_args_list))
+
+    def test_saved_order_return_link_and_expired_payment_gate(self):
+        _,order=self.draft()
+        page=self.client.get(f'/cl-creates/payment/{order.checkout_token}')
+        self.assertIn(b'Copy order link',page.data)
+        self.assertIn(b'3 working days',page.data)
+        self.assertIn(b'Continue your saved order',self.client.get('/cl-creates').data)
+        self.assertNotIn(b'Continue your saved order',main.app.test_client().get('/cl-creates').data)
+        self.fixture.browser(page.data, '''
+            const button=document.getElementById('copy-creates-return-link');
+            const link=document.getElementById('creates-return-link');
+            assert(link.readOnly&&link.value.includes('/cl-creates/payment/'),'Private return link missing');
+            button.click();await new Promise(resolve=>setTimeout(resolve,0));
+            assert(window.copiedLink===link.value,'Wrong return link copied');
+            assert(document.getElementById('creates-return-link-status').textContent.includes('copied'),'Copy link feedback missing');
+            navigator.clipboard.writeText=async()=>{throw Error('Clipboard unavailable');};
+            button.click();await new Promise(resolve=>setTimeout(resolve,0));
+            assert(document.getElementById('creates-return-link-status').textContent.includes('selected'),'Manual copy fallback missing');
+        ''',setup="Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{window.copiedLink=text;}},configurable:true});")
+        order.created_at=datetime.utcnow()-timedelta(days=8);main.db.session.commit()
+        with patch('creates_payments.provider_request') as provider:
+            response=self.client.post(f'/cl-creates/payment/{order.checkout_token}')
+        self.assertEqual(response.status_code,410)
+        provider.assert_not_called()
+
+    def test_automatic_expiry_deactivates_started_checkout(self):
+        _,order=self.draft();self.checkout(order)
+        identity=order.id;order.created_at=datetime.utcnow()-timedelta(days=8);main.db.session.commit()
+        def provider(path,payload=None,method=None):
+            if method=='DELETE':self.status='EXPIRED'
+            return self.provider(path,payload)
+        with patch('creates_payments.provider_request',side_effect=provider):
+            report=main.app.extensions['creates_automation'](apply=True,expiry_only=True)
+        self.assertEqual(report['deleted'],1)
+        self.assertIsNone(main.db.session.get(self.Order,identity))
+
     def test_checkout_charges_two_boxes_for_seven_headbands(self):
         _, order = self.draft(quantity='7')
         self.assertEqual(order.total, Decimal('47'))
