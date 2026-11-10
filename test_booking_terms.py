@@ -114,3 +114,15 @@ class BookingTermsTest(unittest.TestCase):
         arranged = arrange_rescheduling_terms(text)
         self.assertEqual(arrange_rescheduling_terms(arranged), arranged)
         self.assertIn('# 4. Booking amendments and rescheduling\n\n4.1 Changes.', arranged)
+
+    def test_late_cancellation_covers_all_payments_with_loss_limit(self):
+        from booking_terms import PREVIOUS_CANCELLATION_CLAUSE
+        for saved_text in (None, '# 8. Cancellation by the client\n\n8.3 ' + PREVIOUS_CANCELLATION_CLAUSE):
+            if saved_text is not None:
+                main.db.session.merge(main.BusinessSetting(key='booking_terms', value=json.dumps(dict(text=saved_text, updated_at=None))))
+                main.db.session.commit()
+            page = self.public.get('/booking').data
+            self.assertIn(b'including the deposit and any balance payments', page)
+            self.assertIn(b'all payments received may be retained', page)
+            self.assertIn(b'Any amount received above those losses will be refunded.', page)
+            self.assertNotIn(PREVIOUS_CANCELLATION_CLAUSE.encode(), page)

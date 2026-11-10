@@ -10,6 +10,9 @@ from flask import abort, flash, redirect, render_template, request, session, url
 from markupsafe import Markup, escape
 
 
+PREVIOUS_CANCELLATION_CLAUSE = "Where less than 48 hours' notice is provided, CL Paints reserves the right to retain the deposit, subject to the client's applicable statutory rights."
+
+
 def format_terms(text):
     blocks = []
     for block in text.replace('\r\n', '\n').split('\n\n'):
@@ -84,10 +87,13 @@ def register(app, db, Setting, admin_required):
     parser = DefaultText()
     parser.feed(default_html)
     default_text = '\n\n'.join(parser.blocks)
+    cancellation_clause = next(block.split(' ', 1)[1] for block in parser.blocks
+                               if block.startswith('9.3 '))
 
     def current():
         row = db.session.get(Setting, 'booking_terms')
         data = json.loads(row.value) if row else dict(text=default_text, updated_at=None)
+        data['text'] = data['text'].replace(PREVIOUS_CANCELLATION_CLAUSE, cancellation_clause)
         if row and not re.search(r'^# \d+\. Booking amendments and rescheduling\s*$', data['text'], re.MULTILINE):
             data['text'] = data['text'].rstrip() + '\n\n' + amendment_text
         data['text'] = arrange_rescheduling_terms(data['text'])
