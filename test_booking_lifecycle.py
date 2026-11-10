@@ -59,6 +59,21 @@ class BookingLifecycleTest(unittest.TestCase):
         self.assertIn(b'Replacement date accepted', self.client.get(f'/client/bookings/{self.booking.id}').data)
         self.assertIn(self.account.email.encode(), self.admin.get(self.route).data)
 
+    def test_admin_credit_count_requires_payment_and_only_counts_accepted_changes(self):
+        with patch('payment_workflow.confirmation_ready', return_value=False):
+            self.assertNotIn(b'Reschedule credits', self.admin.get(self.route).data)
+        with patch('payment_workflow.confirmation_ready', return_value=True):
+            self.assertIn(b'1 of 1 free credit remaining', self.admin.get(self.route).data)
+            self.propose()
+            proposal = Proposal.query.one()
+            self.assertIn(b'1 of 1 free credit remaining', self.admin.get(self.route).data)
+            self.decide(proposal)
+            self.assertIn(b'0 of 1 free credit remaining', self.admin.get(self.route).data)
+            self.assertIn(b'0 of 1 free credit remaining', self.admin.get('/admin/bookings').data)
+            self.assertNotIn(b'Reschedule credits', self.client.get(f'/client/bookings/{self.booking.id}').data)
+            self.decide(proposal)
+            self.assertEqual(main.app.jinja_env.globals['admin_reschedule_credits'](self.booking)['used'], 1)
+
     def test_ownership_csrf_and_validation(self):
         self.assertEqual(self.client.get(self.route).status_code, 302)
         self.assertEqual(self.admin.post(self.route, data={'action':'propose'}).status_code, 400)

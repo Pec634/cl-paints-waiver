@@ -86,3 +86,31 @@ class BookingTermsTest(unittest.TestCase):
         response = self.publish('Outdated terms.', version=old)
         self.assertIn(b'updated in another window', response.data)
         self.assertIn(b'New published terms.', self.public.get('/booking').data)
+
+    def test_rescheduling_addition_preserves_custom_terms_and_saved_agreements(self):
+        original = '# Existing custom terms\n\nKeep this wording exactly.'
+        main.db.session.merge(main.BusinessSetting(key='booking_terms', value=json.dumps(dict(text=original, updated_at=None))))
+        main.db.session.commit()
+        page = self.public.get('/booking').data
+        self.assertIn(b'Keep this wording exactly.', page)
+        self.assertIn('£15 administration fee'.encode(), page)
+        self.assertIn(b'14 calendar days', page)
+        self.assertIn(b'19.8 Confirmation of amendments', page)
+        self.assertEqual(json.loads(main.db.session.get(main.BusinessSetting, 'booking_terms').value)['text'], original)
+        self.assertEqual(page.count(b'19. Booking amendments and rescheduling'), 1)
+
+    def test_rescheduling_follows_duration_with_updated_references(self):
+        page = self.public.get('/booking').data
+        self.assertLess(page.index(b'3. Booking duration'), page.index(b'4. Booking amendments and rescheduling'))
+        self.assertLess(page.index(b'4. Booking amendments and rescheduling'), page.index(b'5. Additional time and extensions'))
+        self.assertIn(b'4.8 Confirmation of amendments', page)
+        self.assertIn(b'9. Cancellation by the client', page)
+        self.assertIn(b'cancelled in accordance with Section 9.', page)
+        self.assertIn(b'7.5 Additional time purchased', page)
+        self.assertIn(b'in accordance with Section 5.', page)
+        self.assertEqual(page.count(b'Booking amendments and rescheduling</h3>'), 1)
+        from booking_terms import arrange_rescheduling_terms
+        text = '# 1. Booking eligibility\n\n1.1 Existing.\n\n# 2. Booking information\n\n# 3. Booking duration\n\n# 4. Additional time\n\n4.1 Existing.\n\n# 19. Booking amendments and rescheduling\n\n19.1 Changes.'
+        arranged = arrange_rescheduling_terms(text)
+        self.assertEqual(arrange_rescheduling_terms(arranged), arranged)
+        self.assertIn('# 4. Booking amendments and rescheduling\n\n4.1 Changes.', arranged)

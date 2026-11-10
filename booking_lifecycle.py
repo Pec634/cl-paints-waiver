@@ -55,6 +55,15 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
     app.extensions['booking_followup_model'] = FollowUp
     zone = ZoneInfo('Europe/London')
 
+    def reschedule_credits(booking):
+        from payment_workflow import confirmation_ready
+        if booking.status != 'Accepted' or not confirmation_ready(booking):
+            return None
+        used = Proposal.query.filter_by(booking_id=booking.id, status='Accepted').count()
+        return dict(remaining=max(0, 1 - used), used=used)
+
+    app.jinja_env.globals['admin_reschedule_credits'] = reschedule_credits
+
     def csrf():
         return session.setdefault('client_csrf', secrets.token_urlsafe(32))
 

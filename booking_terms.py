@@ -1,6 +1,7 @@
 """Admin-managed booking terms with safe formatting and saved agreement versions."""
 import hashlib
 import json
+import re
 import secrets
 from datetime import datetime
 from html.parser import HTMLParser
@@ -43,22 +44,61 @@ class DefaultText(HTMLParser):
             self.tag = None
 
 
+def arrange_rescheduling_terms(text, html=False):
+    """Place amendments after duration and update numbering and cross-references."""
+    pattern = r'<h3>(\d+)\. ([^<]+)</h3>' if html else r'^# (\d+)\. ([^\n]+)'
+    headings = list(re.finditer(pattern, text, re.MULTILINE))
+    amendment = next((i for i, heading in enumerate(headings)
+                      if heading[2] == 'Booking amendments and rescheduling'), None)
+    if amendment is None:
+        return text
+    sections = [(heading, text[heading.start():headings[i + 1].start() if i + 1 < len(headings) else len(text)])
+                for i, heading in enumerate(headings)]
+    moved = sections.pop(amendment)
+    duration = next((i for i, (heading, _) in enumerate(sections) if heading[2] == 'Booking duration'), None)
+    if duration is None:
+        # Keep bespoke published terms intact when the standard anchor is absent.
+        return text
+    sections.insert(duration + 1, moved)
+    numbers = {heading[1]: str(i + 1) for i, (heading, _) in enumerate(sections)}
+    result = [text[:headings[0].start()]]
+    for heading, section in sections:
+        old, new = heading[1], numbers[heading[1]]
+        prefix = r'(<(?:h3|p)>)' if html else r'(^# |^)'
+        section = re.sub(prefix + re.escape(old) + r'\.(?=\d| )',
+                         lambda match: match[1] + new + '.', section, flags=re.MULTILINE)
+        section = re.sub(r'\bSection (\d+)\b',
+                         lambda match: 'Section ' + numbers.get(match[1], match[1]), section)
+        result.append(section.rstrip() + '\n\n')
+    return ''.join(result).rstrip()
+
+
 def register(app, db, Setting, admin_required):
     default_html = (Path(app.root_path) / 'templates/_booking_terms_default.html').read_text(encoding='utf-8')
+    amendment_html = (Path(app.root_path) / 'templates/_booking_rescheduling_terms.html').read_text(encoding='utf-8')
+    amendment_parser = DefaultText()
+    amendment_parser.feed(amendment_html)
+    amendment_text = '\n\n'.join(amendment_parser.blocks)
+    default_html += '\n' + amendment_html
+    default_html = arrange_rescheduling_terms(default_html, html=True)
     parser = DefaultText()
     parser.feed(default_html)
     default_text = '\n\n'.join(parser.blocks)
 
     def current():
         row = db.session.get(Setting, 'booking_terms')
-        return json.loads(row.value) if row else dict(text=default_text, updated_at=None)
+        data = json.loads(row.value) if row else dict(text=default_text, updated_at=None)
+        if row and not re.search(r'^# \d+\. Booking amendments and rescheduling\s*$', data['text'], re.MULTILINE):
+            data['text'] = data['text'].rstrip() + '\n\n' + amendment_text
+        data['text'] = arrange_rescheduling_terms(data['text'])
+        return data
 
     def version():
         return 'bt-' + hashlib.sha256(current()['text'].encode()).hexdigest()[:20]
 
     def terms_html():
         row = db.session.get(Setting, 'booking_terms')
-        return format_terms(json.loads(row.value)['text']) if row else Markup(default_html)
+        return format_terms(current()['text']) if row else Markup(default_html)
 
     def snapshot():
         return dict(version=version(), html=str(app.jinja_env.get_template('_booking_legal_text.html').render()))

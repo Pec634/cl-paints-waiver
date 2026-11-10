@@ -1,0 +1,6 @@
+{% set credits = admin_reschedule_credits(booking) %}
+{% if credits is not none %}
+<div class="panel"><h3>Reschedule credits</h3>
+<p><strong>{{ credits.remaining }} of 1 free credit remaining</strong> &middot; {{ credits.used }} accepted date change{{ '' if credits.used == 1 else 's' }} recorded.</p>
+<p>Admin only. A credit is used when the client accepts a replacement date, not when it is proposed. Further approved rescheduling carries a &pound;15 administration fee with at least 14 calendar days' notice. Review short-notice requests and exceptions individually. Agree and record any fee separately; this counter does not charge the client.</p></div>
+{% endif %}
