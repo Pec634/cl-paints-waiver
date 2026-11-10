@@ -2,6 +2,7 @@
 from datetime import datetime
 from io import BytesIO
 import json
+import hashlib
 import secrets
 import re
 from urllib.parse import urlsplit, parse_qs, urlencode
@@ -149,6 +150,39 @@ def register(app, db, models, native_models, current_client, admin_required):
         data = json.loads(item.answers_json)
         signed = data.get('signature') or next((v for k, v in data.items() if k.lower().startswith('signature') and v), None)
         return bool(item.terms_snapshot and data.get('authority_confirmed') and signed and not data.get('withdrawn_at'))
+
+    def participant_releases(source):
+        items = Submission.query.join(Form).filter(Submission.client_id == source.client_id, Form.kind == 'photo').order_by(Submission.id.desc()).all()
+        return [item for item in items if json.loads(item.answers_json).get('participant_photo_id') == source.id]
+
+    def participant_release(source):
+        items = participant_releases(source)
+        if not items:
+            return None
+        digest = hashlib.sha256(source.content).hexdigest()
+        for item in items:
+            data = json.loads(item.answers_json)
+            if (evidence(item) and 'website' in data.get('permissions', [])
+                    and data.get('participant_photo_sha256') == digest):
+                return item
+        return None
+
+    def withdraw(item):
+        data = json.loads(item.answers_json)
+        data['withdrawn_at'] = datetime.utcnow().isoformat()
+        item.answers_json = json.dumps(data)
+        for media in Media.query.filter_by(submission_id=item.id):
+            photo = Photo.query.filter_by(media_id=media.id).first()
+            if photo:
+                photo.status = 'withdrawn'
+                photo.gallery = photo.home = photo.hero = photo.about = photo.services = photo.contact = False
+
+    def withdraw_participant(source):
+        for item in participant_releases(source):
+            withdraw(item)
+
+    app.extensions['participant_photo_release'] = participant_release
+    app.extensions['participant_photo_withdraw'] = withdraw_participant
 
     def visible(photo):
         if isinstance(photo, Asset):
@@ -321,6 +355,15 @@ def register(app, db, models, native_models, current_client, admin_required):
         account = current_client()
         if not account:
             return redirect(url_for('client.login'))
+        source, source_person = None, None
+        if 'participant_photo' in request.args:
+            source_id = request.args.get('participant_photo', type=int)
+            if not source_id:
+                abort(404)
+            source, source_person = app.extensions['participant_photo_release_source'](source_id, account)
+            if participant_release(source):
+                flash('This photograph is already in the image library. You can view or withdraw its permission below.', 'success')
+                return redirect(url_for('client_photos'))
         error = None
         if request.method == 'POST':
             check()
@@ -329,14 +372,7 @@ def register(app, db, models, native_models, current_client, admin_required):
                     item = db.get_or_404(Submission, request.form.get('submission_id', type=int))
                     if item.client_id != account.id or db.session.get(Form, item.form_id).kind != 'photo':
                         abort(404)
-                    data = json.loads(item.answers_json)
-                    data['withdrawn_at'] = datetime.utcnow().isoformat()
-                    item.answers_json = json.dumps(data)
-                    for media in Media.query.filter_by(submission_id=item.id):
-                        photo = Photo.query.filter_by(media_id=media.id).first()
-                        if photo:
-                            photo.status = 'withdrawn'
-                            photo.gallery = photo.home = photo.hero = photo.about = photo.services = photo.contact = False
+                    withdraw(item)
                     db.session.commit()
                     flash('Permission withdrawn. Website images have been removed. Contact us about any social media or printed copies.', 'success')
                     return redirect(url_for('client_photos'))
@@ -360,8 +396,12 @@ def register(app, db, models, native_models, current_client, admin_required):
                 if Submission.query.filter_by(token=token).first():
                     return redirect(url_for('client_photos'))
                 uploads = []
-                for index in range(3):
-                    upload = request.files.get(f'photo_{index}')
+                for index in range(1 if source else 3):
+                    if source:
+                        from werkzeug.datastructures import FileStorage
+                        upload = FileStorage(stream=BytesIO(source.content), filename='participant-photo.jpg')
+                    else:
+                        upload = request.files.get(f'photo_{index}')
                     if not upload or not upload.filename:
                         continue
                     people = request.form.get(f'people_{index}', '').strip()
@@ -400,6 +440,12 @@ def register(app, db, models, native_models, current_client, admin_required):
                     answers_json=json.dumps(dict(signature=signed, authority_confirmed=True,
                         permissions=['portfolio', 'website', 'social'], terms_version='1',
                         photo_people=[people for _, people in uploads], account_number=account.account_number)))
+                if source:
+                    data = json.loads(item.answers_json)
+                    data.update(participant_photo_id=source.id,
+                                participant_id=source.participant_id,
+                                participant_photo_sha256=hashlib.sha256(source.content).hexdigest())
+                    item.answers_json = json.dumps(data)
                 db.session.add(item)
                 db.session.flush()
                 form.terms = PHOTO_TERMS
@@ -419,6 +465,7 @@ def register(app, db, models, native_models, current_client, admin_required):
                 error = str(exc)
         entries = Submission.query.join(Form).filter(Submission.client_id == account.id, Form.kind == 'photo').order_by(Submission.id.desc()).all()
         return render_template('client/photos.html', client_account=account, client_csrf=csrf(), error=error,
+            source_photo=source, source_person=source_person,
             terms=PHOTO_TERMS, token=session.setdefault('photo_upload_token', secrets.token_urlsafe(32)),
             fields=[dict(type='signature', label='Signature', required=True)], entries=entries,
             photo_answers=lambda item: json.loads(item.answers_json))

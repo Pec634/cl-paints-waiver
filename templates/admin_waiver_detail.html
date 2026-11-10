@@ -1,3 +1,4 @@
+{% from '_participant_photo_button.html' import photo_button with context %}
 {% extends 'base.html' %}
 
 {% block title %}
@@ -95,7 +96,7 @@ Waiver Details | CL Paints
 
     {% for participant in waiver.participants %}
 
-        <div class="participant-card">
+        <div class="participant-card">{{ photo_button(participant, true) }}
 
             <p>
                 <strong>

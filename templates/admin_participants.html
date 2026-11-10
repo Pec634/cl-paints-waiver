@@ -1,3 +1,4 @@
+{% from '_participant_photo_button.html' import photo_button with context %}
 {% extends 'base.html' %}
 
 {% block title %}
@@ -113,7 +114,7 @@ Participants | CL Paints
                                 <td data-label="Waiver Date">{{ participant.waiver.signed_date.strftime("%d/%m/%Y") }}</td>
                                 <td data-label="Status">{{ participant.waiver.status }}</td>
                                 <td data-label="Action">
-                                    <div class="participant-actions">
+                                    <div class="participant-actions">{{ photo_button(participant, true) }}
                                         <a
                                             class="btn small"
                                             href="{{ url_for('admin_waiver_detail', waiver_id=participant.waiver.id) }}"

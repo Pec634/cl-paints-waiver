@@ -1,0 +1,23 @@
+{% macro photo_button(person, admin=false) %}
+{% set endpoint = 'admin_participant_photos' if admin else 'client_participant_photos' %}
+<div class="participant-photo-control" data-participant-photo>
+  <button class="btn" type="button" data-photo-open>Add image</button>
+  <a class="btn" href="{{ url_for(endpoint, participant_id=person.id) }}">View photos</a>
+  <dialog class="participant-photo-dialog" aria-labelledby="photo-title-{{ person.id }}">
+    <form method="post" enctype="multipart/form-data" action="{{ url_for(endpoint, participant_id=person.id) }}" class="client-form" data-photo-form>
+      <h2 id="photo-title-{{ person.id }}">Add image for {{ person.first_name }} {{ person.last_name }}</h2>
+      <p>Private to this participant's responsible account and CL Paints admins. This does not grant permission for website or social media use.</p>
+      <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+      <input type="hidden" name="action" value="upload">
+      <div class="client-action-row"><button type="button" class="btn" data-photo-camera>Take photo</button><button type="button" class="btn" data-photo-device>Choose from device</button></div>
+      <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-photo-camera-input hidden>
+      <label>Photo (JPG, PNG or WebP, under 10 MB)<input type="file" name="image" accept="image/jpeg,image/png,image/webp" data-photo-input required></label>
+      <p>On phones without camera support, choose an existing photo. Export HEIC photos as JPG first.</p>
+      <img data-photo-preview class="participant-photo-preview" alt="Selected photograph preview" hidden>
+      <p data-photo-status role="status" aria-live="polite"></p>
+      <div class="client-action-row"><button class="btn primary" type="submit" data-photo-save>Save photo</button><button class="btn" type="button" data-photo-close>Cancel</button></div>
+    </form>
+  </dialog>
+  <noscript><a href="{{ url_for(endpoint, participant_id=person.id, upload=1) }}">Upload a participant photo</a></noscript>
+</div>
+{% endmacro %}

@@ -552,6 +552,8 @@ from phone_push import define_models as define_phone_push_models
 phone_push_models = define_phone_push_models(db)
 from admin_client_profiles import define_model as define_admin_client_note
 AdminClientNote = define_admin_client_note(db)
+from participant_photos import define_model as define_participant_photo
+ParticipantPhoto = define_participant_photo(db)
 from email_media import define_model as define_email_media
 EmailMedia = define_email_media(db)
 from client_features import define_model as define_client_preference_model
@@ -2693,9 +2695,11 @@ def delete_waiver(waiver_id):
         return jsonify({"error": "This waiver has loyalty or transfer history. Archive it instead to preserve member records."}), 409
 
     try:
-        Participant.query.filter_by(
-            waiver_id=waiver.id
-        ).delete(synchronize_session=False)
+        for photo in ParticipantPhoto.query.filter(ParticipantPhoto.participant_id.in_(member_ids)).all():
+            app.extensions['participant_photo_withdraw'](photo)
+        ParticipantPhoto.query.filter(ParticipantPhoto.participant_id.in_(member_ids)).delete(synchronize_session=False)
+        for person in waiver.participants:
+            db.session.delete(person)
 
         db.session.delete(waiver)
         db.session.commit()
@@ -3046,6 +3050,9 @@ register_phone_push(app, db, phone_push_models, Booking, get_current_client, adm
 from admin_client_profiles import register as register_admin_client_profiles
 register_admin_client_profiles(app, db, AdminClientNote, ClientAccount, Booking, Waiver, Participant,
     BookingMessage, ClientEnquiry, ClientRewardOwner, BookingInvoice, loyalty_models, admin_required)
+from participant_photos import register as register_participant_photos
+register_participant_photos(app, db, ParticipantPhoto, Participant, ClientAccount, loyalty_models[3],
+    get_current_client, admin_required)
 
 from communications import register as register_communications
 register_communications(app, db, Booking, BookingMessage, notification_models[1], marketing_models,
