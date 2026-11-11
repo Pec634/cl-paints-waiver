@@ -2,6 +2,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import secrets
+import os
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -80,6 +81,52 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
                 error = str(exc)
         response = app.make_response(render_template('admin_client_from_booking.html', booking=booking,
             values=values, client_csrf=csrf, error=error))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+
+    @app.route('/admin/clients/<int:client_id>/edit', methods=['GET', 'POST'])
+    @admin_required
+    def admin_edit_client(client_id):
+        from client_addresses import FIELDS, read_address, format_address
+        account = db.get_or_404(Account, client_id)
+        csrf = session.setdefault('client_csrf', secrets.token_urlsafe(32))
+        Billing = app.extensions['client_billing_address_model']
+        billing = db.session.get(Billing, account.id)
+        values = {key: getattr(account, key) or '' for key in ('first_name', 'last_name', 'phone', 'address')}
+        if billing:
+            values.update(billing.details)
+        error = None
+        if request.method == 'POST':
+            if not secrets.compare_digest(csrf, request.form.get('csrf_token', '')):
+                abort(400)
+            values = request.form
+            try:
+                changes = {key: values.get(key, '').strip() for key in ('first_name', 'last_name', 'phone')}
+                if any(not changes[key] or len(changes[key]) > 100 for key in ('first_name', 'last_name')):
+                    raise ValueError('Enter a first name and surname, up to 100 characters each.')
+                if len(changes['phone']) > 50:
+                    raise ValueError('Keep the phone number within 50 characters.')
+                address_details = read_address(values)
+                changes['address'] = format_address(address_details)
+                if len(changes['address']) > 4000:
+                    raise ValueError('Keep the address within 4,000 characters.')
+                for key, value in changes.items():
+                    setattr(account, key, value)
+                if not billing:
+                    billing = Billing(client_id=account.id, details=address_details)
+                    db.session.add(billing)
+                else:
+                    billing.details = {**billing.details, **address_details}
+                db.session.commit()
+                flash('Client details saved.', 'success')
+                return redirect(url_for('admin_client_profile', client_id=account.id))
+            except ValueError as exc:
+                error = str(exc)
+        response = app.make_response(render_template('admin_edit_client.html', account=account,
+            values=values, form_data=values, billing_address_fields=FIELDS,
+            legacy_address=account.address if not billing else '',
+            google_maps_api_key=os.environ.get('GOOGLE_MAPS_API_KEY', ''),
+            error=error, client_csrf=csrf))
         response.headers['Cache-Control'] = 'private, no-store'
         return response
 

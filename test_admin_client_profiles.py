@@ -12,6 +12,69 @@ class AdminClientProfilesTest(unittest.TestCase):
         self.path=f'/admin/clients/{self.account.id}'
     def tearDown(self): self.fixture.tearDown()
 
+    def test_edit_client_details_and_access_controls(self):
+        path = self.path + '/edit'
+        original_email = self.account.email
+        data = dict(first_name='Updated', last_name='Client', phone='01234 567890',
+                    address_property='12', address_street='High Street', address_city='London',
+                    address_postcode='SW1A 1AA', address_country='United Kingdom',
+                    email='replacement@example.com', csrf_token='admin-token')
+        self.assertEqual(self.client.post(path, data=data).status_code, 302)
+        self.assertEqual(self.account.first_name, 'Test')
+        self.assertEqual(self.admin.post(path, data={**data, 'csrf_token': 'wrong'}).status_code, 400)
+        page = self.admin.get(path)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('no-store', page.headers['Cache-Control'])
+        for field in ('address_property', 'address_street', 'address_city', 'address_postcode', 'address_country'):
+            self.assertIn(f'name="{field}"'.encode(), page.data)
+        self.assertNotIn(b'<textarea name="address"', page.data)
+        self.assertEqual(self.admin.post(path, data=data).status_code, 302)
+        main.db.session.refresh(self.account)
+        self.assertEqual(self.account.first_name, 'Updated')
+        self.assertEqual(self.account.phone, data['phone'])
+        self.assertEqual(self.account.address, '12\nHigh Street\nLondon\nSW1A 1AA\nUnited Kingdom')
+        Billing = main.app.extensions['client_billing_address_model']
+        self.assertEqual(main.db.session.get(Billing, self.account.id).details['address_property'], '12')
+        self.assertEqual(self.account.email, original_email)
+        self.assertIn(self.fixture.booking.public_reference.encode(), self.admin.get(self.path).data)
+        self.assertIn(b'Updated', self.admin.get('/admin/clients').data)
+        response = self.admin.post(path, data={**data, 'first_name': '', 'phone': 'x' * 51})
+        self.assertIn(b'role="alert"', response.data)
+        main.db.session.refresh(self.account)
+        self.assertEqual(self.account.first_name, 'Updated')
+        self.assertEqual(self.account.phone, data['phone'])
+
+    def test_edit_legacy_address_requires_complete_separate_fields(self):
+        self.account.address = '12 High Street, London'
+        main.db.session.commit()
+        path = self.path + '/edit'
+        self.assertIn(b'12 High Street, London', self.admin.get(path).data)
+        response = self.admin.post(path, data=dict(first_name='Changed', last_name='Client',
+            csrf_token='admin-token', address_property='12', address_street='High Street',
+            address_city='London', address_postcode='', address_country='United Kingdom'))
+        self.assertIn(b'role="alert"', response.data)
+        self.assertIn(b'value="High Street"', response.data)
+        main.db.session.refresh(self.account)
+        self.assertEqual(self.account.first_name, 'Test')
+        self.assertEqual(self.account.address, '12 High Street, London')
+
+    def test_edit_structured_address_preserves_profile_fields(self):
+        Billing = main.app.extensions['client_billing_address_model']
+        main.db.session.add(Billing(client_id=self.account.id, details={
+            'address_property': '1', 'address_street': 'Old Street', 'address_city': 'London',
+            'address_postcode': 'N1 1AA', 'address_country': 'UK', 'client_type': 'business'}))
+        main.db.session.commit()
+        data = dict(first_name='Test', last_name='Client', phone='', csrf_token='admin-token',
+                    address_property='2', address_street='New Street', address_city='London',
+                    address_postcode='N1 2AA', address_country='UK')
+        path = self.path + '/edit'
+        self.assertIn(b'name="address_property"', self.admin.get(path).data)
+        self.assertEqual(self.admin.post(path, data=data).status_code, 302)
+        billing = main.db.session.get(Billing, self.account.id)
+        self.assertEqual(billing.details['client_type'], 'business')
+        self.assertEqual(billing.details['address_street'], 'New Street')
+        self.assertEqual(self.account.address, '2\nNew Street\nLondon\nN1 2AA\nUK')
+
     def test_combined_timeline_and_order_attention(self):
         Order = main.creates_models[0]
         main.db.session.add_all([
