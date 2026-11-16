@@ -2,9 +2,9 @@
 {% block title %}Client portal | {{ business_settings.business_name }}{% endblock %}
 {% block body %}
 <div class="client-shell">
-<header class="client-header"><a class="client-brand" href="{{ url_for('client.dashboard') if client_account else url_for('client.login') }}"><img src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="" width="48" height="48"><strong>{{ business_settings.business_name }}</strong></a><small>YOUR CLIENT PORTAL</small>
+<header class="client-header"><a class="client-brand" href="{{ url_for('client.booking_detail',booking_id=private_booking_id) if private_booking_access else url_for('client.dashboard') if client_account else url_for('client.login') }}"><img src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="" width="48" height="48"><strong>{{ business_settings.business_name }}</strong></a><small>{{ 'YOUR PRIVATE BOOKING' if private_booking_access else 'YOUR CLIENT PORTAL' }}</small>
 <p class="client-slogan">Bringing colour to life - One face at time</p>
-{% if client_account %}
+{% if client_account and not private_booking_access %}
 <button class="client-menu-toggle" type="button" aria-expanded="false" aria-controls="client-navigation" hidden>Menu <span aria-hidden="true">☰</span></button>
 <nav id="client-navigation" class="client-navigation" aria-label="Client navigation">
   <div class="client-nav-main">
@@ -36,7 +36,7 @@
     </details>
   </div>
 </nav>{% endif %}</header>
-{% if client_account %}<nav class="portal-mobile-shortcuts" aria-label="Quick navigation"><a href="{{ url_for('client.dashboard') }}" {% if request.endpoint == 'client.dashboard' %}aria-current="page"{% endif %}>Home</a><a href="{{ url_for('client.bookings') }}" {% if request.endpoint in ['client.bookings','client.booking_detail','client_booking_messages'] %}aria-current="page"{% endif %}>Bookings</a><a href="{{ url_for('client_payments') }}" {% if request.endpoint == 'client_payments' %}aria-current="page"{% endif %}>Payments</a><a href="{{ url_for('loyalty.waivers') }}" {% if request.endpoint == 'loyalty.waivers' %}aria-current="page"{% endif %}>Waivers</a></nav>{% endif %}
+{% if client_account and not private_booking_access %}<nav class="portal-mobile-shortcuts" aria-label="Quick navigation"><a href="{{ url_for('client.dashboard') }}" {% if request.endpoint == 'client.dashboard' %}aria-current="page"{% endif %}>Home</a><a href="{{ url_for('client.bookings') }}" {% if request.endpoint in ['client.bookings','client.booking_detail','client_booking_messages'] %}aria-current="page"{% endif %}>Bookings</a><a href="{{ url_for('client_payments') }}" {% if request.endpoint == 'client_payments' %}aria-current="page"{% endif %}>Payments</a><a href="{{ url_for('loyalty.waivers') }}" {% if request.endpoint == 'loyalty.waivers' %}aria-current="page"{% endif %}>Waivers</a></nav>{% endif %}
 <main class="client-main">
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}{% if category == 'client_login_success' %} client-login-celebration{% endif %}" role="status">{{ message }}</p>{% endfor %}
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
@@ -68,7 +68,7 @@
     <div class="client-footer-bottom">
       <p>Bringing colour to life - One face at time</p>
       <nav class="client-footer-links" aria-label="Help and policies">
-      {% if client_account %}<a href="{{ url_for('client_help') }}" {% if request.endpoint == 'client_help' %}aria-current="page"{% endif %}>Help &amp; aftercare</a>{% endif %}
+      {% if client_account and not private_booking_access %}<a href="{{ url_for('client_help') }}" {% if request.endpoint == 'client_help' %}aria-current="page"{% endif %}>Help &amp; aftercare</a>{% endif %}
       <a href="{{ url_for('privacy_policy') }}">Privacy policy</a>
       </nav>
     </div>

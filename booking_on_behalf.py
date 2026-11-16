@@ -3,7 +3,7 @@ import hashlib
 import json
 import secrets
 from datetime import datetime
-from flask import abort, flash, redirect, request, session, url_for
+from flask import abort, flash, redirect, request, session, url_for, g
 from booking_edit import version
 from client_notifications import booking_snapshot
 
@@ -55,6 +55,7 @@ def register(app, db, Booking, current_client, schedule, settings):
         before = booking_snapshot(booking, schedule)
         data = json.loads(booking.event_schedule)
         data['on_behalf'].update(pending=False, signed_at=datetime.utcnow().isoformat(), signed_by=account.email,
+            signed_via='private_booking_link' if getattr(g, 'private_booking', None) else 'client_portal',
             terms_hash=terms_hash(), terms_snapshot=terms_text())
         booking.event_schedule = json.dumps(data)
         booking.signature = signature

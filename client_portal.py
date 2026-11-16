@@ -9,7 +9,7 @@ import os
 import ipaddress
 import re
 from urllib.parse import urlsplit
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, abort
+from flask import Blueprint, render_template, request, session, redirect, url_for, flash, abort, g
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from email_validator import validate_email, EmailNotValidError
@@ -38,6 +38,11 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     def digest(value):
         return hmac.new(str(app.secret_key).encode(), value.encode(), hashlib.sha256).hexdigest()
     def current_account():
+        link_account = app.extensions.get('booking_link_account')
+        if link_account:
+            account = link_account()
+            if account:
+                return account
         account_id = session.get('client_id')
         issued = session.get('client_signed_in', 0)
         if not account_id or datetime.now().timestamp() - issued >= client_session_seconds():
@@ -93,7 +98,7 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     @app.context_processor
     def client_session_context():
         account = current_account() if not request.path.startswith('/admin') else None
-        return dict(client_session_expires=(session.get('client_signed_in', 0) + client_session_seconds()) if account else None)
+        return dict(client_session_expires=(session.get('client_signed_in', 0) + client_session_seconds()) if account and not getattr(g, 'private_booking', None) else None)
 
     @app.context_processor
     def reward_link_context():

@@ -591,6 +591,8 @@ app.extensions['marketing_design_models'] = define_design_models(db)
 KioskSession = define_kiosk_model(db)
 from client_addresses import define_model as define_address_model, FIELDS as BILLING_ADDRESS_FIELDS, read_address, format_address
 ClientBillingAddress = define_address_model(db)
+from booking_access import define_model as define_booking_access
+BookingAccess = define_booking_access(db)
 app.extensions['client_billing_address_model'] = ClientBillingAddress
 app.extensions['profile_ethnicities'] = ETHNICITY_BREAKDOWNS
 
@@ -3155,6 +3157,8 @@ from booking_terms import register as register_booking_terms
 register_booking_terms(app, db, BusinessSetting, admin_required)
 from booking_on_behalf import register as register_booking_on_behalf
 register_booking_on_behalf(app, db, Booking, get_current_client, booking_schedule_events, get_business_settings)
+from booking_access import register as register_booking_access
+register_booking_access(app, db, BookingAccess, Booking, ClientAccount, admin_required, get_business_settings)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

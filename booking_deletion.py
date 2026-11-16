@@ -18,7 +18,7 @@ PROTECTED = {
 }
 REQUEST_TABLES = {'booking_activity', 'booking_change', 'booking_date_proposal',
     'booking_message', 'booking_request', 'payment_plan', 'booking_design_media',
-    'invoice_document', 'form_booking_record', 'form_field_file'}
+    'invoice_document', 'form_booking_record', 'form_field_file', 'booking_access'}
 
 
 def register(app, db, Booking, admin_required):

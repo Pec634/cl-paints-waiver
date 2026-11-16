@@ -3,7 +3,7 @@ import json
 import hashlib
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from flask import flash
+from flask import flash, g
 from werkzeug.datastructures import MultiDict
 from client_addresses import FIELDS
 from client_notifications import booking_snapshot
@@ -80,13 +80,15 @@ def save_revision(app, db, booking, revised, account, Request, Enquiry, schedule
         terms = app.jinja_env.get_template('_booking_legal_text.html').render(business_settings=settings)
         previous['on_behalf'].update(pending=False, signed_at=datetime.utcnow().isoformat(),
                                     signed_by=account.email,
+                                    signed_via='private_booking_link' if getattr(g, 'private_booking', None) else 'client_portal',
                                     terms_snapshot=terms, terms_hash=hashlib.sha256(terms.encode()).hexdigest())
     booking.event_schedule = json.dumps(previous)
     after = booking_snapshot(booking, schedule)
     changes = {label: {'before': before.get(label), 'after': value}
                for label, value in after.items() if before.get(label) != value}
     history = previous.setdefault('client_revisions', [])
-    history.append(dict(at=datetime.now(timezone.utc).isoformat(), by=account.email, changes=changes))
+    history.append(dict(at=datetime.now(timezone.utc).isoformat(), by=account.email, changes=changes,
+                        via='private_booking_link' if getattr(g, 'private_booking', None) else 'client_portal'))
     booking.event_schedule = json.dumps(previous)
     details = '\n'.join(f'{label}: {change["before"]} → {change["after"]}' for label, change in changes.items())
     details = f'Client edited booking (revision {len(history)}). Review the latest booking, pricing and travel charges before confirming.\n\n{details}'

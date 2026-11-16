@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from decimal import Decimal
 from string import Formatter
-from flask import abort, current_app, redirect, request, session, url_for, has_app_context
+from flask import abort, current_app, redirect, request, session, url_for, has_app_context, g
 import secrets
 EMAIL_KINDS = ('booking', 'reward', 'portal_enquiry', 'website_enquiry')
 
@@ -199,12 +199,14 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         account = current_client() if request.path.startswith('/client/') else None
         if not account:
             return {}
-        result = {'client_notifications': Notice.query.filter(db.func.lower(Notice.email) == account.email).order_by(Notice.id.desc()).limit(10).all()}
-        Read = app.extensions['notification_read_model']
-        marker = db.session.get(Read, account.id)
-        last_read = marker.last_notice_id if marker else 0
-        result['client_unread_count'] = Notice.query.filter(db.func.lower(Notice.email) == account.email, Notice.id > last_read).count()
-        result['client_last_notice_id'] = max((notice.id for notice in result['client_notifications']), default=0)
+        result = {}
+        if not getattr(g, 'private_booking', None):
+            result['client_notifications'] = Notice.query.filter(db.func.lower(Notice.email) == account.email).order_by(Notice.id.desc()).limit(10).all()
+            Read = app.extensions['notification_read_model']
+            marker = db.session.get(Read, account.id)
+            last_read = marker.last_notice_id if marker else 0
+            result['client_unread_count'] = Notice.query.filter(db.func.lower(Notice.email) == account.email, Notice.id > last_read).count()
+            result['client_last_notice_id'] = max((notice.id for notice in result['client_notifications']), default=0)
         if request.endpoint == 'client.booking_detail':
             changes = Change.query.filter_by(booking_id=request.view_args['booking_id'], acknowledged_at=None).order_by(Change.id.desc()).all()
             fields = {key for change in changes for key in change.changes}

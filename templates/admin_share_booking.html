@@ -1,0 +1,19 @@
+{% extends 'rewards/base.html' %}
+{% block content %}
+<a href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Back to booking</a>
+<section class="panel"><h1>Private booking link &amp; QR code</h1>
+<p>{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }}</p>
+<p>The client can open this booking without signing in, review the details, make changes until confirmation, and sign. Anyone you share the link or QR code with can access this booking, so send it directly to the client.</p>
+{% if not account %}<p>Link this booking to a client account first.</p><a class="btn primary" href="{{ url_for('admin_client_from_booking', booking_id=booking.id) }}">Create or link client account</a>
+{% else %}
+{% if share_url %}
+<label>Private booking URL<input id="private-booking-url" type="url" value="{{ share_url }}" readonly style="width:100%;box-sizing:border-box" onclick="this.select()"></label>
+<button class="btn primary" type="button" id="copy-private-booking-url">Copy link</button><p id="copy-private-booking-status" role="status"></p>
+<p>Expires {{ access.expires_at|booking_history_time }}. Replacing or disabling the link also disables the previous QR code.</p>
+<img src="{{ url_for('admin_share_booking_qr', booking_id=booking.id) }}" width="256" height="256" style="max-width:100%;height:auto" alt="QR code for this private booking link">
+<p><a class="btn" download href="{{ url_for('admin_share_booking_qr', booking_id=booking.id) }}">Download QR code</a></p>
+{% endif %}
+<form method="post" class="client-action-row"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn" name="action" value="generate">{{ 'Replace link and QR code' if share_url else 'Generate link and QR code' }}</button>{% if share_url %}<button class="btn" name="action" value="revoke">Disable link</button>{% endif %}</form>
+{% endif %}</section>
+<script src="{{ url_for('static', filename='booking-share.js') }}" defer></script>
+{% endblock %}

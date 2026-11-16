@@ -10,7 +10,7 @@ Client Booking Request | CL Paints
 {% if on_behalf %}<p class="client-booking-banner"><a href="{{ url_for('admin_bookings') }}">Back to admin bookings</a> · <strong>Admin: book on behalf of a client</strong>. The client will review and sign in their portal. You are entering details, not signing their agreement.</p>{% endif %}
 {% if kiosk_item %}<a class="btn" href="{{ url_for('kiosk_menu') }}">Back to kiosk forms</a>{% endif %}
 {% if booking_offer %}<p class="client-booking-banner"><strong>{{ booking_offer.title }}</strong> ? Save ?{{ booking_offer.saving }} per hour. Offer applies when your request is submitted during the promotion period; travel and minimum duration still apply.</p>{% endif %}
-    {% if portal_account %}<p class="client-booking-banner"><a href="{{ url_for('client.bookings') }}">← My bookings</a> · Signed in as {{ portal_account.email }}</p>{% endif %}
+    {% if portal_account and not private_booking_access %}<p class="client-booking-banner"><a href="{{ url_for('client.bookings') }}">← My bookings</a> · Signed in as {{ portal_account.email }}</p>{% endif %}
     <header class="booking-public-header">
         <a class="brand" href="/">{{ business_settings.business_name }}</a>
         <small>CLIENT BOOKING REQUEST</small>

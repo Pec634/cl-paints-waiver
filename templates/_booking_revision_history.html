@@ -6,7 +6,7 @@
   {% for revision in revision_history|reverse %}
   <article class="client-record">
     <h3>Revision {{ loop.revindex }}</h3>
-    <p><time datetime="{{ revision.at }}">{{ revision.at|booking_history_time }}</time> &middot; Changed by {{ revision.by }}</p>
+    <p><time datetime="{{ revision.at }}">{{ revision.at|booking_history_time }}</time> &middot; Changed by {{ revision.by }}{% if revision.via == 'private_booking_link' %} via private booking link{% endif %}</p>
     {% if revision.changes %}
     <dl>{% for label, change in revision.changes.items() %}
       <dt><strong>{{ label }}</strong></dt>
