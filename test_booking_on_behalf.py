@@ -123,6 +123,30 @@ class OnBehalfTest(unittest.TestCase):
         self.assertIn('We have prepared your booking.', send.call_args.args[2])
         self.assertIn('/client/bookings/', send.call_args.args[2])
 
+    def test_prefill_uses_older_booking_when_latest_and_profile_fields_are_blank(self):
+        from datetime import date
+        old = self.create()
+        old.date_of_birth = date(1990, 4, 5)
+        old.title = 'Dr'
+        old.job_title = 'Earlier saved job'
+        main.db.session.commit()
+        latest = self.create()
+        for field in ('phone', 'client_address', 'client_type', 'job_title', 'title', 'ethnicity', 'religion'):
+            setattr(latest, field, '')
+        latest.date_of_birth = None
+        account = self.fixture.fixture.account
+        account.phone = ''
+        account.address = ''
+        main.db.session.add(main.ClientBillingAddress(client_id=account.id, details={
+            'date_of_birth': '', 'client_type': '', 'ethnicity': '', 'religion': '',
+            'address_property': '', 'address_country': 'United Kingdom'}))
+        main.db.session.commit()
+        for client, path in ((self.admin, f'{self.path}?client_id={account.id}'), (self.client, '/booking')):
+            page = client.get(path)
+            for value in (b'value="1990-04-05"', b'value="Dr" selected', b'Earlier saved job',
+                          b'value="10"', b'value="High Street"', b'value="+447911123456"'):
+                self.assertIn(value, page.data)
+
     def test_account_bookings_prefill_all_saved_client_details(self):
         booking = self.create()
         booking.title = 'Dr'

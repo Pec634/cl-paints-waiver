@@ -1812,10 +1812,10 @@ def booking_request():
     if request.method == 'GET' and prefill_account:
         from client_addresses import booking_prefill
         billing = db.session.get(ClientBillingAddress, prefill_account.id)
-        latest_booking = Booking.query.filter(
+        previous_bookings = Booking.query.filter(
             db.func.lower(db.func.trim(Booking.email)) == prefill_account.email.strip().lower()
-        ).order_by(Booking.submitted_at.desc(), Booking.id.desc()).first()
-        form_data = booking_prefill(prefill_account, billing, latest_booking)
+        ).order_by(Booking.submitted_at.desc(), Booking.id.desc()).all()
+        form_data = booking_prefill(prefill_account, billing, previous_bookings=previous_bookings)
         repeat_id = request.args.get('repeat', type=int)
         if repeat_id and portal_account:
             form_data.update(app.extensions['repeat_booking_details'](portal_account, repeat_id))
