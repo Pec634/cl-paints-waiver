@@ -84,7 +84,7 @@ def register(app, db, Form, Submission, Account, admin_required, check, current_
                         else 'Thank you for entering. Visit your Rewards page for the result and future giveaways.')
             notice = Notice(email=account.email, kind='reward', reference=f'Giveaway-{form.id}', details=details)
             db.session.add(notice)
-            notices.append((account.first_name, notice))
+            notices.append((account.first_name or 'there', notice))
         try:
             db.session.commit()
         except IntegrityError:

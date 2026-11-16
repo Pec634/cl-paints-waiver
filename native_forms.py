@@ -244,24 +244,42 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
             if records['settings'](form).get('waitlist_enabled')=='yes':return redirect(url_for('form_waiting_list',form_id=form.id))
             abort(404)
         if form.kind=='booking':return redirect(url_for('booking_request',seasonal=form.id))
-        if not current_client() and not session.get('kiosk_id'):
+        guest_giveaway = form.kind == 'giveaway' and not current_client() and not session.get('kiosk_id')
+        if not current_client() and not session.get('kiosk_id') and not guest_giveaway:
             session['native_return_form']=form.id
             return redirect(url_for('client.login'))
         workflows['track'](form);db.session.commit()
         return render_template('native_form.html',form=form,fields=json.loads(form.fields_json),csrf=csrf(),
+            guest_giveaway=guest_giveaway,
             submission_token=session.setdefault('native_form_'+str(form.id),secrets.token_urlsafe(32)))
 
     @app.post('/forms/<int:form_id>')
     def native_form_submit(form_id):
         form=db.get_or_404(Form,form_id);account=current_client()
         kiosk_guest = bool(session.get('kiosk_id'))
-        if not account and not kiosk_guest:abort(401)
+        guest_giveaway = form.kind == 'giveaway' and not account and not kiosk_guest
+        if not account and not kiosk_guest and not guest_giveaway:abort(401)
         check()
         if not available(form) or form.kind=='booking':abort(404)
         token=session.get('native_form_'+str(form.id),'')
         if not token or not secrets.compare_digest(token,request.form.get('submission_token','')):abort(400)
         if request.content_length and request.content_length>32_000_000:abort(413)
+        email = ''
         try:
+            workflows['guard']()
+            if guest_giveaway:
+                from email_validator import validate_email, EmailNotValidError
+                from types import SimpleNamespace
+                try:
+                    email = validate_email(request.form.get('guest_email', '').strip(), check_deliverability=False).normalized.casefold()
+                except EmailNotValidError:
+                    raise ValueError('Enter a valid email address.')
+                owner = Account.query.filter(db.func.lower(db.func.trim(Account.email)) == email).first()
+                # The email is an entrant contact, not proof of account ownership.
+                if not owner:
+                    owner = Account(email=email, first_name='', last_name='')
+                    db.session.add(owner); db.session.flush()
+                account = SimpleNamespace(id=owner.id, email=email, first_name='there', last_name='')
             if kiosk_guest:
                 from email_validator import validate_email, EmailNotValidError
                 from types import SimpleNamespace
@@ -276,12 +294,19 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
                     owner = Account(email=email, first_name=first, last_name=last)
                     db.session.add(owner); db.session.flush()
                 account = SimpleNamespace(id=owner.id, email=email, first_name=first, last_name=last)
-            workflows['guard']()
             Form.query.filter_by(id=form.id).with_for_update().first()
             if workflows['full'](form):raise ValueError('This form has reached its response limit. Contact CL Paints or join its waiting list.')
             field_uploads=read_form_files(form,request.files)
             data=answers(form,request.form,upload_names(field_uploads))
             if request.form.get('agree')!='yes':raise ValueError('Confirm that you accept the displayed rules or permissions.')
+            if guest_giveaway:
+                data['Entry method'] = 'Guest email entry; no portal sign-in or email ownership verification.'
+                existing = Submission.query.filter_by(form_id=form.id, client_id=account.id).first()
+                if existing:
+                    db.session.rollback()
+                    session.pop('native_form_'+str(form.id), None)
+                    session['guest_giveaway_received'] = form.id
+                    return redirect(url_for('guest_giveaway_received', form_id=form.id))
             uploads=[]
             if form.kind=='photo':
                 people=request.form.get('people','').strip()
@@ -319,7 +344,7 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
             else:
                 key = f'wedding:{form.id}:{account.id}' if wedding else (f'{form.id}:{account.id}' if form.kind=='giveaway' else None)
                 item=Submission(form_id=form.id,client_id=account.id,token=token,giveaway_key=key,
-                    email=account.email,name=(account.first_name+' '+account.last_name).strip(),answers_json=json.dumps(data),terms_snapshot=form.terms,title_snapshot=form.title)
+                    email=account.email,name='Guest entrant' if guest_giveaway else (account.first_name+' '+account.last_name).strip(),answers_json=json.dumps(data),terms_snapshot=form.terms,title_snapshot=form.title)
             db.session.add(item);db.session.flush()
             records['record_submission'](form,item,data,field_uploads)
             if wedding:
@@ -330,16 +355,29 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
             if form.kind != 'enquiry':
                 item.email_sent=send_email(account.email,messages.get('email_subject') or 'CL Paints: '+form.title+' received',messages.get('email_body') or f'Hello {account.first_name},\n\nWe received your submission for {form.title}. Reference: F-{item.id}.\n\nThis is not a booking confirmation or notification of a giveaway win.\n\nCL Paints')
             db.session.commit();session.pop('native_form_'+str(form.id),None)
+            if guest_giveaway:
+                session['guest_giveaway_received'] = form.id
+                return redirect(url_for('guest_giveaway_received', form_id=form.id))
             flash('Submission received. Reference F-'+str(item.id)+'.','success')
             if kiosk_guest:
                 session['kiosk_completed_form'] = form.id
                 return redirect(url_for('kiosk_form_done'))
             return redirect(url_for('native_form_submission',submission_id=item.id))
         except IntegrityError:
-            db.session.rollback();flash('This entry has already been received. Giveaway entry is limited to one per account per giveaway.','error')
+            db.session.rollback()
+            if guest_giveaway:
+                existing = Submission.query.filter(Submission.form_id == form.id,
+                    db.func.lower(Submission.email) == email).first()
+                if existing:
+                    session.pop('native_form_'+str(form.id), None)
+                    session['guest_giveaway_received'] = form.id
+                    return redirect(url_for('guest_giveaway_received', form_id=form.id))
+                flash('We could not save your entry. Please try again.', 'error')
+            else:
+                flash('This entry has already been received. Giveaway entry is limited to one per account per giveaway.','error')
         except ValueError as error:
             db.session.rollback();flash(str(error),'error')
-            return render_template('native_form.html',form=form,fields=json.loads(form.fields_json),csrf=csrf(),submission_token=token)
+            return render_template('native_form.html',form=form,fields=json.loads(form.fields_json),csrf=csrf(),submission_token=token,guest_giveaway=guest_giveaway)
         return redirect(url_for('native_form_open',form_id=form.id))
 
     @app.get('/client/form-submissions/<int:submission_id>')
@@ -350,6 +388,15 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
         snapshot=json.loads(meta.snapshot_json) if meta else {}
         return render_template('native_submission.html',item=item,answers=json.loads(item.answers_json),media=Media.query.filter_by(submission_id=item.id).all(),
             files=records['files'](item.id),snapshot=snapshot,confirmation_message=confirmation(snapshot.get('settings',{}),account.first_name,item.title_snapshot,'F-'+str(item.id)).get('confirmation_text',''))
+
+    @app.get('/giveaways/<int:form_id>/entry-received')
+    def guest_giveaway_received(form_id):
+        form = Form.query.filter_by(id=form_id, kind='giveaway').first_or_404()
+        if session.get('guest_giveaway_received') != form.id:
+            abort(404)
+        response = app.make_response(render_template('giveaway_guest_received.html', form=form))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
 
     @app.get('/client/form-submissions')
     def native_my_submissions():

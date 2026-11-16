@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Giveaway | CL Paints{% endblock %}
+{% block body %}<main class="client-main" style="max-width:48rem;margin:auto;padding:1rem">
+<header><a href="/">CL Paints</a></header>
+{% for category,message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category=='error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
+{% block content %}{% endblock %}
+</main>{% endblock %}
