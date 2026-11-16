@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch
+from werkzeug.datastructures import MultiDict
 import test_native_forms as fixtures
 from giveaway_removal import eligible_accounts
 
@@ -74,3 +75,33 @@ class GiveawayRemovalTest(unittest.TestCase):
         record = main.db.session.get(main.db._giveaway_removal, self.entry.id)
         self.assertEqual(record.reason, self.data['reason'])
         self.assertEqual(record.removed_at, at)
+
+    def test_visible_remove_button_opens_selection_and_bulk_removes(self):
+        page = self.admin.get(f'/admin/native-forms/{self.form.id}/submissions')
+        path = f'/admin/native-forms/{self.form.id}/remove-entrants'
+        self.assertIn(path.encode(), page.data)
+        self.assertIn(b'>Remove entrants</a>', page.data)
+        other = main.ClientAccount(email='bulk-remove@example.com', first_name='Bulk', last_name='Entrant')
+        main.db.session.add(other); main.db.session.flush()
+        entry = fixtures.Submission(form_id=self.form.id, client_id=other.id, token='bulk-remove-token',
+            giveaway_key=f'{self.form.id}:{other.id}', email=other.email, name='Bulk Entrant', answers_json='{}',
+            terms_snapshot=self.form.terms, title_snapshot=self.form.title)
+        main.db.session.add(entry); main.db.session.commit()
+        page = self.admin.get(path)
+        self.assertIn(b'Select entrants to remove', page.data)
+        self.assertIn(f'name="entry_ids" value="{entry.id}"'.encode(), page.data)
+        data = MultiDict([('csrf_token','admin-token'), ('confirm_remove','yes'), ('reason','Requested removal'),
+                         ('entry_ids',str(self.entry.id)), ('entry_ids',str(entry.id))])
+        self.assertEqual(self.client.post(path, data=data).status_code, 302)
+        self.assertEqual(self.admin.post(path, data=data).status_code, 302)
+        self.assertEqual(main.db._giveaway_removal.query.count(), 2)
+        self.assertEqual(eligible_accounts(main.db, main.ClientAccount, fixtures.Submission, self.form.id).count(), 0)
+        self.assertIsNotNone(main.db.session.get(main.ClientAccount, other.id))
+        self.assertEqual(main.app.test_client().get(path).status_code, 302)
+
+    def test_bulk_removal_rejects_entries_from_other_giveaways_without_partial_removal(self):
+        other = self.fixture.create('giveaway')
+        path = f'/admin/native-forms/{other.id}/remove-entrants'
+        data = dict(self.data, entry_ids=str(self.entry.id))
+        self.assertEqual(self.admin.post(path, data=data).status_code, 404)
+        self.assertEqual(main.db._giveaway_removal.query.count(), 0)

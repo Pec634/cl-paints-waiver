@@ -1,0 +1,23 @@
+{% extends 'rewards/base.html' %}{% block content %}
+<a href="{{ url_for('native_form_entries',form_id=form.id) }}">Back to submissions</a>
+<h1>Remove giveaway entrants</h1><h2>{{ form.title }}</h2>
+{% if drawn %}<section class="panel"><p>This giveaway has already been drawn. Entrants cannot be removed after the draw.</p></section>
+{% elif not entries %}<section class="panel"><p>No active entrants to remove from this giveaway.</p></section>
+{% else %}
+<link rel="stylesheet" href="{{ url_for('static',filename='giveaway-client-selector.css') }}">
+<section class="panel"><form method="post" class="client-form">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<fieldset class="giveaway-client-selector" data-giveaway-clients><legend>Select entrants to remove</legend>
+<p>Tick up to 500 entrants. Removing them excludes them from this giveaway's draw. Their accounts, bookings and entry history are kept.</p>
+<label>Find entrants<input type="search" data-client-search placeholder="Search name, email or account number" autocomplete="off"></label>
+<div class="client-action-row"><button class="btn" type="button" data-select-visible>Select visible entrants</button><button class="btn" type="button" data-clear-clients>Clear selection</button></div>
+<p data-client-count role="status" aria-live="polite">0 clients selected</p>
+<div class="giveaway-client-list" tabindex="0" role="group" aria-label="Giveaway entrants">
+{% for entry,account in entries %}<label class="giveaway-client-option" data-client-option data-search="{{ entry.name }} {{ entry.email }} {{ account.account_number }}"><input type="checkbox" name="entry_ids" value="{{ entry.id }}"><span><strong>{{ entry.name }}</strong><small>{{ account.account_number }} &middot; {{ entry.email }}</small></span></label>{% endfor %}
+</div><p data-client-empty hidden>No entrants match this search.</p>
+</fieldset>
+<label>Reason for removal<textarea name="reason" maxlength="1000" required></textarea></label>
+<label><input type="checkbox" name="confirm_remove" value="yes" required> Confirm removal of the selected entrants from this giveaway</label>
+<button class="btn primary" type="submit">Remove selected entrants</button>
+</form></section><script src="{{ url_for('static',filename='giveaway-client-selector.js') }}" defer></script>
+{% endif %}{% endblock %}

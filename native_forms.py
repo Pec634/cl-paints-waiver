@@ -94,7 +94,7 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     from giveaway_import import register as register_giveaway_import
     register_giveaway_import(app, db, Form, Submission, Account, admin_required, check, csrf, send_email)
     from giveaway_removal import register as register_removal
-    register_removal(app, db, Form, Submission, admin_required, check)
+    register_removal(app, db, Form, Submission, Account, admin_required, check, csrf)
     records=register_records(app,db,models,Account,Booking,current_client,admin_required,available,csrf,check)
     from form_workflows import register as register_workflows
     workflows=register_workflows(app,db,models,Booking,current_client,admin_required,available,records,csrf,check)
