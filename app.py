@@ -593,6 +593,8 @@ from client_addresses import define_model as define_address_model, FIELDS as BIL
 ClientBillingAddress = define_address_model(db)
 from booking_access import define_model as define_booking_access
 BookingAccess = define_booking_access(db)
+from outgoing_emails import define_model as define_outgoing_email
+OutgoingEmail = define_outgoing_email(db)
 app.extensions['client_billing_address_model'] = ClientBillingAddress
 app.extensions['profile_ethnicities'] = ETHNICITY_BREAKDOWNS
 
@@ -1373,7 +1375,7 @@ info@clpaints.com
 """
 
     try:
-        resend.Emails.send({
+        send_portal_email({
             "from": "CL Paints <info@clpaints.com>",
             "to": [waiver.responsible_email],
             "subject": confirmation_subject,
@@ -1490,7 +1492,7 @@ def admin_password_reset_request():
                     _external=True,
                 )
                 try:
-                    resend.Emails.send({
+                    send_portal_email({
                         "from": "CL Paints <info@clpaints.com>",
                         "to": [configured_email],
                         "subject": "Reset your CL Paints admin password",
@@ -1670,10 +1672,6 @@ def admin_rewards():
 
 
 def send_booking_request_confirmation(booking):
-    if not RESEND_API_KEY:
-        print("Booking acknowledgement email was not sent: RESEND_API_KEY is not configured.")
-        return False
-
     try:
         schedule_data = json.loads(booking.event_schedule or "{}")
         events = schedule_data.get("events", [])
@@ -1745,7 +1743,7 @@ def send_booking_request_confirmation(booking):
     custom = confirmation(seasonal.get('snapshot', {}).get('settings', {}), booking.first_name, seasonal.get('title', ''), booking.public_reference) if seasonal else {}
     if custom.get('email_body'): lines = [custom['email_body'], ''] + lines
     try:
-        resend.Emails.send({
+        send_portal_email({
             "from": "CL Paints <info@clpaints.com>",
             "to": [booking.email],
             "subject": custom.get('email_subject') or f"Booking request received - {booking.public_reference} (Under Review)",
@@ -2121,12 +2119,15 @@ def booking_request():
                 db.session.flush()
                 for upload in seasonal_uploads:
                     db.session.add(app.extensions['native_booking_media'](booking_id=booking.id,**upload))
+            if on_behalf:
+                db.session.flush()
+                app.extensions['booking_created_share_link'](booking)
             db.session.commit()
             if seasonal_form:
                 session['native_booking_confirmation'] = {'reference': booking.public_reference, 'message': confirmation(app.extensions['native_form_records']['settings'](seasonal_form), first_name, seasonal_form.title, booking.public_reference).get('confirmation_text', '')}
             if on_behalf:
                 email_sent = app.extensions['client_booking_review_requested'](booking)
-                return redirect(url_for('admin_bookings', created_on_behalf=booking.id, status_email='sent' if email_sent else 'failed'))
+                return redirect(url_for('admin_share_booking', booking_id=booking.id, created='yes', status_email='sent' if email_sent else 'failed'))
             email_sent = send_booking_request_confirmation(booking)
             if booking.promo_code and booking.referral_verified:
                 app.extensions['client_reward_code_notice'](booking.promo_code,
@@ -2244,7 +2245,7 @@ def send_booking_status_email(booking):
     ])
 
     try:
-        resend.Emails.send({
+        send_portal_email({
             "from": "CL Paints <info@clpaints.com>",
             "to": [booking.email],
             "subject": f"Booking request {booking.public_reference} {status_text}",
@@ -2986,16 +2987,23 @@ register_moodboard_payments(app, db, MoodboardOrder, Event, EventMoodboardImage,
                            get_moodboard_prices, get_business_settings, admin_required, BusinessSetting)
 
 
+def send_portal_email(payload):
+    from outgoing_emails import deliver
+    def provider_send(message):
+        if not RESEND_API_KEY:
+            raise RuntimeError('Email service is not configured.')
+        return resend.Emails.send(message)
+    return deliver(app, db, OutgoingEmail, payload, provider_send)
+
+
 def send_client_email(to, subject, body, html_body=None, attachments=None):
-    if not RESEND_API_KEY:
-        return False
     try:
         payload = {'from': 'CL Paints <info@clpaints.com>', 'to': [to], 'subject': subject, 'text': body}
         if html_body:
             payload['html'] = html_body
         if attachments:
             payload['attachments'] = attachments
-        resend.Emails.send(payload)
+        send_portal_email(payload)
         return True
     except Exception:
         app.logger.warning('Client email delivery failed.')
@@ -3159,6 +3167,8 @@ from booking_on_behalf import register as register_booking_on_behalf
 register_booking_on_behalf(app, db, Booking, get_current_client, booking_schedule_events, get_business_settings)
 from booking_access import register as register_booking_access
 register_booking_access(app, db, BookingAccess, Booking, ClientAccount, admin_required, get_business_settings)
+from outgoing_emails import register as register_outgoing_emails
+register_outgoing_emails(app, db, OutgoingEmail, admin_required)
 
 if __name__ == '__main__':
     app.run(debug=os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true'))

@@ -1,0 +1,24 @@
+{% extends 'rewards/base.html' %}
+{% block content %}
+{% include '_communications_nav.html' %}
+<section class="panel"><h2>Outgoing emails</h2>
+<p>Search portal emails, including automatic notifications and emails triggered by admin actions. Times are UK local time. Accepted for sending means the email provider accepted the request; delivery to the inbox is not confirmed.</p>
+<details class="panel"><summary>Import past emails from Resend</summary><p>Copy the history still retained by Resend for info@clpaints.com into this searchable list. Original send dates are preserved. Previously recorded emails are skipped; no emails are resent.</p><p>Resend normally retains 30 days on standard plans. Older summaries are still available in Email history. The live server needs a Resend key with permission to read email history.</p><form method="post" action="{{ url_for('outgoing_emails_import') }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn" name="action" value="start">Import past emails</button>{% if import_progress.get('more') %}<button class="btn primary" name="action" value="continue">Continue import</button>{% endif %}</form>{% if import_progress %}<p>{{ import_progress.get('imported',0) }} email(s) imported in this run.</p>{% endif %}</details>
+<form method="get" class="portal-filter">
+<label>Search emails<input type="search" name="q" value="{{ filters.q }}" maxlength="200" placeholder="Recipient, subject, message or provider reference"></label>
+<label>Category<select name="kind"><option value="all">All categories</option>{% for value,label in kinds.items() %}<option value="{{ value }}" {% if filters.kind==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Sending status<select name="state">{% for value,label in [('all','All attempts'),('accepted','Accepted for sending'),('failed','Failed / not sent'),('pending','Sending / outcome not recorded')] %}<option value="{{ value }}" {% if filters.state==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Trigger<select name="trigger">{% for value,label in [('all','All triggers'),('admin','Admin action'),('automatic','Client action / automation'),('historical','Imported history (trigger unknown)')] %}<option value="{{ value }}" {% if filters.trigger==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>From date<input type="date" name="from" value="{{ filters['from'] }}"></label><label>To date<input type="date" name="to" value="{{ filters.to }}"></label>
+<button class="btn primary">Search emails</button><a class="btn" href="{{ url_for('communications_outgoing') }}">Clear filters</a>
+</form>
+<p>{{ pagination.total }} matching email{{ '' if pagination.total==1 else 's' }}. Full email copies are recorded from this update onward. <a href="{{ url_for('communications_history') }}">Search earlier notification and campaign records</a>.</p>
+{% for item in pagination.items %}<article class="client-record">
+<h3>{{ item.subject }}</h3><p><strong>To:</strong> {{ item.recipient }}<br><strong>From:</strong> {{ item.sender }}</p>
+<p>{{ item.created_at|booking_history_time }} &middot; {{ kinds.get(item.kind,'Other emails') }} &middot; {{ 'Imported history (trigger unknown)' if item.trigger=='historical' else 'Admin action' if item.trigger=='admin' else 'Client action / automation' }} &middot; <strong>{{ 'Accepted for sending' if item.status=='accepted' else 'Failed / not sent' if item.status=='failed' else 'Sending / outcome not recorded' }}</strong></p>
+{% if item.provider_id %}<p>Provider reference: {{ item.provider_id }}</p>{% endif %}
+{% if item.failure %}<p>Sending error: {{ item.failure }}</p>{% endif %}
+<details><summary>View email message</summary>{% if item.trigger=='historical' %}<p>Imported from Resend. Attachments are not downloaded.</p>{% endif %}<p class="client-message" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ item.body_text }}</p>{% if item.attachments!='[]' %}<p>Attachments: {{ item.attachments }}</p>{% endif %}</details>
+</article>{% else %}<p>No outgoing emails match these filters.</p>{% endfor %}
+{% if pagination.pages>1 %}<nav class="client-action-row" aria-label="Outgoing email pages">{% if pagination.has_prev %}<a href="{{ url_for('communications_outgoing',page=pagination.prev_num,**filters) }}">Previous</a>{% endif %}<span>Page {{ pagination.page }} of {{ pagination.pages }}</span>{% if pagination.has_next %}<a href="{{ url_for('communications_outgoing',page=pagination.next_num,**filters) }}">Next</a>{% endif %}</nav>{% endif %}
+</section>{% endblock %}

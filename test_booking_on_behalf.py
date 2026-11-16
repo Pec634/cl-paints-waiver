@@ -89,6 +89,44 @@ class OnBehalfTest(unittest.TestCase):
         page = self.admin.get(self.path)
         self.assertIn(b'action="/admin/bookings/new"', page.data)
 
+    def test_completion_displays_ready_to_share_link_and_qr(self):
+        import re
+        from urllib.parse import urlsplit
+        account = self.fixture.fixture.account
+        with patch.object(main, 'send_client_email', return_value=True):
+            response = self.admin.post(f'{self.path}?client_id={account.id}', data=self.form())
+        booking = main.Booking.query.order_by(main.Booking.id.desc()).first()
+        self.assertIn(f'/admin/bookings/{booking.id}/share', response.location)
+        page = self.admin.get(response.location)
+        self.assertIn(b'Booking added successfully', page.data)
+        self.assertIn(b'client review email was sent', page.data)
+        self.assertIn(b'Copy link', page.data)
+        self.assertIn(b'Download QR code', page.data)
+        link = re.search(r'id="private-booking-url"[^>]*value="([^"]+)"', page.get_data(as_text=True))[1]
+        fresh = self.admin.get(response.location)
+        self.assertIn(link.encode(), fresh.data)
+        self.assertIn(f'/admin/bookings/{booking.id}/share'.encode(), self.admin.get(f'/admin/clients/{account.id}').data)
+        self.assertEqual(main.app.test_client().get(urlsplit(link).path, follow_redirects=True).status_code, 200)
+        self.assertEqual(self.admin.get(f'/admin/bookings/{booking.id}/share/qr.png').status_code, 200)
+        self.assertEqual(booking.status, 'Under Review')
+        self.assertTrue(pending_agreement(booking))
+
+    def test_new_client_also_gets_working_link_when_email_fails(self):
+        import re
+        from urllib.parse import urlsplit
+        data = self.form(); data['email'] = 'new-account@example.com'
+        with patch.object(main, 'send_client_email', return_value=False):
+            page = self.admin.post(self.path, data=data, follow_redirects=True)
+        self.assertIn(b'booking is saved, but the review email could not be sent', page.data)
+        booking = main.Booking.query.filter_by(email=data['email']).one()
+        self.assertIsNotNone(main.ClientAccount.query.filter_by(email=data['email']).one())
+        link = re.search(r'id="private-booking-url"[^>]*value="([^"]+)"', page.get_data(as_text=True))[1]
+        guest = main.app.test_client()
+        self.assertEqual(guest.get(urlsplit(link).path, follow_redirects=True).status_code, 200)
+        self.assertEqual(booking.status, 'Under Review')
+        with guest.session_transaction() as state:
+            self.assertNotIn('client_id', state)
+
     def test_account_booking_sends_client_review_email(self):
         account = self.fixture.fixture.account
         Preference = main.app.extensions['client_email_preference_model']

@@ -4,6 +4,7 @@ from io import BytesIO
 import secrets
 from flask import abort, g, redirect, render_template, request, session, url_for, send_file
 from itsdangerous import URLSafeSerializer, BadSignature
+from sqlalchemy.exc import IntegrityError
 
 
 def define_model(db):
@@ -22,6 +23,25 @@ def register(app, db, Access, Booking, Account, admin_required, settings):
 
     def owner(booking):
         return Account.query.filter(db.func.lower(db.func.trim(Account.email)) == booking.email.strip().lower()).first()
+
+    def prepare_created_booking(booking):
+        """Create sharing access in the same transaction as the admin booking."""
+        if not owner(booking):
+            try:
+                with db.session.begin_nested():
+                    db.session.add(Account(email=booking.email.strip().lower(), first_name=booking.first_name,
+                                           last_name=booking.last_name, phone=booking.phone,
+                                           address=booking.client_address))
+                    db.session.flush()
+            except IntegrityError:
+                if not owner(booking):
+                    raise
+        if not db.session.get(Access, booking.id):
+            now = datetime.utcnow()
+            db.session.add(Access(booking_id=booking.id, nonce=secrets.token_urlsafe(32),
+                                  created_at=now, expires_at=now + timedelta(days=90)))
+
+    app.extensions['booking_created_share_link'] = prepare_created_booking
 
     def scoped_account():
         grant = session.get('booking_access')

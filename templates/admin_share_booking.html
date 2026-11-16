@@ -1,6 +1,12 @@
 {% extends 'rewards/base.html' %}
 {% block content %}
 <a href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Back to booking</a>
+{% if request.args.get('created') == 'yes' %}
+<section class="panel" role="status"><h1>Booking added successfully</h1><p>Booking <strong>{{ booking.public_reference }}</strong> is <strong>{{ booking.status }}</strong>. It is not confirmed. The client needs to review the details and provide their signature and agreement.</p>
+{% if request.args.get('status_email') == 'sent' %}<p>The client review email was sent for delivery.</p>{% elif request.args.get('status_email') == 'failed' %}<p>The booking is saved, but the review email could not be sent. You can share the private link or QR code below directly.</p>{% endif %}
+<p>Copy the URL or download the QR code below to send it now. The same link remains available from the client tab.</p>
+<div class="client-action-row"><a class="btn" href="{{ url_for('admin_bookings') }}">View bookings</a>{% if account %}<a class="btn" href="{{ url_for('admin_client_profile',client_id=account.id) }}">Open client account</a><a class="btn" href="{{ url_for('admin_booking_on_behalf',client_id=account.id) }}">Add another booking</a>{% endif %}</div></section>
+{% endif %}
 <section class="panel"><h1>Private booking link &amp; QR code</h1>
 <p>{{ booking.public_reference }} &middot; {{ booking.first_name }} {{ booking.last_name }}</p>
 <p>The client can open this booking without signing in, review the details, make changes until confirmation, and sign. Anyone you share the link or QR code with can access this booking, so send it directly to the client.</p>
