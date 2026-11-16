@@ -21,6 +21,13 @@ def define_model(db):
 
 
 def register(app, db, Request, Booking, Enquiry, current_client, admin_required, settings, send_email, schedule):
+    from client_booking_edit import history, history_time
+    app.jinja_env.globals['booking_revision_history'] = history
+    app.jinja_env.filters['booking_history_time'] = history_time
+    def revision_email(item, account, booking):
+        return send_email(settings()['contact_email'], 'CL Paints: client edited booking',
+            f'{account.first_name} {account.last_name} ({account.email})\nBooking: {booking.public_reference}\n\n{item.details}\n\nReview: {url_for("admin_booking_request", request_id=item.id, _external=True)}')
+    app.extensions['client_revision_email'] = revision_email
     def check():
         if not session.get('client_csrf') or not secrets.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
             abort(400)
@@ -70,14 +77,19 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
     @app.route('/admin/booking-requests/<int:request_id>', methods=['GET', 'POST'])
     @admin_required
     def admin_booking_request(request_id):
-        item = Request.query.filter_by(id=request_id).with_for_update().first_or_404()
-        booking = db.get_or_404(Booking, item.booking_id)
+        item = db.get_or_404(Request, request_id)
+        booking = Booking.query.filter_by(id=item.booking_id).with_for_update().first_or_404()
+        item = Request.query.filter_by(id=request_id).populate_existing().with_for_update().first_or_404()
+        from booking_edit import version
+        revision_request = item.pending_key == f'{booking.id}:edit'
         token = session.setdefault('client_csrf', secrets.token_urlsafe(32))
         if request.method == 'POST':
             check()
             action = request.form.get('action')
             response = request.form.get('response', '').strip()
-            if item.status != 'Pending' or action not in ('complete', 'decline') or not response or len(response) > 2500:
+            if revision_request and request.form.get('booking_version') != version(booking):
+                flash('The client changed this booking while you were reviewing. Review the latest details before saving a decision.', 'error')
+            elif item.status != 'Pending' or action not in ('complete', 'decline') or not response or len(response) > 2500:
                 flash('Enter your decision and response for a pending request.', 'error')
             elif action == 'complete' and item.kind == 'cancellation' and booking.status not in ('Accepted', 'Under Review', 'Awaiting Payment'):
                 flash('This booking is no longer active. Decline or explain the request instead.', 'error')
@@ -95,4 +107,5 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
                     f'Booking: {booking.public_reference}\nRequest: {item.status}\n\n{response}\n\nView your booking: {url_for("client.booking_detail", booking_id=booking.id, _external=True)}')
                 flash('Decision saved. A client notification email was attempted; refunds must be processed and recorded separately.', 'success')
                 return redirect(url_for('admin_booking_request', request_id=item.id))
-        return render_template('admin_booking_request.html', item=item, booking=booking, client_csrf=token)
+        return render_template('admin_booking_request.html', item=item, booking=booking, client_csrf=token,
+                               revision_request=revision_request, booking_version=version(booking))

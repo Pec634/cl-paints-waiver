@@ -1,0 +1,9 @@
+{% if notice_booking and notice_booking.status in ['Under Review', 'Awaiting Payment'] %}
+<dialog id="booking-unconfirmed-notice" aria-labelledby="booking-unconfirmed-title" aria-describedby="booking-unconfirmed-message" style="max-width:30rem;width:calc(100% - 2rem);box-sizing:border-box;border:0;border-radius:1rem;padding:1.5rem;">
+  <h2 id="booking-unconfirmed-title">Your booking is not confirmed</h2>
+  <p id="booking-unconfirmed-message">Bookings marked <strong>Under Review</strong> or <strong>Awaiting Payment</strong> are not confirmed. Your booking is only confirmed when CL Paints confirms it.</p>
+  <p>Current status: <strong>{{ notice_booking.status }}</strong>.</p>
+  <form method="dialog"><button class="btn primary" autofocus>I understand</button></form>
+</dialog>
+<script src="{{ url_for('static', filename='booking-unconfirmed-notice.js') }}" defer></script>
+{% endif %}

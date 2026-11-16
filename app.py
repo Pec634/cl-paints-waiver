@@ -1757,11 +1757,23 @@ def send_booking_request_confirmation(booking):
 
 @app.route("/booking", methods=["GET", "POST"])
 def booking_request():
+    from booking_edit import version as booking_version
     on_behalf = request.endpoint == 'admin_booking_on_behalf' and bool(session.get('admin_authenticated'))
+    editing_booking = None
+    if request.endpoint == 'client_edit_booking':
+        account = get_current_client()
+        if not account:
+            return redirect(url_for('client.login'))
+        editing_booking = Booking.query.filter(
+            Booking.id == request.view_args['booking_id'],
+            db.func.lower(db.func.trim(Booking.email)) == account.email.strip().lower()
+        ).with_for_update().first_or_404()
+        if editing_booking.status not in ('Under Review', 'Awaiting Payment'):
+            abort(409)
     from native_forms import available as native_available, answers as native_answers, design_uploads
     from native_form_records import read_form_files, upload_names, confirmation
     NativeForm = native_form_models[0]
-    seasonal_id = request.form.get('seasonal_id', type=int) if request.method == 'POST' else request.args.get('seasonal', type=int)
+    seasonal_id = None if editing_booking else (request.form.get('seasonal_id', type=int) if request.method == 'POST' else request.args.get('seasonal', type=int))
     seasonal_form = db.session.get(NativeForm, seasonal_id) if seasonal_id else None
     if seasonal_id and (not seasonal_form or seasonal_form.kind != 'booking' or not native_available(seasonal_form)):
         abort(404)
@@ -1776,6 +1788,8 @@ def booking_request():
     offer = app.extensions['active_hourly_discount'](pricing_rules['hourly_rate'])
     if offer:
         pricing_rules.update(hourly_rate=offer['hourly_rate'], promotion=offer)
+    if editing_booking:
+        pricing_rules.update(json.loads(editing_booking.event_schedule or '{}').get('pricing_rules', {}))
     portal_account = None if on_behalf else get_current_client()
     booking_account = None
     if on_behalf and 'client_id' in request.args:
@@ -1796,11 +1810,12 @@ def booking_request():
         'client_address': prefill_account.address,
     } if prefill_account else {})
     if request.method == 'GET' and prefill_account:
+        from client_addresses import booking_prefill
         billing = db.session.get(ClientBillingAddress, prefill_account.id)
-        if billing:
-            form_data.update(billing.details)
-            if billing.details.get('date_of_birth'):
-                form_data['is_over_18'] = 'yes'
+        latest_booking = Booking.query.filter(
+            db.func.lower(db.func.trim(Booking.email)) == prefill_account.email.strip().lower()
+        ).order_by(Booking.submitted_at.desc(), Booking.id.desc()).first()
+        form_data = booking_prefill(prefill_account, billing, latest_booking)
         repeat_id = request.args.get('repeat', type=int)
         if repeat_id and portal_account:
             form_data.update(app.extensions['repeat_booking_details'](portal_account, repeat_id))
@@ -1816,11 +1831,18 @@ def booking_request():
             form_data['event_schedule'] = json.dumps({'events': [dict(date=date.isoformat(), start_time=start.strftime('%H:%M'), finish_time=finish.strftime('%H:%M'), event_type=request.args.get('preferred_type','')[:150], event_address=request.args.get('preferred_address','')[:1000])]})
         except (ValueError, TypeError):
             pass
+    if editing_booking and request.method == 'GET':
+        from client_booking_edit import form_values
+        form_data = form_values(editing_booking, booking_schedule_events)
     error = None
 
     if request.method == "POST":
         try:
-            app.extensions['form_workflows']['guard']()
+            if editing_booking:
+                if request.form.get('booking_version') != booking_version(editing_booking):
+                    raise ValueError('This booking changed while you were editing. Reopen the editor to review the latest details.')
+            else:
+                app.extensions['form_workflows']['guard']()
             request_type = request.form.get("request_type", "")
             seasonal_field_uploads = read_form_files(seasonal_form, request.files) if seasonal_form else []
             seasonal_answers = native_answers(seasonal_form, request.form, upload_names(seasonal_field_uploads)) if seasonal_form else {}
@@ -1900,6 +1922,8 @@ def booking_request():
             else:
                 submitted_events = []
                 all_dates_same_details = False
+            if not isinstance(submitted_events, list) or any(not isinstance(day, dict) for day in submitted_events):
+                raise ValueError('Enter a valid event schedule.')
             if not submitted_events:
                 submitted_events = [{
                     "date": request.form.get("event_date", ""),
@@ -2018,7 +2042,10 @@ def booking_request():
 
             promo_code = request.form.get("promo_code", "").strip() or None
             referral_verified = None
-            if promo_code:
+            if editing_booking:
+                promo_code = editing_booking.promo_code
+                referral_verified = editing_booking.referral_verified
+            elif promo_code:
                 referral_verified = booking_code_is_valid(promo_code)
                 if not referral_verified:
                     raise ValueError("The referral code is invalid, already processed or expired. Remove it or enter a valid code.")
@@ -2078,6 +2105,11 @@ def booking_request():
                 total_event_cost=total_event_cost,
                 status="Under Review",
             )
+            if editing_booking:
+                from client_booking_edit import save_revision
+                save_revision(app, db, editing_booking, booking, portal_account, BookingRequest,
+                              ClientEnquiry, booking_schedule_events, read_address(request.form), settings)
+                return redirect(url_for('client.booking_detail', booking_id=editing_booking.id))
             db.session.add(booking)
             if seasonal_form:
                 app.extensions['native_form_records']['record_booking'](seasonal_form, booking, seasonal_answers, seasonal_field_uploads)
@@ -2123,6 +2155,9 @@ def booking_request():
         portal_account=portal_account,
         on_behalf=on_behalf,
         booking_account=booking_account,
+        editing_booking=editing_booking,
+        edit_version=(request.form.get('booking_version') if request.method == 'POST' else
+                      booking_version(editing_booking)) if editing_booking else None,
         google_maps_api_key=GOOGLE_MAPS_API_KEY,
     )
 
@@ -2130,6 +2165,11 @@ def booking_request():
 @app.route('/admin/bookings/new', methods=['GET', 'POST'])
 @admin_required
 def admin_booking_on_behalf():
+    return booking_request()
+
+
+@app.route('/client/bookings/<int:booking_id>/edit', methods=['GET', 'POST'])
+def client_edit_booking(booking_id):
     return booking_request()
 
 
@@ -2295,7 +2335,7 @@ def admin_bookings():
 @app.post("/admin/bookings/<int:booking_id>/manage")
 @admin_required
 def admin_manage_booking(booking_id):
-    booking = db.session.get(Booking, booking_id)
+    booking = Booking.query.filter_by(id=booking_id).with_for_update().first()
     if booking is None:
         return redirect(url_for("admin_bookings"))
 
@@ -2303,6 +2343,11 @@ def admin_manage_booking(booking_id):
     previous_snapshot = booking_snapshot(booking, booking_schedule_events)
     previous_status = booking.status
     action = request.form.get("action", "update")
+    if (action in ('accept', 'request_payment') or
+            (action == 'update' and request.form.get('status') in ('Accepted', 'Awaiting Payment'))):
+        pending_edit = BookingRequest.query.filter_by(pending_key=f'{booking.id}:edit', status='Pending').first()
+        if pending_edit:
+            return redirect(url_for('admin_booking_request', request_id=pending_edit.id))
     from booking_on_behalf import pending_agreement
     if pending_agreement(booking) and (action in ('accept', 'request_payment') or (action == 'update' and request.form.get('status') in ('Accepted', 'Awaiting Payment'))):
         return redirect(url_for('admin_bookings', consent_pending=booking.id))

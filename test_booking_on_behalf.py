@@ -89,6 +89,68 @@ class OnBehalfTest(unittest.TestCase):
         page = self.admin.get(self.path)
         self.assertIn(b'action="/admin/bookings/new"', page.data)
 
+    def test_account_booking_sends_client_review_email(self):
+        account = self.fixture.fixture.account
+        Preference = main.app.extensions['client_email_preference_model']
+        main.db.session.add(Preference(client_id=account.id, booking_updates=False, reward_updates=False))
+        main.db.session.commit()
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            response = self.admin.post(f'{self.path}?client_id={account.id}', data=self.form())
+        self.assertEqual(response.status_code, 302)
+        send.assert_called_once()
+        email, subject, body, markup = send.call_args.args[:4]
+        self.assertEqual(email, account.email)
+        self.assertIn('A booking has been added to your CL Paints account', subject)
+        self.assertIn('A booking has been added to your account.', body)
+        self.assertIn('Please log in to your client account to review the booking.', body)
+        self.assertIn('/client/bookings/', body)
+        self.assertIn('not confirmed', body)
+        self.assertIn('A booking has been added to your account.', markup)
+
+    def test_admin_can_customize_booking_added_email(self):
+        page = self.admin.get('/admin/communications/configuration')
+        self.assertIn(b'Bookings added by admin', page.data)
+        with self.admin.session_transaction() as session:
+            token = session['settings_csrf']
+        response = self.admin.post('/admin/settings', data=dict(
+            csrf_token=token, section='email_booking_added', return_to='communications',
+            notification_booking_added_subject='Please review booking {reference}',
+            notification_booking_added_body='Hi {name},\nWe have prepared your booking.\n{details}'))
+        self.assertEqual(response.status_code, 302)
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            self.admin.post(self.path, data=self.form())
+        self.assertTrue(send.call_args.args[1].startswith('Please review booking '))
+        self.assertIn('We have prepared your booking.', send.call_args.args[2])
+        self.assertIn('/client/bookings/', send.call_args.args[2])
+
+    def test_account_bookings_prefill_all_saved_client_details(self):
+        booking = self.create()
+        booking.title = 'Dr'
+        booking.job_title = 'Studio Manager'
+        account = self.fixture.fixture.account
+        account.phone = '+447911123456'
+        main.db.session.commit()
+        for client, path in ((self.admin, f'{self.path}?client_id={account.id}'),
+                             (self.client, '/booking')):
+            page = client.get(path)
+            self.assertEqual(page.status_code, 200)
+            for value in (b'Studio Manager', b'value="10"', b'value="High Street"',
+                          b'value="London"', b'value="SW1A 1AA"', b'value="United Kingdom"',
+                          b'value="business" selected', b'value="Dr" selected'):
+                self.assertIn(value, page.data)
+            self.assertIn(account.email.encode(), page.data)
+            self.assertNotIn(b'value="Test Client"', page.data)
+        billing = main.ClientBillingAddress(client_id=account.id, details={
+            'client_type': 'individual', 'date_of_birth': '1990-02-03',
+            'title': 'Ms', 'religion': 'No Religion', 'ethnicity': 'Prefer not to say',
+            'address_property': '22', 'address_street': 'New Road', 'address_city': 'York',
+            'address_postcode': 'YO1 1AA', 'address_country': 'United Kingdom'})
+        main.db.session.add(billing); main.db.session.commit()
+        page = self.admin.get(f'{self.path}?client_id={account.id}')
+        for value in (b'value="1990-02-03"', b'value="22"', b'value="New Road"',
+                      b'value="individual" selected', b'value="Ms" selected'):
+            self.assertIn(value, page.data)
+
     def test_client_signs_in_portal_before_admin_requests_payment(self):
         booking = self.create()
         self.admin.post(f'/admin/bookings/{booking.id}/manage', data={'action': 'accept'})

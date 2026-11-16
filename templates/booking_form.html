@@ -6,6 +6,7 @@ Client Booking Request | CL Paints
 
 {% block body %}
 <main class="booking-public">
+{% with notice_booking=editing_booking %}{% include '_booking_unconfirmed_notice.html' %}{% endwith %}
 {% if on_behalf %}<p class="client-booking-banner"><a href="{{ url_for('admin_bookings') }}">Back to admin bookings</a> · <strong>Admin: book on behalf of a client</strong>. The client will review and sign in their portal. You are entering details, not signing their agreement.</p>{% endif %}
 {% if kiosk_item %}<a class="btn" href="{{ url_for('kiosk_menu') }}">Back to kiosk forms</a>{% endif %}
 {% if booking_offer %}<p class="client-booking-banner"><strong>{{ booking_offer.title }}</strong> ? Save ?{{ booking_offer.saving }} per hour. Offer applies when your request is submitted during the promotion period; travel and minimum duration still apply.</p>{% endif %}
@@ -36,7 +37,9 @@ Client Booking Request | CL Paints
     {% endif %}
 
     {% if booking_account %}<p class="client-booking-banner"><a href="{{ url_for('admin_client_profile',client_id=booking_account.id) }}">Back to client account</a> · Booking for <strong>{{ booking_account.first_name }} {{ booking_account.last_name }}</strong> ({{ booking_account.email }}). This booking will be linked to their account and requires their review, signature and confirmation.</p>{% endif %}
-    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_booking_on_behalf',client_id=booking_account.id) if booking_account else url_for('admin_booking_on_behalf') if on_behalf else url_for('booking_request') }}">
+    {% if editing_booking %}<section class="panel"><h2>Edit booking {{ editing_booking.public_reference }}</h2><p>You can save changes as often as needed until CL Paints confirms your booking. Each save returns your booking to Under Review and requires a new admin review. Check the revised details and sign below when saving.</p><p>Existing billing address: {{ editing_booking.client_address }}. Please check each address field below.</p><a class="btn" href="{{ url_for('client.booking_detail',booking_id=editing_booking.id) }}">Back to booking</a></section>{% endif %}
+    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('client_edit_booking',booking_id=editing_booking.id) if editing_booking else url_for('admin_booking_on_behalf',client_id=booking_account.id) if booking_account else url_for('admin_booking_on_behalf') if on_behalf else url_for('booking_request') }}">
+        {% if editing_booking %}<input type="hidden" name="booking_version" value="{{ edit_version }}">{% endif %}
         <input type="hidden" name="booking_terms_version" value="{{ booking_terms_version() }}">
 <section class="booking-section panel booking-availability-check"><h2>Check availability</h2><p>After entering your dates, times and venue, check them together here. Availability is provisional until CL Paints confirms your booking.</p><button type="button" class="btn" id="booking-check-dates">Check dates and times</button><p id="booking-dates-result" role="status"></p></section>
 {% if seasonal_form %}<section class="booking-section panel"><h2>{{ seasonal_form.title }}</h2><p>{{ seasonal_form.description }}</p><input type="hidden" name="seasonal_id" value="{{ seasonal_form.id }}"><div class="client-form">{% with fields=native_form_fields(seasonal_form), field_form=seasonal_form %}{% include '_native_fields.html' %}{% endwith %}</div><label class="booking-field booking-field-wide"><span>Upload your design ideas (optional)</span><input type="file" name="design_images" accept="image/jpeg,image/png,image/webp" multiple><small>Up to six images, each no larger than 15 MB. Stored privately for CL Paints to review.</small></label>{% if seasonal_form.terms %}<p class="rota-note">{{ seasonal_form.terms }}</p><label><input type="checkbox" name="seasonal_agree" value="yes" required> I have read and accept this seasonal booking information.</label>{% endif %}</section>{% endif %}
@@ -319,7 +322,7 @@ Client Booking Request | CL Paints
             <div class="booking-referral-entry">
                 <label class="booking-field booking-payment-field">
                     <span>Referral code <small>Optional</small></span>
-                    <small>Enter the five-character referral code exactly as supplied. The referring customer earns 30 minutes free face painting after your qualifying booking is attended.</small><input name="promo_code" id="referralCodeInput" maxlength="100" autocomplete="off" value="{{ form_data.get('promo_code', '') }}">
+                    <small>Enter the five-character referral code exactly as supplied. The referring customer earns 30 minutes free face painting after your qualifying booking is attended.</small><input name="promo_code" id="referralCodeInput" maxlength="100" autocomplete="off" {% if editing_booking %}readonly{% endif %} value="{{ form_data.get('promo_code', '') }}">
                 </label>
                 <button class="btn" type="button" id="verifyReferralButton">Verify code</button>
                 <p id="referralVerification" role="status" aria-live="polite"></p>
@@ -339,7 +342,7 @@ Client Booking Request | CL Paints
             </label>
 
             <p class="booking-payment-note">This form records your preferred payment arrangement only. It does not take payment or confirm a booking. CL Paints will calculate travel costs and contact you to confirm availability, final costs and payment.</p>
-            <button class="btn primary booking-submit" type="submit">{{ 'Create booking and request client signature' if on_behalf else 'Send booking request' }}</button>
+            <button class="btn primary booking-submit" type="submit">{{ 'Save changes for CL Paints to review' if editing_booking else 'Create booking and request client signature' if on_behalf else 'Send booking request' }}</button>
         </section>
     </form>
     <dialog id="bookingReviewDialog" class="booking-review-dialog" aria-labelledby="bookingReviewTitle"><h2 id="bookingReviewTitle">Review your booking request</h2><p>Check the details below. Sending this request does not confirm availability or take payment.</p><div id="bookingReviewContent"></div><div class="nav"><button class="btn" type="button" id="bookingReviewEdit">Back to editing</button><button class="btn primary" type="button" id="bookingReviewSend">Confirm and send request</button></div></dialog>
@@ -641,12 +644,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const reviewDialog = document.getElementById('bookingReviewDialog');
     const reviewContent = document.getElementById('bookingReviewContent');
     const submitButton = form.querySelector('.booking-submit');
-    submitButton.textContent = 'Review booking request';
+    const reviewButtonLabel = {{ ('Review booking changes' if editing_booking else 'Review booking request')|tojson }};
+    submitButton.textContent = reviewButtonLabel;
     let reviewConfirmed = false;
     window.addEventListener('pageshow', () => {
         reviewConfirmed = false;
         submitButton.disabled = false;
-        submitButton.textContent = 'Review booking request';
+        submitButton.textContent = reviewButtonLabel;
     });
     form.addEventListener('input', () => { reviewConfirmed = false; });
     form.addEventListener('change', () => { reviewConfirmed = false; });

@@ -1,0 +1,19 @@
+{% set revision_history = booking_revision_history(booking) %}
+{% if revision_history %}
+<section class="panel" id="booking-change-history">
+  <h2>Booking change history</h2>
+  <p>Every saved client revision is retained here, newest first. Times are shown in UK time (GMT or BST).</p>
+  {% for revision in revision_history|reverse %}
+  <article class="client-record">
+    <h3>Revision {{ loop.revindex }}</h3>
+    <p><time datetime="{{ revision.at }}">{{ revision.at|booking_history_time }}</time> &middot; Changed by {{ revision.by }}</p>
+    {% if revision.changes %}
+    <dl>{% for label, change in revision.changes.items() %}
+      <dt><strong>{{ label }}</strong></dt>
+      <dd><span>Before: {{ change.before }}</span><br><span>After: {{ change.after }}</span></dd>
+    {% endfor %}</dl>
+    {% else %}<p>Details saved again without changes.</p>{% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endif %}

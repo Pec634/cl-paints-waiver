@@ -142,7 +142,7 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
     @admin_required
     def admin_settings():
         token = session.setdefault('settings_csrf', secrets.token_urlsafe(32))
-        email_sections = {'notifications', 'email_bookings', 'email_rewards', 'email_portal_enquiry', 'email_website_enquiry', 'email_design'}
+        email_sections = {'notifications', 'email_bookings', 'email_booking_added', 'email_rewards', 'email_portal_enquiry', 'email_website_enquiry', 'email_design'}
         active_tab = 'email' if request.endpoint == 'communications_templates' or request.args.get('tab') == 'email' or request.form.get('section') in email_sections else 'general'
         if request.method == 'POST':
             if not secrets.compare_digest(request.form.get('csrf_token', ''), token):
@@ -183,6 +183,7 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                         values[key] = value
                 elif section in email_sections:
                     groups = {
+                        'email_booking_added': ['notification_booking_added_subject', 'notification_booking_added_body'],
                         'email_bookings': ['notification_booking_subject', 'notification_booking_body'],
                         'email_rewards': ['notification_reward_subject', 'notification_reward_body'],
                         'email_portal_enquiry': ['notification_portal_enquiry_subject', 'notification_portal_enquiry_body'],

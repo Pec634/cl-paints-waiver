@@ -33,6 +33,36 @@ def format_address(values):
     return '\n'.join(values[key] for key, _, _, _ in FIELDS)
 
 
+def booking_prefill(account, billing, latest_booking=None):
+    """Prefer the account profile, with older booking details as a fallback."""
+    import json
+    values = {}
+    if latest_booking:
+        for key in ('client_type', 'title', 'job_title', 'date_of_birth', 'ethnicity',
+                    'ethnicity_detail', 'religion', 'phone'):
+            value = getattr(latest_booking, key)
+            values[key] = value.isoformat() if hasattr(value, 'isoformat') else value or ''
+    if billing:
+        values.update(billing.details)
+    values.update(first_name=account.first_name, last_name=account.last_name, email=account.email)
+    values['phone'] = account.phone or values.get('phone', '')
+    address = account.address or (latest_booking.client_address if latest_booking else '')
+    values['client_address'] = address
+    if not billing or not any(billing.details.get(key) for key, *_ in FIELDS):
+        lines = address.splitlines()
+        if len(lines) == len(FIELDS):
+            values.update(zip((key for key, *_ in FIELDS), lines))
+        elif latest_booking and address == latest_booking.client_address:
+            try:
+                saved = json.loads(latest_booking.event_schedule or '{}')
+                values.update(saved.get('billing_address', {}))
+            except (ValueError, TypeError, AttributeError):
+                pass
+    if values.get('date_of_birth'):
+        values['is_over_18'] = 'yes'
+    return values
+
+
 def profile_details(form, ethnicities):
     from datetime import datetime
     from zoneinfo import ZoneInfo

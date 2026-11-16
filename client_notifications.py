@@ -10,6 +10,8 @@ import secrets
 EMAIL_KINDS = ('booking', 'reward', 'portal_enquiry', 'website_enquiry')
 
 EMAIL_DEFAULTS = {
+    'notification_booking_added_subject': 'A booking has been added to your CL Paints account - {reference}',
+    'notification_booking_added_body': 'Hello {name},\n\n{details}',
     'notification_booking_subject': 'Your CL Paints booking {reference} has been updated',
     'notification_booking_body': 'Hello {name},\n\nWe have updated your booking {reference}.\n\n{details}\n\nPlease open your booking to review the highlighted changes.',
     'notification_reward_subject': 'A rewards update from CL Paints',
@@ -124,6 +126,9 @@ def render_notification(config, name, kind, reference, details, link, preview=Fa
         if details.startswith('You have a new message from CL Paints.'):
             subject = f'No-reply: New CL Paints message for booking {reference}'
             body = f'Hello {name},\n\n{details}'
+        elif details.startswith('A booking has been added to your account.'):
+            subject = config.get('notification_booking_added_subject', EMAIL_DEFAULTS['notification_booking_added_subject']).format(**variables)
+            body = config.get('notification_booking_added_body', EMAIL_DEFAULTS['notification_booking_added_body']).format(**variables)
         body += '\n\nPlease log in to your client portal to review this update. Do not reply to this automatic email.'
     heading = config['notification_heading'].format(**variables)
     footer = config['notification_footer'].format(**variables)
@@ -240,7 +245,7 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         'You have a new message from CL Paints. Please log in to your client portal and open your booking conversation to read it. Do not reply to this automatic email.',
         url_for('client_booking_messages', booking_id=booking.id, _external=True), essential=True)
     app.extensions['client_booking_review_requested'] = lambda booking: notify(booking.email, booking.first_name, 'booking', booking.public_reference,
-        'CL Paints has entered this booking on your behalf. Your signature and agreement are still required. Please sign in to your client portal, review the booking details, and complete the client agreement. This booking is Under Review and is not confirmed.',
+        'A booking has been added to your account. Please log in to your client account to review the booking. You can update the details before signing and agreeing to the booking. Your signature and agreement are required. This booking is Under Review and is not confirmed.',
         url_for('client.booking_detail', booking_id=booking.id, _external=True), essential=True)
     app.extensions['client_reward_notice'] = reward
     app.extensions['client_reward_code_notice'] = reward_code
