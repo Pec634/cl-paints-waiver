@@ -1,0 +1,11 @@
+.giveaway-client-selector { min-width: 0; margin: 0; padding: 1rem; border: 1px solid #ccd5e0; border-radius: .75rem; }
+.giveaway-client-list { max-height: 20rem; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #ccd5e0; border-radius: .5rem; }
+.client-form .giveaway-client-option { display: flex; align-items: flex-start; gap: .75rem; padding: .85rem; margin: 0; border-bottom: 1px solid #e3e8ef; cursor: pointer; }
+.client-form .giveaway-client-option:last-child { border-bottom: 0; }
+.giveaway-client-option input[type=checkbox] { width: 1.2rem; height: 1.2rem; margin: .15rem 0 0; flex: 0 0 1.2rem; }
+.giveaway-client-option span { min-width: 0; overflow-wrap: anywhere; }
+.giveaway-client-option small { display: block; }
+.client-form .giveaway-client-option[hidden] { display: none; }
+.giveaway-client-option:has(input:checked) { background: #fceaf3; }
+.giveaway-client-option:has(input:disabled) { cursor: default; color: #586579; }
+.giveaway-client-list:focus-visible { outline: 3px solid #f52f83; outline-offset: 2px; }

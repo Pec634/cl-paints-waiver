@@ -93,7 +93,9 @@ def register(app, db, Form, Submission, Account, admin_required, check, csrf, se
                     return redirect(url_for('native_form_entries', form_id=form_id))
 
                 rows = []
-                selected = request.form.get('client_id', type=int)
+                selected = request.form.getlist('client_ids')
+                if not selected and request.form.get('client_id'):
+                    selected = [request.form['client_id']]
                 upload = request.files.get('csv_file')
                 if upload and upload.filename:
                     content = upload.read(1024 * 1024 + 1)
@@ -107,8 +109,16 @@ def register(app, db, Form, Submission, Account, admin_required, check, csrf, se
                         if len(rows) > 1000:
                             raise ValueError('Import no more than 1,000 entrants at a time.')
                 elif selected:
-                    account = db.get_or_404(Account, selected)
-                    rows = [dict(first_name=account.first_name, last_name=account.last_name, email=account.email)]
+                    if len(selected) > 500:
+                        raise ValueError('Select no more than 500 clients at a time.')
+                    try:
+                        selected_ids = {int(value) for value in selected}
+                    except (TypeError, ValueError):
+                        raise ValueError('Choose valid clients from the selection list.')
+                    accounts = Account.query.filter(Account.id.in_(selected_ids)).order_by(Account.first_name, Account.last_name, Account.id).all()
+                    if len(accounts) != len(selected_ids):
+                        raise ValueError('A selected client no longer exists. Refresh the list and select the clients again.')
+                    rows = [dict(first_name=account.first_name, last_name=account.last_name, email=account.email) for account in accounts]
                 else:
                     rows = [{key: request.form.get(key, '') for key in ('first_name','last_name','email')}]
                 unique = {}
@@ -138,4 +148,7 @@ def register(app, db, Form, Submission, Account, admin_required, check, csrf, se
                 batch = None
         return render_template('admin_giveaway_import.html', form=form, batch=batch, preview=preview,
             email_preview=message(form, '{first_name}', '{client_account_number}'), csrf=csrf(), error=error,
-            accounts=Account.query.order_by(Account.first_name, Account.last_name).limit(500).all())
+            accounts=Account.query.order_by(db.func.lower(Account.first_name), db.func.lower(Account.last_name), Account.id).all(),
+            entered_client_ids={row[0] for row in db.session.query(Submission.client_id).filter_by(form_id=form_id).all()},
+            removed_client_ids={row[0] for row in db.session.query(Submission.client_id).join(
+                db._giveaway_removal, db._giveaway_removal.submission_id == Submission.id).filter(Submission.form_id == form_id).all()})

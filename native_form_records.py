@@ -259,10 +259,13 @@ def register(app, db, models, Account, Booking, current_client, admin_required, 
     def entries(form):
         result=[]
         for item in Submission.query.filter_by(form_id=form.id).order_by(Submission.id.desc()).all():
+            removal = db.session.get(db._giveaway_removal, item.id) if form.kind == 'giveaway' else None
+            if removal and request.args.get('removed') != 'yes':
+                continue
             meta=db.session.get(SubmissionRecord,item.id)
             result.append(dict(type='submission',id=item.id,reference='F-'+str(item.id),name=item.name,email=item.email,
                 created_at=item.created_at,answers=json.loads(item.answers_json),meta=meta,
-                status=meta.review_status if meta else 'New',item=item,media=Media.query.options(defer(Media.content)).filter_by(submission_id=item.id).all(),
+                status='Removed' if removal else meta.review_status if meta else 'New',item=item,media=Media.query.options(defer(Media.content)).filter_by(submission_id=item.id).all(),
                 files=FieldFile.query.options(defer(FieldFile.content)).filter_by(submission_id=item.id).all(),snapshot=json.loads(meta.snapshot_json) if meta else {},
                 version=db.session.get(Version,meta.version_id) if meta and meta.version_id else None))
         if form.kind == 'booking':

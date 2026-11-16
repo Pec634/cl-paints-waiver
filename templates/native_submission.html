@@ -4,6 +4,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='native-fields.css') }}">
 <a class="btn" href="{{ url_for('native_submission_pdf',token=item.token) }}">Download response PDF</a>
 <section class="panel"><h1>{{ item.title_snapshot }}</h1><p>Received · F-{{ item.id }}</p>
+{% if giveaway_entry_removal(item) %}<p class="booking-admin-notice">This entry has been removed from the giveaway and will not be included in the draw. Please contact CL Paints if you have any questions.</p>{% endif %}
 {% if confirmation_message %}<p class="native-preserve">{{ confirmation_message }}</p>{% endif %}
 {% for label,value in answers.items() %}{% set definition = snapshot.get('fields', [])|selectattr('label', 'equalto', label)|first|default({}) %}<div class="native-response-answer"><strong>{{ label }}</strong><div>{{ answer(value, definition) }}</div></div>{% endfor %}
 <details><summary>Accepted wording</summary><p class="native-preserve">{{ item.terms_snapshot }}</p>{% for block in snapshot.get('fields', []) if block.type in ['content', 'heading'] %}<h3>{{ block.label }}</h3><p class="native-preserve">{{ block.get('content', '') }}</p>{% endfor %}</details>

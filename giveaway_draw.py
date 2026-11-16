@@ -49,13 +49,14 @@ def register(app, db, Form, Submission, Account, admin_required, check, current_
     @admin_required
     def giveaway_draw(form_id):
         check()
-        form = db.get_or_404(Form, form_id)
+        form = Form.query.filter_by(id=form_id).with_for_update().first_or_404()
         if form.kind != 'giveaway':
             abort(400)
         existing = Draw.query.filter_by(form_id=form_id).with_for_update().first()
         if existing and (not existing.can_redraw or request.form.get('draw_version') != existing.drawn_at.isoformat()):
             return jsonify(number=existing.account_number, saved=True)
-        accounts = Account.query.join(Submission, Submission.client_id == Account.id).filter(Submission.form_id == form_id).distinct().order_by(Account.id).all()
+        from giveaway_removal import eligible_accounts
+        accounts = eligible_accounts(db, Account, Submission, form_id).order_by(Account.id).all()
         previous_ids = {item.client_id for item in db._giveaway_round.query.filter_by(form_id=form_id).all()}
         if existing:
             previous_ids.add(existing.client_id)

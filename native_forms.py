@@ -61,6 +61,8 @@ def define_models(db):
     db._giveaway_draw = define_model(db)
     from giveaway_import import define_model as define_import_model
     define_import_model(db)
+    from giveaway_removal import define_model as define_removal_model
+    define_removal_model(db)
     return NativeForm,NativeSubmission,ConsentMedia
 
 
@@ -91,6 +93,8 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     register_giveaway_draw(app, db, Form, Submission, Account, admin_required, check, current_client)
     from giveaway_import import register as register_giveaway_import
     register_giveaway_import(app, db, Form, Submission, Account, admin_required, check, csrf, send_email)
+    from giveaway_removal import register as register_removal
+    register_removal(app, db, Form, Submission, admin_required, check)
     records=register_records(app,db,models,Account,Booking,current_client,admin_required,available,csrf,check)
     from form_workflows import register as register_workflows
     workflows=register_workflows(app,db,models,Booking,current_client,admin_required,available,records,csrf,check)
@@ -365,14 +369,19 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     def native_form_entries(form_id):
         form=db.get_or_404(Form,form_id)
         rows=records['entries'](form);page=max(1,request.args.get('page',1,type=int))
+        removals = {item.submission_id: item for item in db._giveaway_removal.query.join(
+            Submission, Submission.id == db._giveaway_removal.submission_id).filter(Submission.form_id == form.id).all()} if form.kind == 'giveaway' else {}
+        if request.args.get('removed') != 'yes':
+            rows = [row for row in rows if row['type'] != 'submission' or row['id'] not in removals]
         draw_clients = {}
         for row in rows:
             if row['client_id'] and row['account_number']:
                 draw_clients.setdefault(row['client_id'], dict(number=row['account_number']))
         if form.kind == 'giveaway':
-            draw_clients = {account.id: dict(number=account.account_number) for account in Account.query.join(Submission, Submission.client_id == Account.id).filter(Submission.form_id == form.id).distinct().all()}
+            from giveaway_removal import eligible_accounts
+            draw_clients = {account.id: dict(number=account.account_number) for account in eligible_accounts(db, Account, Submission, form.id).all()}
         saved_draw = db.session.get(db._giveaway_draw, form.id)
-        return render_template('admin_native_entries.html',form=form,saved_draw=saved_draw,all_forms=Form.query.order_by(Form.id.desc()).all(),draw_clients=list(draw_clients.values()),rows=rows[(page-1)*25:page*25],total=len(rows),page=page,statuses=STATUSES,csrf=csrf())
+        return render_template('admin_native_entries.html',form=form,saved_draw=saved_draw,removals=removals,all_forms=Form.query.order_by(Form.id.desc()).all(),draw_clients=list(draw_clients.values()),rows=rows[(page-1)*25:page*25],total=len(rows),page=page,statuses=STATUSES,csrf=csrf())
 
     @app.get('/form-media/<int:media_id>')
     def native_media(media_id):
