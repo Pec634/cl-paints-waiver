@@ -1777,6 +1777,13 @@ def booking_request():
     if offer:
         pricing_rules.update(hourly_rate=offer['hourly_rate'], promotion=offer)
     portal_account = None if on_behalf else get_current_client()
+    booking_account = None
+    if on_behalf and 'client_id' in request.args:
+        client_id = request.args.get('client_id', type=int)
+        if client_id is None:
+            abort(404)
+        booking_account = db.get_or_404(ClientAccount, client_id)
+    prefill_account = booking_account or portal_account
     if on_behalf:
         session.setdefault('client_csrf', secrets.token_urlsafe(32))
     if (portal_account or on_behalf) and request.method == 'POST':
@@ -1784,18 +1791,18 @@ def booking_request():
         if not session.get('client_csrf') or not hmac.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
             abort(400)
     form_data = request.form if request.method == "POST" else ({
-        'first_name': portal_account.first_name, 'last_name': portal_account.last_name,
-        'email': portal_account.email, 'phone': portal_account.phone,
-        'client_address': portal_account.address,
-    } if portal_account else {})
-    if request.method == 'GET' and portal_account:
-        billing = db.session.get(ClientBillingAddress, portal_account.id)
+        'first_name': prefill_account.first_name, 'last_name': prefill_account.last_name,
+        'email': prefill_account.email, 'phone': prefill_account.phone,
+        'client_address': prefill_account.address,
+    } if prefill_account else {})
+    if request.method == 'GET' and prefill_account:
+        billing = db.session.get(ClientBillingAddress, prefill_account.id)
         if billing:
             form_data.update(billing.details)
             if billing.details.get('date_of_birth'):
                 form_data['is_over_18'] = 'yes'
         repeat_id = request.args.get('repeat', type=int)
-        if repeat_id:
+        if repeat_id and portal_account:
             form_data.update(app.extensions['repeat_booking_details'](portal_account, repeat_id))
     elif request.method == 'GET' and request.args.get('repeat'):
         return redirect(url_for('client.login'))
@@ -1826,7 +1833,7 @@ def booking_request():
             client_type = request.form.get("client_type", "")
             first_name = request.form.get("first_name", "").strip()
             last_name = request.form.get("last_name", "").strip()
-            email = portal_account.email if portal_account else request.form.get("email", "").strip()
+            email = prefill_account.email if prefill_account else request.form.get("email", "").strip()
             phone = request.form.get("phone", "").strip()
             client_address = format_address(read_address(request.form))
             job_title = request.form.get("job_title", "").strip()
@@ -2115,6 +2122,7 @@ def booking_request():
         submitted=request.args.get("submitted"),
         portal_account=portal_account,
         on_behalf=on_behalf,
+        booking_account=booking_account,
         google_maps_api_key=GOOGLE_MAPS_API_KEY,
     )
 

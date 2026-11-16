@@ -35,7 +35,8 @@ Client Booking Request | CL Paints
     <div class="booking-error" role="alert">{{ error }}</div>
     {% endif %}
 
-    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('booking_request') }}">
+    {% if booking_account %}<p class="client-booking-banner"><a href="{{ url_for('admin_client_profile',client_id=booking_account.id) }}">Back to client account</a> · Booking for <strong>{{ booking_account.first_name }} {{ booking_account.last_name }}</strong> ({{ booking_account.email }}). This booking will be linked to their account and requires their review, signature and confirmation.</p>{% endif %}
+    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_booking_on_behalf',client_id=booking_account.id) if booking_account else url_for('admin_booking_on_behalf') if on_behalf else url_for('booking_request') }}">
         <input type="hidden" name="booking_terms_version" value="{{ booking_terms_version() }}">
 <section class="booking-section panel booking-availability-check"><h2>Check availability</h2><p>After entering your dates, times and venue, check them together here. Availability is provisional until CL Paints confirms your booking.</p><button type="button" class="btn" id="booking-check-dates">Check dates and times</button><p id="booking-dates-result" role="status"></p></section>
 {% if seasonal_form %}<section class="booking-section panel"><h2>{{ seasonal_form.title }}</h2><p>{{ seasonal_form.description }}</p><input type="hidden" name="seasonal_id" value="{{ seasonal_form.id }}"><div class="client-form">{% with fields=native_form_fields(seasonal_form), field_form=seasonal_form %}{% include '_native_fields.html' %}{% endwith %}</div><label class="booking-field booking-field-wide"><span>Upload your design ideas (optional)</span><input type="file" name="design_images" accept="image/jpeg,image/png,image/webp" multiple><small>Up to six images, each no larger than 15 MB. Stored privately for CL Paints to review.</small></label>{% if seasonal_form.terms %}<p class="rota-note">{{ seasonal_form.terms }}</p><label><input type="checkbox" name="seasonal_agree" value="yes" required> I have read and accept this seasonal booking information.</label>{% endif %}</section>{% endif %}
@@ -151,7 +152,7 @@ Client Booking Request | CL Paints
                 </label>
                 <label class="booking-field">
                     <span>Email</span>
-                    <input type="email" name="email" autocomplete="email" maxlength="255" required {% if portal_account %}readonly{% endif %} value="{{ portal_account.email if portal_account else form_data.get('email', '') }}">
+                    <input type="email" name="email" autocomplete="email" maxlength="255" required {% if portal_account or booking_account %}readonly{% endif %} value="{{ booking_account.email if booking_account else portal_account.email if portal_account else form_data.get('email', '') }}">
                 </label>
             </div>
         </section>

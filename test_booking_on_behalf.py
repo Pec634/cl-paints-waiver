@@ -64,6 +64,31 @@ class OnBehalfTest(unittest.TestCase):
         bad = self.form(); bad['csrf_token'] = 'invalid'
         self.assertEqual(self.admin.post(self.path, data=bad).status_code, 400)
 
+    def test_client_profile_booking_form_links_account_and_preserves_admin_submission(self):
+        account = self.fixture.fixture.account
+        path = f'{self.path}?client_id={account.id}'
+        profile = self.admin.get(f'/admin/clients/{account.id}')
+        self.assertIn(path.encode(), profile.data)
+        page = self.admin.get(path)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(f'action="{path}"'.encode(), page.data)
+        self.assertIn(account.email.encode(), page.data)
+        form = self.form()
+        form['email'] = 'different@example.com'
+        with patch.object(main, 'send_client_email', return_value=True):
+            response = self.admin.post(path, data=form)
+        self.assertEqual(response.status_code, 302)
+        booking = main.Booking.query.order_by(main.Booking.id.desc()).first()
+        self.assertEqual(booking.email, account.email)
+        self.assertTrue(pending_agreement(booking))
+        self.assertEqual(booking.signature, '')
+        self.assertEqual(self.client.get(f'/client/bookings/{booking.id}').status_code, 200)
+        self.assertEqual(self.admin.get(self.path + '?client_id=invalid').status_code, 404)
+
+    def test_generic_admin_form_posts_to_admin_route(self):
+        page = self.admin.get(self.path)
+        self.assertIn(b'action="/admin/bookings/new"', page.data)
+
     def test_client_signs_in_portal_before_admin_requests_payment(self):
         booking = self.create()
         self.admin.post(f'/admin/bookings/{booking.id}/manage', data={'action': 'accept'})
