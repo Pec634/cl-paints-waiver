@@ -8,7 +8,10 @@ records. The existing client app remains a separate application.
 
 ## Included
 
-- Staff login using the existing admin account and session timeout.
+- Named cashier and manager sign-ins, with the existing portal administrator kept
+  as a management route. Staff enter only their allocated PIN, not a username or password. Cashiers sell library items; managers can override prices,
+  manage items, refund payments and close day-end reconciliations. Each new sale
+  retains the staff name and any custom-item or price-override flag.
 - Search existing waivers by adult name, participant name, email or waiver reference.
   Results show participants, event, expiry and status. Archived waivers are excluded;
   expired or otherwise invalid waivers cannot be linked to a sale. Linking consent
@@ -66,6 +69,43 @@ automatically reverse loyalty history; use the existing event loyalty correction
 workflow when an award also needs correcting.
 
 There is no receipt printer integration, offline queue or Play Store release yet.
+
+## Staff and day-end setup
+
+Restart the server after deploying these changes to create the staff, held-basket
+and reconciliation tables and upgrade existing sale/refund/product columns. No
+default staff PINs are created. Sign in as the portal administrator, open
+**Staff** in the till header, and create named cashier/manager accounts. Allocate a PIN to each staff member, including accounts created before PIN sign-in was added. Staff can
+use `/admin/pos/staff/login`; their accounts grant POS access, not wider portal
+administration. Each staff member signs in with their own unique PIN, with no minimum length. PINs are hashed, repeated failed sign-ins are throttled,
+and disabled accounts lose access on their next request.
+
+Use **Hold / resume baskets** to save a named basket while serving another customer.
+Items, waiver selection, receipt preference and selected events are retained in
+the database under the current sign-in. Hold or clear the current basket before
+resuming another. A resumed basket keeps its sale token, including after a page
+refresh, so repeating checkout returns the same saved sale. Previously resumed,
+unsold baskets remain recoverable from the list.
+
+Managers can set a category and **Quick item** flag in item management. Library
+search, category and **Quick items only** work together to narrow the item tiles.
+
+Open **Day-end** to compare the POS ledger with the physical cash count and the
+SumUp net card total entered from the merchant report. Compare the same UK date,
+before processing fees. Include non-sales cash added, removed and banked. Cash
+and card differences are calculated live; closing requires checked counts and an
+explanation for differences. Every save creates a retained revision. Later till
+transactions invalidate the earlier reconciliation until a new revision is saved.
+Daily handovers with till activity require a current closed reconciliation.
+
+Refunds offer their own optional email receipt, using the original address when
+available. Sending is logged and failed receipt emails can be retried without
+repeating the refund. Refunds against a POS loyalty award are flagged **Needs
+review** in the sale and manager queue. A manager records the review outcome;
+actual point corrections remain in the portal administrator's event loyalty
+ledger so other visits and free-paint cycles stay consistent.
+
+See [tablet acceptance checks](TABLET-TESTING.md) for the physical device flow.
 
 ## SumUp configuration
 

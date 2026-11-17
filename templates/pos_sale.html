@@ -2,18 +2,18 @@
 {% block title %}Sale #{{ sale.id }} | CL Paints{% endblock %}
 {% block body %}
 <link rel="stylesheet" href="{{ url_for('static', filename='pos.css') }}">
-<div class="admin">{% include '_admin_sidebar.html' %}<main id="portal-main" class="pos-main">
+<div class="admin">{% include '_pos_sidebar.html' %}<main id="portal-main" class="pos-main" data-pos-manager="{{ 'true' if pos_manager else 'false' }}">
   {% include '_pos_popup_start.html' %}
   <h1>Sale #{{ sale.id }}</h1><p id="pos-sale-reference" data-reference="{{ sale.reference }}">{{ sale.reference }}</p>
   {% for category, message in get_flashed_messages(with_categories=true) %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}
   <section class="panel"><h2>{{ sale.status }}</h2><p>{{ sale.method }}</p><p>Sale recorded: {{ sale.created_at|pos_timestamp }}</p>{% if sale.paid_at %}<p>Payment recorded: {{ sale.paid_at|pos_timestamp }}</p>{% endif %}
     {% for item in items %}<p>{{ item.quantity }} × {{ item.name }} · £{{ item.price }} each</p>{% endfor %}
-    <p class="pos-total">Total £{{ '%.2f'|format(sale.amount) }}</p>
+    <p>Served by: {{ sale.staff_name or 'Not recorded (older sale)' }}{% if sale.price_override %} &middot; Manager price / custom item entry{% endif %}</p><p class="pos-total">Total £{{ '%.2f'|format(sale.amount) }}</p>
     {% if sale.cash_tender is not none %}<p>Cash received: £{{ '%.2f'|format(sale.cash_tender) }}</p><p class="pos-change">Change: £{{ '%.2f'|format(sale.change_due) }}</p>{% endif %}
     {% if sale.customer_label %}<p>Account at sale: {{ sale.customer_label }}</p>{% endif %}{% if sale.participant_name %}<p>Participant: {{ sale.participant_name }}</p>{% endif %}
     {% include '_pos_receipt_status.html' %}
     {% include '_pos_loyalty_status.html' %}
-    {% if waiver %}<p>Linked waiver: <a href="{{ url_for('admin_waiver_detail', waiver_id=waiver.id) }}">{{ waiver.waiver_reference }}</a></p>{% endif %}
+    {% if waiver %}<p>Linked waiver: <a href="{{ url_for('pos_waiver_detail' if session.get('pos_staff_id') else 'admin_waiver_detail', waiver_id=waiver.id) }}">{{ waiver.waiver_reference }}</a></p>{% endif %}
     {% if sale.status == 'Paid' %}<p>Payment recorded{% if sale.transaction_code %} · SumUp {{ sale.transaction_code }}{% endif %}.</p>
     {% elif sale.status == 'Ready' %}<p>Open this sale in the CL Paints POS Android app before starting card payment.</p>
       <form method="post" action="{{ url_for('pos_start_payment', sale_id=sale.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button>Prepare SumUp payment</button></form>

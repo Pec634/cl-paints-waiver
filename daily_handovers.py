@@ -136,6 +136,9 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
                 if latest and latest.status == 'Complete' and action != 'complete':
                     raise ValueError('Save changes to a completed handover as a completed correction.')
                 if action == 'complete':
+                    reconciliation = app.extensions.get('pos_reconciliation_closed')
+                    if reconciliation and pos_summary and pos_summary['transactions'] and not reconciliation(selected,pos_summary):
+                        raise ValueError('Close or update the till day-end reconciliation before completing this handover.')
                     if cashups_pending:
                         raise ValueError('Close the cash-up for every event on this date before completing the handover. You can save a draft meanwhile.')
                     if selected > today:
@@ -147,6 +150,9 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
                     phase=item['cashup'].phase if item['cashup'] else 'Not started') for item in bookings]
                 if pos_summary is not None:
                     values['pos_ledger'] = pos_summary
+                    reconcile = app.extensions.get('pos_reconciliation_closed')
+                    matched = reconcile(selected,pos_summary) if reconcile else None
+                    values['pos_reconciliation_id'] = matched.id if matched else None
                 row = Handover(handover_date=selected, revision=latest.revision+1 if latest else 1,
                     status='Complete' if action == 'complete' else 'Draft', data_json=json.dumps(values),
                     recorded_by=os.getenv('ADMIN_EMAIL') or 'CL Paints admin')

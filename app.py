@@ -589,6 +589,10 @@ from pos import define_product_model as define_pos_product
 PosProduct = define_pos_product(db)
 from pos_finances import define_refund_model
 PosRefund = define_refund_model(db)
+from pos_staff import define_models as define_pos_staff_models
+pos_staff_models = define_pos_staff_models(db)
+from pos_operations import define_models as define_pos_operation_models
+pos_operation_models = define_pos_operation_models(db)
 from staff_reports import define_models as define_staff_report_models
 staff_report_models = define_staff_report_models(db)
 from connecteam_rota import define_model as define_rota_model
@@ -3063,9 +3067,15 @@ from pos_loyalty import PosLoyalty
 pos_loyalty = PosLoyalty(app, db, loyalty_models, ClientAccount, Participant, Waiver, Event)
 from pos_finances import PosLedger, register_refunds
 app.extensions['pos_ledger'] = PosLedger(app, db, PosSale, PosRefund, Event)
-register_pos(app, db, PosSale, Waiver, Participant, admin_required, PosProduct, send_client_email, pos_loyalty)
+from pos_staff import PosAccess
+pos_access = PosAccess(app, db, pos_staff_models, admin_required)
+app.extensions['pos_access'] = pos_access
+pos_access.register()
+register_pos(app, db, PosSale, Waiver, Participant, pos_access.required, PosProduct, send_client_email, pos_loyalty)
 from pos import reader_transaction as pos_reader_transaction
-register_refunds(app, db, PosSale, PosRefund, admin_required, pos_reader_transaction)
+register_refunds(app, db, PosSale, PosRefund, pos_access.required, pos_reader_transaction, send_client_email)
+from pos_operations import register as register_pos_operations
+register_pos_operations(app, db, pos_operation_models, PosSale, Waiver, pos_access, app.extensions['pos_ledger'])
 from sumup_invoice_sync import register as register_sumup_invoice_sync
 register_sumup_invoice_sync(app, db, BookingInvoice, Booking, tool_models[1], admin_required)
 from google_calendar_sync import register as register_google_calendar_sync

@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const get = id => document.getElementById(id);
+  const canManage = document.querySelector('.pos-main')?.dataset.posManager !== 'false';
   let items = [], waiver = null;
   const storageKey = 'clpaints-pos-draft';
   const receipt = get('pos-cash-receipt');
@@ -16,8 +17,11 @@
     if (draft && Array.isArray(draft.items)) items = draft.items.filter(item =>
       typeof item.name === 'string' && Number.isInteger(item.quantity) && item.quantity > 0 &&
       Number.isInteger(item.pence) && item.pence > 0).slice(0, 50);
+    if (typeof draft?.saleToken==='string' && /^[A-Za-z0-9_-]{20,50}$/.test(draft.saleToken)) {
+      get('pos-checkout').elements.sale_token.value=draft.saleToken;
+    }
   } catch (_) { /* A blocked storage area must not prevent checkout. */ }
-  const save = () => { try { sessionStorage.setItem(storageKey, JSON.stringify({items})); } catch (_) {} };
+  const save = () => { try { sessionStorage.setItem(storageKey, JSON.stringify({items,saleToken:get('pos-checkout').elements.sale_token.value})); } catch (_) {} };
   const money = pence => `£${(pence / 100).toFixed(2)}`;
   const parsePrice = value => /^\d+(\.\d{1,2})?$/.test(value) && Number(value) > 0 && Number(value) <= 99999 ? Math.round(Number(value) * 100) : null;
   function updateReceipt() {
@@ -63,7 +67,7 @@
     get('pos-cash-tender').disabled = true;
   }
   function addItem(item) {
-    const existing = items.find(line => line.name === item.name && line.pence === item.pence);
+    const existing = items.find(line => line.name === item.name && line.pence === item.pence && line.product_id === item.product_id);
     if (existing && existing.quantity + item.quantity <= 999) existing.quantity += item.quantity;
     else if (items.length < 50) items.push(item);
     else { get('pos-error').textContent = 'A sale can contain up to 50 lines.'; return; }
@@ -74,6 +78,7 @@
   function render() {
     get('pos-basket').replaceChildren();
     get('pos-clear-basket').disabled = items.length === 0;
+    if (get('pos-hold-basket')) get('pos-hold-basket').disabled = !items.length;
     let total = 0;
     items.forEach((item, index) => {
       total += item.quantity * item.pence;
@@ -95,6 +100,7 @@
       const priceLabel = document.createElement('label'); priceLabel.textContent = 'Unit price (£)';
       const price = document.createElement('input'); price.type = 'number'; price.min = '0.01'; price.max = '99999'; price.step = '0.01'; price.inputMode = 'decimal'; price.value = (item.pence / 100).toFixed(2);
       price.setAttribute('aria-label', `Unit price for ${item.name}`);
+      price.readOnly = !canManage;
       price.addEventListener('change', () => {
         const value = parsePrice(price.value);
         if (value === null) { price.value = (item.pence / 100).toFixed(2); get('pos-error').textContent = 'Enter a positive price with up to two decimal places.'; return; }
@@ -104,7 +110,7 @@
       row.append(fields); get('pos-basket').append(row);
     });
     get('pos-total').textContent = `Total ${money(total)}`;
-    get('pos-items').value = JSON.stringify(items.map(i => ({name:i.name, quantity:i.quantity, price:(i.pence / 100).toFixed(2)})));
+    get('pos-items').value = JSON.stringify(items.map(i => ({name:i.name, quantity:i.quantity, price:(i.pence / 100).toFixed(2), ...(i.product_id ? {product_id:i.product_id} : {})})));
     get('pos-waiver-id').value = waiver ? waiver.id : '';
     get('pos-participant-id').value = waiver?.participantId || '';
     get('pos-linked').textContent = waiver ? `Linked: ${waiver.label}${waiver.participantName ? ' · ' + waiver.participantName : ''}` : 'No waiver linked';
@@ -115,7 +121,7 @@
     updateCash();
     save();
   }
-  get('pos-add-item').addEventListener('submit', event => {
+  get('pos-add-item')?.addEventListener('submit', event => {
     event.preventDefault();
     const name = get('pos-item-name').value.trim(), quantity = Number(get('pos-item-quantity').value);
     const price = get('pos-item-price').value;
@@ -129,20 +135,27 @@
   const products = [...document.querySelectorAll('[data-product-id]')];
   products.forEach(button => button.addEventListener('click', () => {
     const pence = parsePrice(button.dataset.productPrice);
-    if (pence !== null) addItem({name: button.dataset.productName, quantity: 1, pence});
+    if (pence !== null) addItem({name: button.dataset.productName, quantity: 1, pence, product_id:Number(button.dataset.productId)});
   }));
-  get('pos-library-search')?.addEventListener('input', event => {
-    const query = event.target.value.trim().toLowerCase();
-    products.forEach(button => { button.hidden = !button.dataset.productName.toLowerCase().includes(query); });
+  function filterProducts() {
+    const query = get('pos-library-search').value.trim().toLowerCase();
+    const category=get('pos-product-category')?.value || '';
+    const shortcuts=get('pos-shortcuts-only')?.checked;
+    products.forEach(button => { button.hidden = !button.dataset.productName.toLowerCase().includes(query) ||
+      (category && button.dataset.productCategory!==category) || (shortcuts && button.dataset.productShortcut!=='true'); });
     get('pos-library-status').textContent = `${products.filter(button => !button.hidden).length} items shown`;
-  });
+  }
+  get('pos-library-search')?.addEventListener('input',filterProducts);
+  get('pos-product-category')?.addEventListener('change',filterProducts);
+  get('pos-shortcuts-only')?.addEventListener('change',filterProducts);
   const waiverResults = get('pos-waiver-results');
   waiverResults.addEventListener('click', event => {
     const button = event.target.closest('button[data-waiver-id]');
     if (!button || !waiverResults.contains(button)) return;
     const participant = button.closest('.pos-waiver')?.querySelector('.pos-participant');
     waiver = {id:button.dataset.waiverId, label:button.dataset.waiverLabel,
-      participantId:participant?.value || '', participantName:participant?.value ? participant.selectedOptions[0].textContent : ''}; render();
+      participantId:participant?.value || '', participantName:participant?.value ? participant.selectedOptions[0].textContent : '',
+      people:participant ? [...participant.options].filter(option=>option.value).map(option=>({id:option.value,name:option.textContent,points:option.dataset.points || '0'})) : []}; render();
     updateLoyalty(participant ? [...participant.options].filter(option => option.value) : [], participant?.value || '');
     const receiptEmail = get('pos-receipt-email');
     if (!receiptEmail.value || receiptEmail.value === receiptEmail.dataset.prefilled) {
@@ -226,6 +239,68 @@
   };
   get('pos-cash-tender').addEventListener('input', updateCash);
   get('pos-cash-cancel').onclick = () => { closeCash(); get('pos-cash-open').focus(); };
+  if (get('pos-hold-basket')) {
+    const base = get('pos-hold-basket').dataset.heldUrl;
+    const feedback = get('pos-held-status');
+    const api = async (path, payload) => {
+      const response = await fetch(path,{method:payload ? 'POST':'GET',credentials:'same-origin',cache:'no-store',
+        headers:{Accept:'application/json',...(payload ? {'Content-Type':'application/json'} : {})},
+        ...(payload ? {body:JSON.stringify({...payload,csrf_token:get('pos-checkout').elements.csrf_token.value})} : {})});
+      if (!response.ok || response.redirected) throw new Error('Could not save or load this basket. Check your sign-in and try again.');
+      return response.json();
+    };
+    const refresh = async () => {
+      try {
+        const data = await api(base);
+        get('pos-held-list').replaceChildren();
+        data.baskets.forEach(basket => {
+          const row = document.createElement('div'); row.className='pos-held-row';
+          const label = document.createElement('span');label.textContent=basket.label+(basket.status==='Resumed' ? ' · Previously resumed, not yet paid' : '');
+          const resume = document.createElement('button');resume.type='button';resume.textContent='Resume';
+          resume.onclick = async () => {
+            if (items.length) {feedback.textContent='Hold or clear the current basket before resuming another.';return;}
+            resume.disabled=true;
+            try {
+              const data=await api(base+'/'+basket.id+'/resume',{}), saved=data.payload;
+              items=saved.items.map(item=>({name:item.name,quantity:item.quantity,pence:Math.round(Number(item.price)*100),...(item.product_id ? {product_id:item.product_id} : {})}));
+              waiver=saved.waiver || null;
+              get('pos-checkout').elements.sale_token.value=data.sale_token;
+              get('pos-receipt-requested').checked=!!saved.receipt_requested;
+              get('pos-receipt-email').value=saved.receipt_email || '';
+              if (get('pos-trading-event')) get('pos-trading-event').value=saved.trading_event_id || '';
+              if (get('pos-loyalty-event')) get('pos-loyalty-event').value=saved.loyalty_event_id || '';
+              const people=(saved.loyalty_people || []);
+              updateLoyalty(people.map(person=>({value:String(person.id),textContent:person.name,dataset:{points:String(person.points || 0)}})),waiver?.participantId || '');
+              document.querySelectorAll('input[name=loyalty_participant_id]').forEach(field=>{field.checked=people.some(person=>String(person.id)===field.value && person.checked);});
+              updateReceipt();render();
+              get('pos-waiver-fold').open=!waiver;
+              feedback.textContent='Basket resumed. Check prices, waiver validity and event before payment.';
+            } catch(error) {feedback.textContent=error.message;}
+            resume.disabled=false;
+          };
+          row.append(label,resume);get('pos-held-list').append(row);
+        });
+        if (!data.baskets.length) get('pos-held-list').textContent='No held baskets.';
+      } catch(error) {feedback.textContent=error.message;}
+    };
+    get('pos-refresh-held').onclick=refresh;
+    get('pos-held-controls').addEventListener('toggle',()=>{if(get('pos-held-controls').open)refresh();});
+    get('pos-hold-basket').onclick=async () => {
+      const label=get('pos-hold-label').value.trim();
+      if (!label) {feedback.textContent='Enter a name for this held basket.';return;}
+      get('pos-hold-basket').disabled=true;
+      try {
+        const data=await api(base,{label,items:JSON.parse(get('pos-items').value),waiver,
+          receipt_email:get('pos-receipt-email').value,receipt_requested:get('pos-receipt-requested').checked,
+          trading_event_id:get('pos-trading-event')?.value || '',loyalty_event_id:get('pos-loyalty-event')?.value || '',
+          loyalty_people:(waiver?.people || []).map(person=>({...person,checked:[...document.querySelectorAll('input[name=loyalty_participant_id]')].some(field=>field.value===String(person.id)&&field.checked)}))});
+        items=[];waiver=null;closeCash();updateLoyalty();get('pos-receipt-requested').checked=false;get('pos-receipt-email').value='';updateReceipt();
+        get('pos-checkout').elements.sale_token.value=data.next_sale_token;
+        get('pos-hold-label').value='';render();get('pos-waiver-fold').open=true;
+        feedback.textContent='Basket held. Ready for the next customer.';await refresh();
+      } catch(error) {feedback.textContent=error.message;render();}
+    };
+  }
   get('pos-checkout').addEventListener('submit', event => {
     const eventField = get('pos-loyalty-event');
     if (eventField) {

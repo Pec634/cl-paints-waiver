@@ -53,6 +53,9 @@ def define_model(db):
         booking_id = db.Column(db.Integer, db.ForeignKey('booking.id'), nullable=True)
         event_index = db.Column(db.Integer, nullable=True)
         refund_version = db.Column(db.Integer, nullable=False, default=0)
+        staff_id = db.Column(db.Integer, db.ForeignKey('pos_staff.id'), nullable=True)
+        staff_name = db.Column(db.String(255), nullable=True)
+        price_override = db.Column(db.Boolean, nullable=False, default=False)
         refunds = db.relationship('PosRefund', lazy='select', order_by='PosRefund.id')
 
         @property
@@ -77,7 +80,8 @@ def ensure_schema(db):
         'receipt_email': 'VARCHAR(320)', 'receipt_status': 'VARCHAR(20)', 'receipt_sent_at': 'TIMESTAMP',
         'loyalty_event_id':'INTEGER REFERENCES event(id)', 'loyalty_participants_json':'TEXT', 'loyalty_result_json':'TEXT',
         'trading_event_id':'INTEGER REFERENCES event(id)', 'booking_id':'INTEGER REFERENCES booking(id)',
-        'event_index':'INTEGER', 'refund_version':'INTEGER NOT NULL DEFAULT 0'}
+        'event_index':'INTEGER', 'refund_version':'INTEGER NOT NULL DEFAULT 0',
+        'staff_id':'INTEGER REFERENCES pos_staff(id)', 'staff_name':'VARCHAR(255)', 'price_override':'BOOLEAN NOT NULL DEFAULT FALSE'}
     with db.engine.begin() as connection:
         for name, definition in additions.items():
             if name not in columns:
@@ -86,6 +90,33 @@ def ensure_schema(db):
             column['name'] for column in inspect(db.engine).get_columns('loyalty_visit')}:
         with db.engine.begin() as connection:
             connection.exec_driver_sql('ALTER TABLE loyalty_visit ADD COLUMN pos_sale_id INTEGER REFERENCES pos_sale(id)')
+    product_columns = {column['name'] for column in inspect(db.engine).get_columns('pos_product')}
+    with db.engine.begin() as connection:
+        for name,definition in {'category':"VARCHAR(60) NOT NULL DEFAULT 'General'",'shortcut':'BOOLEAN NOT NULL DEFAULT FALSE'}.items():
+            if name not in product_columns:
+                connection.exec_driver_sql(f'ALTER TABLE pos_product ADD COLUMN {name} {definition}')
+    if 'pos_refund' in inspect(db.engine).get_table_names():
+        refund_columns = {column['name'] for column in inspect(db.engine).get_columns('pos_refund')}
+        with db.engine.begin() as connection:
+            for name,definition in {'receipt_email':'VARCHAR(320)','receipt_status':'VARCHAR(20)','receipt_sent_at':'TIMESTAMP',
+                    'loyalty_review_status':'VARCHAR(30)','loyalty_review_note':'TEXT','loyalty_reviewed_by':'VARCHAR(255)',
+                    'loyalty_reviewed_at':'TIMESTAMP'}.items():
+                if name not in refund_columns:
+                    connection.exec_driver_sql(f'ALTER TABLE pos_refund ADD COLUMN {name} {definition}')
+            if 'loyalty_review_status' not in refund_columns:
+                rows=connection.execute(db.text("SELECT r.id,s.loyalty_result_json FROM pos_refund r JOIN pos_sale s ON s.id=r.sale_id WHERE r.status='Refunded' AND s.loyalty_result_json IS NOT NULL")).all()
+                for identity,raw in rows:
+                    try: awarded=any(item.get('points',0)>0 for item in json.loads(raw))
+                    except (ValueError,TypeError,AttributeError): awarded=False
+                    if awarded:
+                        connection.execute(db.text("UPDATE pos_refund SET loyalty_review_status='Needs review' WHERE id=:identity"),{'identity':identity})
+    if 'pos_staff' in inspect(db.engine).get_table_names():
+        staff_columns={column['name'] for column in inspect(db.engine).get_columns('pos_staff')}
+        with db.engine.begin() as connection:
+            for name,definition in {'pin_hash':'TEXT','pin_digest':'VARCHAR(64)'}.items():
+                if name not in staff_columns:
+                    connection.exec_driver_sql(f'ALTER TABLE pos_staff ADD COLUMN {name} {definition}')
+            connection.exec_driver_sql('CREATE UNIQUE INDEX IF NOT EXISTS uq_pos_staff_pin_digest ON pos_staff(pin_digest)')
 
 
 def parse_tender(raw, total):
@@ -104,6 +135,8 @@ def define_product_model(db):
         id = db.Column(db.Integer, primary_key=True)
         name = db.Column(db.String(120), nullable=False)
         price = db.Column(db.Numeric(10, 2), nullable=False)
+        category = db.Column(db.String(60), nullable=False, default='General')
+        shortcut = db.Column(db.Boolean, nullable=False, default=False)
     return PosProduct
 
 
@@ -147,6 +180,8 @@ def parse_items(raw):
                     or price != price.quantize(Decimal('.01'))):
                 raise ValueError()
             cleaned.append(dict(name=name, quantity=quantity, price=str(price)))
+            if item.get('product_id') is not None:
+                cleaned[-1]['product_id'] = int(str(item['product_id']))
             total += quantity * price
         if total > Decimal('99999.99'):
             raise ValueError()
@@ -158,6 +193,11 @@ def parse_items(raw):
 def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_email=None, loyalty=None):
     app.add_template_filter(format_sale_time, 'pos_timestamp')
     ledger = app.extensions.get('pos_ledger')
+    access = app.extensions.get('pos_access')
+    if not access:
+        @app.context_processor
+        def default_pos_permissions():
+            return dict(pos_manager=True,pos_actor='Portal administrator')
     def send_receipt(sale, retry=False):
         # Claim delivery before contacting the provider so concurrent requests cannot send twice.
         states = ['Requested', 'Failed'] if retry else ['Requested']
@@ -213,6 +253,13 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         context = waiver_search_context()
         return jsonify(html=render_template('_pos_waiver_results.html', **context), count=len(context['matches']))
 
+    @app.get('/admin/pos/waivers/<int:waiver_id>')
+    @admin_required
+    def pos_waiver_detail(waiver_id):
+        waiver=db.get_or_404(Waiver,waiver_id)
+        return render_template('pos_waiver_detail.html',waiver=waiver,status=waiver_status(waiver),
+            people=loyalty.people(waiver) if loyalty else waiver.participants)
+
     def sale_destination(sale):
         if sale.method == 'Cash':
             return redirect(url_for('pos_home', completed=sale.id, _anchor='pos-cash-receipt'))
@@ -259,7 +306,9 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         return render_template('admin_pos.html', **search_context,
             loyalty_events=loyalty.events() if loyalty else [], loyalty_enabled=bool(loyalty),
             trading_events=ledger.events() if ledger else [],
+            pending_loyalty_reviews=ledger.Refund.query.filter_by(loyalty_review_status='Needs review').order_by(ledger.Refund.id.desc()).limit(50).all() if ledger else [],
             products=Product.query.order_by(Product.name, Product.id).all(),
+            product_categories=[row[0] for row in db.session.query(Product.category).distinct().order_by(Product.category).all()],
             configured=configured(),
             sale_token=secrets.token_urlsafe(24),
             sales=sales_page.items, sales_page=sales_page, sale_q=sale_query,
@@ -269,6 +318,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
     @admin_required
     def pos_library_save():
         check()
+        if access: access.require_manager()
         product_id = request.form.get('product_id', '', type=str)
         product = db.get_or_404(Product, product_id) if product_id else Product()
         try:
@@ -276,6 +326,10 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
                 quantity=1, price=request.form.get('price', ''))]))
             product.name = items[0]['name']
             product.price = Decimal(items[0]['price'])
+            category = request.form.get('category','General').strip() or 'General'
+            if len(category)>60: raise ValueError('Use a category of up to 60 characters.')
+            product.category = category
+            product.shortcut = request.form.get('shortcut')=='yes'
             db.session.add(product)
             db.session.commit()
             flash('Library item saved. New taps use the updated price; existing basket prices stay as entered.', 'success')
@@ -288,6 +342,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
     @admin_required
     def pos_library_delete(product_id):
         check()
+        if access: access.require_manager()
         product = db.get_or_404(Product, product_id)
         db.session.delete(product)
         db.session.commit()
@@ -308,6 +363,13 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             return sale_destination(existing)
         try:
             items, total = parse_items(request.form.get('items', ''))
+            override = False
+            for item in items:
+                product = db.session.get(Product,item.get('product_id')) if item.get('product_id') else None
+                changed_price = not product or Decimal(item['price']) != product.price or item['name'] != product.name
+                if changed_price and access and not access.manager():
+                    raise ValueError('A manager must enter custom items or approve price changes. Refresh library prices before checkout.')
+                override = override or changed_price
             method = request.form.get('method')
             if method not in ('Cash', 'Card'):
                 raise ValueError('Choose cash or card.')
@@ -339,6 +401,8 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
                 receipt_email=receipt_email, receipt_status='Requested' if receipt_email else None,
                 loyalty_event_id=event_id, loyalty_participants_json=json.dumps(loyalty_ids),
                 trading_event_id=trading_id, booking_id=booking_id, event_index=event_index,
+                staff_id=session.get('pos_staff_id'), staff_name=access.actor() if access else app.config.get('ADMIN_EMAIL') or 'Portal administrator',
+                price_override=override,
                 participant_name=f'{participant.first_name} {participant.last_name}' if participant else None,
                 customer_label=customer_label, customer_search=customer_search,
                 waiver_id=waiver.id if waiver else None, method=method,

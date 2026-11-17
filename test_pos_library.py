@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
 from decimal import Decimal
 from urllib.error import URLError, HTTPError
+from werkzeug.security import generate_password_hash
 from functools import wraps
 from flask import Flask, abort, session
 from flask_sqlalchemy import SQLAlchemy
@@ -18,6 +19,8 @@ from pos_finances import define_refund_model, PosLedger, register_refunds
 import booking_cashup
 import cash_journal
 import daily_handovers
+import pos_staff
+import pos_operations
 
 
 class PosLibraryTest(unittest.TestCase):
@@ -31,6 +34,8 @@ class PosLibraryTest(unittest.TestCase):
         self.Sale = pos.define_model(self.db)
         self.Product = pos.define_product_model(self.db)
         self.Refund = define_refund_model(self.db)
+        self.staff_models=pos_staff.define_models(self.db)
+        self.operation_models=pos_operations.define_models(self.db)
         class Waiver(self.db.Model):
             id = self.db.Column(self.db.Integer, primary_key=True)
             waiver_reference = self.db.Column(self.db.String(100))
@@ -87,20 +92,26 @@ class PosLibraryTest(unittest.TestCase):
                 return function(*args, **kwargs)
             return wrapped
         self.mail = Mock(return_value=True)
-        pos.register(self.app, self.db, self.Sale, Waiver, Participant, staff_only, self.Product, self.mail, self.loyalty)
+        self.access=pos_staff.PosAccess(self.app,self.db,self.staff_models,staff_only)
+        self.app.extensions['pos_access']=self.access
+        self.access.register()
+        pos.register(self.app, self.db, self.Sale, Waiver, Participant, self.access.required, self.Product, self.mail, self.loyalty)
         self.reader = Mock()
-        register_refunds(self.app, self.db, self.Sale, self.Refund, staff_only, self.reader)
+        register_refunds(self.app, self.db, self.Sale, self.Refund, self.access.required, self.reader,self.mail)
+        pos_operations.register(self.app,self.db,self.operation_models,self.Sale,Waiver,self.access,self.ledger)
         cash_journal.register(self.app,self.db,self.Movement,self.Cashup,BusinessSetting,self.TillCount,staff_only,Event)
         daily_handovers.register(self.app,self.db,self.Handover,Booking,lambda booking:[],staff_only,self.Cashup)
         for endpoint in ('event_day_dashboard','connecteam_rota'):
             self.app.add_url_rule('/test/'+endpoint,endpoint,lambda:'Test')
         self.app.add_url_rule('/admin/waivers/<int:waiver_id>', 'admin_waiver_detail', lambda waiver_id: 'Waiver')
+        self.app.add_url_rule('/admin/login','admin_login',lambda:'Admin sign-in')
+        self.app.add_url_rule('/admin/events/<int:event_id>/loyalty','loyalty.event_admin',lambda event_id:'Loyalty')
         self.context = self.app.app_context()
         self.context.push()
         self.db.create_all()
         self.client = self.app.test_client()
         with self.client.session_transaction() as state:
-            state.update(staff=True, client_csrf='token')
+            state.update(staff=True, admin_authenticated=True, client_csrf='token')
 
     def tearDown(self):
         self.db.session.remove()
@@ -119,6 +130,244 @@ class PosLibraryTest(unittest.TestCase):
             amount='15.00', transaction_code=sale.transaction_code, refunded_amount=0)
         data = dict(csrf_token='token', refund_token='r'*24, reason='Customer request', refund_quantity_0='1', refund_confirmed='yes')
         return sale, data
+
+    def named_staff(self,role='cashier',username='cashier'):
+        pin=str(self.staff_models[0].query.count()+1)
+        hashed=generate_password_hash(pin)
+        row=self.staff_models[0](username=username,name='Named '+role,password_hash=hashed,pin_hash=hashed,pin_digest=self.access.pin_digest(pin),role=role,enabled=True)
+        self.db.session.add(row);self.db.session.commit()
+        return row
+
+    def as_staff(self,row):
+        with self.client.session_transaction() as state:
+            state.clear();state.update(pos_staff_id=row.id,pos_last_activity=datetime.utcnow().timestamp(),
+                pos_signed_in_at=datetime.utcnow().timestamp(),client_csrf='token')
+
+    def close_day(self,day):
+        summary=self.ledger.summary(day)
+        latest=self.operation_models[1].query.filter_by(day=day).order_by(self.operation_models[1].revision.desc()).first()
+        return self.client.post('/admin/pos/reconciliation',data=dict(csrf_token='token',date=day.isoformat(),
+            version=str(latest.id) if latest else '',ledger_version=summary['version'],action='close',checked='yes',
+            opening_cash='100.00',other_cash_in='0.00',other_cash_out='0.00',
+            counted_cash=str(100+Decimal(summary['cash_sales'])-Decimal(summary['cash_refunds'])),
+            sumup_net=str(Decimal(summary['card_sales'])-Decimal(summary['card_refunds'])),notes=''))
+
+    def test_named_cashier_permissions_prices_and_sale_attribution(self):
+        self.save();product=self.Product.query.one()
+        cashier=self.named_staff();self.as_staff(cashier)
+        self.assertEqual(self.client.post('/admin/pos/library',data={'csrf_token':'token'}).status_code,403)
+        self.assertEqual(self.client.get('/admin/pos/staff').status_code,403)
+        self.assertEqual(self.client.get('/admin/pos/reconciliation').status_code,403)
+        page=self.client.get('/admin/pos')
+        self.assertEqual(page.status_code,200)
+        self.assertNotIn(b'pos-library-manager',page.data)
+        self.assertNotIn(b'id="pos-add-item"',page.data)
+        data=dict(csrf_token='token',sale_token='c'*24,method='Cash',cash_tender='10.00')
+        for item in (dict(name=product.name,quantity=1,price='5.00',product_id=product.id),dict(name='Custom',quantity=1,price='7.50')):
+            self.client.post('/admin/pos/sales',data={**data,'items':json.dumps([item])})
+            self.assertEqual(self.Sale.query.count(),0)
+        self.client.post('/admin/pos/sales',data={**data,'items':json.dumps([dict(name=product.name,quantity=1,price='7.50',product_id=product.id)])})
+        sale=self.Sale.query.one()
+        self.assertEqual(sale.staff_id,cashier.id);self.assertEqual(sale.staff_name,'Named cashier');self.assertFalse(sale.price_override)
+        self.assertEqual(self.client.post(f'/admin/pos/sales/{sale.id}/refund',data={'csrf_token':'token'}).status_code,403)
+        cashier.enabled=False;self.db.session.commit()
+        self.assertIn('/staff/login',self.client.get('/admin/pos').location)
+
+    def test_staff_pin_login_throttling_and_manager_pin_storage(self):
+        row=self.named_staff(role='manager',username='manager')
+        client=self.app.test_client()
+        page=client.get('/admin/pos/staff/login');self.assertEqual(page.status_code,200)
+        with client.session_transaction() as state:csrf=state['pos_login_csrf']
+        self.assertEqual(client.post('/admin/pos/staff/login',data={'csrf_token':'bad'}).status_code,400)
+        result=client.post('/admin/pos/staff/login',data=dict(csrf_token=csrf,pin='1'))
+        self.assertEqual(result.status_code,302)
+        with client.session_transaction() as state:
+            self.assertEqual(state['pos_staff_id'],row.id);self.assertNotIn('admin_authenticated',state)
+        for index in range(5):
+            self.client.post('/admin/pos/staff/login',data={'csrf_token':self.client.get('/admin/pos/staff/login').data.decode().split('name="csrf_token" value="')[1].split('"')[0],'pin':'999999'})
+        with self.client.session_transaction() as state:csrf=state['pos_login_csrf']
+        self.assertEqual(self.client.post('/admin/pos/staff/login',data=dict(csrf_token=csrf,pin='1')).status_code,429)
+        self.assertNotEqual(row.pin_hash,'1')
+
+    def test_manager_price_override_and_item_categories(self):
+        manager=self.named_staff('manager','manager');self.as_staff(manager)
+        result=self.client.post('/admin/pos/library',data=dict(csrf_token='token',name='Glitter',price='3.00',category='Extras',shortcut='yes'))
+        self.assertEqual(result.status_code,302)
+        product=self.Product.query.one();self.assertEqual(product.category,'Extras');self.assertTrue(product.shortcut)
+        self.client.post('/admin/pos/sales',data=dict(csrf_token='token',sale_token='v'*24,method='Cash',cash_tender='5.00',
+            items=json.dumps([dict(name='Glitter',quantity=1,price='2.00',product_id=product.id)])))
+        self.assertTrue(self.Sale.query.one().price_override)
+        self.assertEqual(self.Sale.query.one().staff_name,'Named manager')
+
+    def test_manager_can_create_reset_and_disable_staff_pins(self):
+        payload=dict(csrf_token='token',name='Till assistant',role='cashier',enabled='yes',pin='1')
+        self.assertEqual(self.client.post('/admin/pos/staff',data=payload).status_code,302)
+        row=self.staff_models[0].query.one()
+        self.assertEqual(row.role,'cashier');self.assertTrue(row.enabled)
+        old_hash=row.pin_hash
+        self.client.post('/admin/pos/staff',data={**payload,'staff_id':row.id,'pin':'02','enabled':''})
+        self.assertNotEqual(row.pin_hash,old_hash);self.assertFalse(row.enabled)
+        self.assertEqual(pos_operations.money('999999.99'),Decimal('999999.99'))
+        self.assertEqual(pos_operations.money('-999999.99',signed=True),Decimal('-999999.99'))
+
+    def test_pins_are_unique_preserve_zeroes_and_have_no_minimum_length(self):
+        first=dict(csrf_token='token',name='First staff',role='cashier',enabled='yes',pin='0')
+        self.client.post('/admin/pos/staff',data=first)
+        row=self.staff_models[0].query.one()
+        self.client.post('/admin/pos/staff',data={**first,'name':'Second staff'})
+        self.assertEqual(self.staff_models[0].query.count(),1)
+        self.client.post('/admin/pos/staff',data={**first,'name':'Second staff','pin':'00'})
+        self.assertEqual(self.staff_models[0].query.count(),2)
+        self.assertNotEqual(row.pin_digest,self.access.pin_digest('00'))
+        original=row.pin_hash
+        self.client.post('/admin/pos/staff',data={**first,'staff_id':row.id,'pin':'','enabled':''})
+        self.assertEqual(row.pin_hash,original)
+        self.client.post('/admin/pos/staff',data={**first,'name':'Third staff'})
+        self.assertEqual(self.staff_models[0].query.count(),2)
+        for pin in ('','12a',' 1','1'*257):
+            self.client.post('/admin/pos/staff',data={**first,'name':'Invalid staff','pin':pin})
+        self.assertEqual(self.staff_models[0].query.count(),2)
+        login=self.app.test_client()
+        login.get('/admin/pos/staff/login')
+        with login.session_transaction() as state:csrf=state['pos_login_csrf']
+        self.assertEqual(login.post('/admin/pos/staff/login',data=dict(csrf_token=csrf,pin='0')).status_code,200)
+        self.assertEqual(login.post('/admin/pos/staff/login',data=dict(csrf_token=csrf,pin='00')).status_code,302)
+        with login.session_transaction() as state:
+            self.assertEqual(state['pos_staff_id'],self.staff_models[0].query.filter_by(name='Second staff').one().id)
+        page=self.client.get('/admin/pos/staff')
+        self.assertNotIn(b'minlength=',page.data)
+        self.assertNotIn(row.pin_hash.encode(),page.data)
+
+    def test_existing_staff_accounts_upgrade_and_require_pin_allocation(self):
+        self.db.session.remove()
+        with self.db.engine.begin() as connection:
+            connection.exec_driver_sql('DROP TABLE pos_staff')
+            connection.exec_driver_sql('CREATE TABLE pos_staff (id INTEGER PRIMARY KEY,username VARCHAR(80) UNIQUE,name VARCHAR(120),password_hash TEXT NOT NULL,role VARCHAR(12),enabled BOOLEAN)')
+            connection.execute(self.db.text('INSERT INTO pos_staff (id,username,name,password_hash,role,enabled) VALUES (1,:username,:name,:hash,:role,1)'),
+                dict(username='legacy',name='Legacy staff',hash=generate_password_hash('old-password-123'),role='cashier'))
+        pos.ensure_schema(self.db);pos.ensure_schema(self.db)
+        row=self.staff_models[0].query.one()
+        self.assertIsNone(row.pin_hash)
+        self.client.post('/admin/pos/staff',data=dict(csrf_token='token',staff_id=row.id,name=row.name,role=row.role,enabled='yes',pin='7'))
+        self.assertEqual(row.pin_digest,self.access.pin_digest('7'))
+
+    def test_held_baskets_are_private_recoverable_and_reuse_sale_token(self):
+        cashier=self.named_staff();self.as_staff(cashier)
+        payload=dict(csrf_token='token',label='Waiting customer',items=[dict(name='Painting',quantity=1,price='7.50')],waiver=None)
+        self.assertEqual(self.client.post('/admin/pos/held',json={**payload,'csrf_token':'bad'}).status_code,400)
+        saved=self.client.post('/admin/pos/held',json=payload)
+        self.assertEqual(saved.status_code,200)
+        held_id=saved.json['id']
+        other=self.named_staff(username='other');self.as_staff(other)
+        self.assertEqual(self.client.get('/admin/pos/held').json['baskets'],[])
+        self.assertEqual(self.client.post(f'/admin/pos/held/{held_id}/resume',json={'csrf_token':'token'}).status_code,404)
+        self.as_staff(cashier)
+        resumed=self.client.post(f'/admin/pos/held/{held_id}/resume',json={'csrf_token':'token'})
+        again=self.client.post(f'/admin/pos/held/{held_id}/resume',json={'csrf_token':'token'})
+        self.assertEqual(resumed.json['sale_token'],again.json['sale_token'])
+        self.assertEqual(resumed.json['payload']['items'][0]['price'],'7.50')
+
+    def test_refund_receipt_and_loyalty_review_are_logged_once(self):
+        sale,data=self.refundable_sale()
+        sale.loyalty_result_json=json.dumps([dict(participant_id=1,name='Member',points=1,message='Point awarded')])
+        self.db.session.commit()
+        data.update(email_refund_receipt='yes',refund_receipt_email='customer@example.com')
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        refund=self.Refund.query.one()
+        self.assertEqual(refund.receipt_status,'Sent');self.mail.assert_called_once()
+        self.assertIn('Remaining paid',self.mail.call_args.args[2])
+        self.assertEqual(refund.loyalty_review_status,'Needs review')
+        result=self.client.post(f'/admin/pos/refunds/{refund.id}/loyalty-review',data=dict(csrf_token='token',review_note='Partial return; the painting was completed, so retain the point.'))
+        self.assertEqual(result.status_code,302);self.assertEqual(refund.loyalty_review_status,'Reviewed')
+        self.assertEqual(refund.loyalty_reviewed_by,'Portal administrator')
+
+    def test_day_end_reconciliation_explains_variances_and_detects_later_sales(self):
+        from zoneinfo import ZoneInfo
+        sale,data=self.refundable_sale();today=datetime.now(ZoneInfo('Europe/London')).date()
+        self.assertEqual(self.close_day(today).status_code,302)
+        row=self.operation_models[1].query.one()
+        self.assertEqual(row.values['expected_cash'],'115.00');self.assertEqual(row.values['cash_variance'],'0.00')
+        self.assertIsNotNone(self.app.extensions['pos_reconciliation_closed'](today,self.ledger.summary(today)))
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        self.assertIsNone(self.app.extensions['pos_reconciliation_closed'](today,self.ledger.summary(today)))
+        summary=self.ledger.summary(today)
+        form=dict(csrf_token='token',date=today.isoformat(),version=str(row.id),ledger_version=summary['version'],action='close',checked='yes',
+            opening_cash='100',other_cash_in='0',other_cash_out='0',counted_cash='1',sumup_net='0',notes='')
+        self.assertEqual(self.client.post('/admin/pos/reconciliation',data=form).status_code,400)
+        form['notes']='Counted short; manager investigating.'
+        self.assertEqual(self.client.post('/admin/pos/reconciliation',data=form).status_code,302)
+        self.assertEqual(self.operation_models[1].query.count(),2)
+        self.assertEqual(row.values['cash_variance'],'0.00')
+
+    def test_refund_email_failure_can_retry_without_repeating_refund(self):
+        sale,data=self.refundable_sale()
+        data.update(email_refund_receipt='yes',refund_receipt_email='customer@example.com')
+        self.mail.return_value=False
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        refund=self.Refund.query.one();self.assertEqual(refund.status,'Refunded');self.assertEqual(refund.receipt_status,'Failed')
+        self.mail.return_value=True
+        self.client.post(f'/admin/pos/refunds/{refund.id}/receipt/retry',data={'csrf_token':'token'})
+        self.assertEqual(refund.receipt_status,'Sent');self.assertEqual(self.Refund.query.count(),1)
+        self.assertEqual(self.client.post(f'/admin/pos/refunds/{refund.id}/receipt/retry',data={'csrf_token':'token'}).status_code,409)
+
+    @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
+    def test_categories_shortcuts_and_held_baskets_on_tablet(self):
+        self.db.session.add_all([self.Product(name='Painting',price=Decimal('7.50'),category='Faces',shortcut=True),
+            self.Product(name='Glitter',price=Decimal('3.00'),category='Extras',shortcut=False)])
+        self.db.session.commit()
+        markup=self.client.get('/admin/pos').data
+        for width in (1024,800):
+            BrowserChecks.browser(self,markup,'''
+                const category=document.getElementById('pos-product-category');
+                category.value='Extras';change(category);
+                assert([...document.querySelectorAll('[data-product-id]')].filter(button=>!button.hidden).length===1,'category filter incorrect');
+                document.getElementById('pos-shortcuts-only').click();
+                assert([...document.querySelectorAll('[data-product-id]')].every(button=>button.hidden),'quick item filter incorrect');
+                category.value='';change(category);
+                const product=[...document.querySelectorAll('[data-product-id]')].find(button=>!button.hidden);
+                assert(product.dataset.productName==='Painting','wrong quick item shown');product.click();
+                let heldPayload;
+                window.fetch=async (url,options={})=>({ok:true,redirected:false,json:async()=>{
+                    if(options.method==='POST'&&String(url).endsWith('/resume'))return {payload:heldPayload,sale_token:'hhhhhhhhhhhhhhhhhhhhhhhh'};
+                    if(options.method==='POST'){heldPayload=JSON.parse(options.body);return {id:1,next_sale_token:'nnnnnnnnnnnnnnnnnnnnnnnn'};}
+                    return {baskets:heldPayload?[{id:1,label:'Waiting family',status:'Held'}]:[]};
+                }});
+                document.getElementById('pos-held-controls').open=true;
+                await new Promise(resolve=>setTimeout(resolve,0));
+                document.getElementById('pos-hold-label').value='Waiting family';
+                document.getElementById('pos-hold-basket').click();
+                await new Promise(resolve=>setTimeout(resolve,0));
+                assert(document.getElementById('pos-basket').children.length===0,'holding basket did not clear till');
+                document.querySelector('#pos-held-list button').click();
+                await new Promise(resolve=>setTimeout(resolve,0));
+                assert(document.getElementById('pos-basket').children.length===1,'resume did not restore basket');
+                assert(document.getElementById('pos-checkout').elements.sale_token.value==='hhhhhhhhhhhhhhhhhhhhhhhh','held sale identity changed');
+                assert(JSON.parse(sessionStorage.getItem('clpaints-pos-draft')).saleToken==='hhhhhhhhhhhhhhhhhhhhhhhh','resumed sale identity will be lost on refresh');
+                assert(document.documentElement.scrollWidth<=innerWidth,'tablet till overflows screen');
+            ''',width=width)
+
+    @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
+    def test_cashier_controls_and_live_reconciliation_preview(self):
+        self.save();cashier=self.named_staff();self.as_staff(cashier)
+        markup=self.client.get('/admin/pos').data
+        BrowserChecks.browser(self,markup,'''
+            document.querySelector('[data-product-id]').click();
+            assert(document.querySelectorAll('#pos-basket input')[1].readOnly,'cashier can edit unit price');
+            assert(!document.querySelector('#pos-add-item'),'cashier can enter custom items');
+            assert(document.getElementById('pos-cash-open') && !document.getElementById('pos-cash-open').disabled,'cashier cannot take cash');
+        ''',width=1024)
+        manager=self.named_staff('manager','manager');self.as_staff(manager)
+        markup=self.client.get('/admin/pos/reconciliation').data
+        BrowserChecks.browser(self,markup,'''
+            const form=document.querySelector('[data-pos-reconciliation]');
+            for(const name of ['opening_cash','other_cash_in','other_cash_out','counted_cash','sumup_net'])form.elements[name].value='0.00';
+            form.elements.opening_cash.value='20.00';form.elements.counted_cash.value='19.00';form.dispatchEvent(new Event('input'));
+            const variance=form.querySelector('[data-reconcile-value=cash_variance]');
+            assert(variance.textContent.includes('1.00') && variance.classList.contains('pos-reconcile-difference'),'cash difference not highlighted');
+            form.elements.counted_cash.value='20.00';form.dispatchEvent(new Event('input'));
+            assert(!variance.classList.contains('pos-reconcile-difference'),'matched cash still flagged');
+        ''',width=1024)
 
     def test_cash_refunds_are_itemised_bounded_idempotent_and_audited(self):
         sale, data = self.refundable_sale()
@@ -216,6 +465,8 @@ class PosLibraryTest(unittest.TestCase):
         self.assertIn(b'Painting',page.data)
         form=dict(csrf_token='token',handover_date=today,version='',action='complete',manager_name='Manager',
             business_today='Trading',am_notes='Opened',pm_notes='Closed',incident_status='none')
+        self.assertEqual(self.client.post('/admin/handovers',data=form).status_code,400)
+        self.assertEqual(self.close_day(datetime.now(ZoneInfo('Europe/London')).date()).status_code,302)
         result=self.client.post('/admin/handovers',data=form)
         self.assertEqual(result.status_code,302)
         saved=self.Handover.query.one()

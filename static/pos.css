@@ -122,3 +122,15 @@
 .pos-refund-form textarea{display:block;width:100%;padding:12px;border:1px solid #bdaeb6;border-radius:8px;font:inherit}
 .pos-main .pos-refund-form input[type=checkbox]{width:20px;min-height:20px;height:20px;flex:0 0 20px;margin:0}
 .pos-refund-record{border-top:1px solid #eedee6;margin-top:16px;padding-top:16px;font-size:.9rem}
+.pos-popup-tools{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.pos-popup-tools a{font-size:.85rem;padding:8px 4px;text-decoration:underline}
+.pos-library-filters{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 0 12px;font-size:.8rem}
+.pos-library-filters select{display:block;max-width:100%;padding:8px;border:1px solid #bdaeb6;border-radius:8px;background:white;font:inherit}
+.pos-main .pos-library-filters input[type=checkbox],.pos-main .pos-library-form input[type=checkbox],.pos-main .pos-management-table input[type=checkbox]{width:20px;min-height:20px;height:20px;margin:0;accent-color:#a71659}
+.pos-library-edit-list .pos-management-table{min-width:650px}
+.pos-held-controls{margin:0 0 16px;border-bottom:1px solid #eedee6;padding-bottom:12px;font-size:.85rem}
+.pos-held-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #eedee6;overflow-wrap:anywhere}
+.pos-main .pos-held-row button{flex:0 0 auto;min-height:42px;padding:8px 12px}
+.pos-main #pos-held-list{max-height:240px;overflow:auto}
+.pos-reconcile-difference{font-weight:800;color:#a51b40}
+@media(max-width:700px){.pos-popup-heading{flex-wrap:wrap}.pos-popup-tools{margin-left:auto;gap:8px}.pos-popup-tools a{font-size:.8rem}}
