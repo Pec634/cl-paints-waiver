@@ -81,17 +81,18 @@
         </fieldset>{% endif %}
         <div class="pos-receipt-option"><label class="pos-receipt-check"><input type="checkbox" id="pos-receipt-requested" name="receipt_requested" value="1" aria-controls="pos-receipt-fields"> Customer wants an email receipt</label><div id="pos-receipt-fields" hidden><label for="pos-receipt-email">Send receipt to</label><input id="pos-receipt-email" name="receipt_email" type="email" maxlength="320" autocomplete="email" placeholder="customer@example.com" disabled><small>Sent automatically after successful payment. Confirm the address with the customer.</small></div></div>
         <button type="button" id="pos-cash-open" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
-        <button name="method" value="Card" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button>
+        <button id="pos-card-pay" name="method" value="Card" aria-describedby="pos-card-status" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button>
+        <p id="pos-card-status" class="pos-card-status" role="status">{{ 'Add an item to enable card payment.' if configured else 'Card payment unavailable: SumUp setup is incomplete on the website server.' }}</p>
         <div id="pos-cash-panel" hidden>
           <label for="pos-cash-tender">Cash received (£)</label><input id="pos-cash-tender" name="cash_tender" type="number" min="0.01" max="999999.99" step="0.01" inputmode="decimal" disabled aria-describedby="pos-cash-change">
           <p id="pos-cash-change" class="pos-change" role="status">Enter the amount received.</p>
           <button name="method" value="Cash" id="pos-cash-confirm" disabled>Complete cash sale</button><button type="button" id="pos-cash-cancel" class="pos-secondary">Cancel</button>
         </div>
       </form>
-      {% if not configured %}<p>Card payments need SumUp setup. Cash sales and waiver search are available.</p>{% else %}<p>Solo Lite payments open the SumUp app on Android. Pair your reader and check the signed-in merchant there.</p>{% endif %}
+      {% if not configured %}<div class="pos-card-setup"><p>Installing the APK does not configure SumUp. {{ 'Complete the server setup below, then restart the website service.' if pos_manager else 'Ask a manager to complete the SumUp server setup.' }}</p>{% if pos_manager %}<details><summary>Check card setup</summary><ul>{% for setting in card_settings %}<li>{{ setting.label }}: <strong>{{ 'Configured' if setting.present else 'Missing' }}</strong>{% if not setting.present %}<br><code>{{ setting.key }}</code>{% endif %}</li>{% endfor %}</ul><p>Add the missing settings in the website host's private environment settings, then restart or redeploy. No credential values are displayed here.</p></details>{% endif %}</div>{% else %}<p>Solo Lite payments open the SumUp app on Android. Pair your reader and check the signed-in merchant there.</p>{% endif %}
       <noscript>Enable JavaScript to build a sale. Waiver search still works.</noscript>
     </section>
   </div>
   </div></dialog>
-</main></div><script src="{{ url_for('static', filename='pos-popup.js') }}" defer></script><script src="{{ url_for('static', filename='pos.js') }}" defer></script>
+</main></div><script src="{{ url_for('static', filename='pos-popup.js') }}" defer></script><script src="{{ url_for('static', filename='pos-mobile-basket.js') }}" defer></script><script src="{{ url_for('static', filename='pos.js') }}" defer></script>
 {% endblock %}

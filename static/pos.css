@@ -134,3 +134,20 @@
 .pos-main #pos-held-list{max-height:240px;overflow:auto}
 .pos-reconcile-difference{font-weight:800;color:#a51b40}
 @media(max-width:700px){.pos-popup-heading{flex-wrap:wrap}.pos-popup-tools{margin-left:auto;gap:8px}.pos-popup-tools a{font-size:.8rem}}
+.pos-main .pos-mobile-basket-toggle,.pos-main .pos-mobile-basket-backdrop{display:none}
+@media(max-width:899px){
+  .pos-mobile-basket-ready .pos-popup-content{display:flex;flex-direction:column;position:relative;overflow:hidden;padding:10px 66px 10px 10px;scrollbar-gutter:auto}
+  .pos-mobile-basket-ready .pos-till-layout{display:block;flex:1;min-height:0;overflow:visible}
+  .pos-mobile-basket-ready .pos-browse{display:block;height:100%;min-height:0;overflow:auto;scrollbar-gutter:auto;overscroll-behavior:contain}
+  .pos-main .pos-mobile-basket-ready .pos-sale-panel{position:absolute;top:10px;right:66px;bottom:10px;width:calc(100% - 76px);height:auto;max-height:none;overflow:auto;padding:14px;z-index:7;box-shadow:0 6px 24px #10213f33;scrollbar-gutter:stable;overscroll-behavior:contain}
+  .pos-main .pos-mobile-basket-ready .pos-mobile-basket-toggle{position:absolute;top:10px;right:6px;bottom:10px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px;width:50px;min-height:48px;padding:10px 3px;margin:0;border-radius:12px;background:#10213f;color:white;z-index:8;font-size:.72rem;overflow-wrap:anywhere}
+  .pos-mobile-basket-toggle strong{font-size:1.1rem}
+  .pos-mobile-basket-toggle small{font-size:.63rem;font-variant-numeric:tabular-nums}
+  .pos-main .pos-mobile-basket-ready .pos-mobile-basket-backdrop{position:absolute;inset:0 62px 0 0;display:block;margin:0;width:auto;min-height:0;padding:0;border-radius:0;background:#10213f55;z-index:6}
+  .pos-main .pos-mobile-basket-ready #pos-basket{max-height:none;overflow:visible;padding-right:0}
+}
+@media print{.pos-main .pos-mobile-basket-toggle,.pos-main .pos-mobile-basket-backdrop{display:none!important}.pos-mobile-basket-ready .pos-popup-content,.pos-mobile-basket-ready .pos-till-layout,.pos-mobile-basket-ready .pos-browse{display:block;height:auto;overflow:visible;padding:0}.pos-main .pos-mobile-basket-ready .pos-sale-panel{position:static;width:auto;height:auto;overflow:visible;box-shadow:none}}
+.pos-main #pos-card-pay.pos-card-ready{background:#10213f;box-shadow:0 0 0 2px #10213f22;font-weight:800;opacity:1}
+.pos-card-status{flex:1 1 100%;margin:8px 0;font-size:.85rem;line-height:1.5}
+.pos-card-setup{padding:12px;margin-top:12px;border:1px solid #ead39b;border-radius:10px;background:#fff8e8;font-size:.85rem}
+.pos-card-setup li{margin:8px 0;overflow-wrap:anywhere}

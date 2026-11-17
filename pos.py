@@ -34,7 +34,7 @@ def define_model(db):
         amount = db.Column(db.Numeric(10, 2), nullable=False)
         waiver_id = db.Column(db.Integer, db.ForeignKey('waiver.id'), nullable=True)
         method = db.Column(db.String(12), nullable=False)
-        status = db.Column(db.String(20), nullable=False)
+        status = db.Column(db.String(32), nullable=False)
         merchant = db.Column(db.String(100), nullable=False, default='')
         transaction_code = db.Column(db.String(100), unique=True, nullable=True)
         paid_at = db.Column(db.DateTime, nullable=True)
@@ -73,7 +73,13 @@ def define_model(db):
 
 
 def ensure_schema(db):
-    columns = {column['name'] for column in inspect(db.engine).get_columns('pos_sale')}
+    sale_columns = inspect(db.engine).get_columns('pos_sale')
+    columns = {column['name'] for column in sale_columns}
+    status_column = next(column for column in sale_columns if column['name']=='status')
+    status_length = getattr(status_column['type'],'length',None)
+    if db.engine.dialect.name=='postgresql' and status_length is not None and status_length<32:
+        with db.engine.begin() as connection:
+            connection.exec_driver_sql('ALTER TABLE pos_sale ALTER COLUMN status TYPE VARCHAR(32)')
     additions = {'cash_tender': 'NUMERIC(10, 2)',
         'participant_id': 'INTEGER REFERENCES participant(id) ON DELETE SET NULL',
         'participant_name': 'VARCHAR(255)', 'customer_label': 'TEXT', 'customer_search': 'TEXT',
@@ -265,8 +271,12 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             return redirect(url_for('pos_home', completed=sale.id, _anchor='pos-cash-receipt'))
         return redirect(url_for('pos_sale', sale_id=sale.id))
 
+    def card_settings():
+        return [dict(key=key,label=label,present=bool(os.getenv(key,'').strip())) for key,label in (
+            ('SUMUP_API_KEY','SumUp API key'),('SUMUP_MERCHANT_CODE','SumUp merchant code'),('SUMUP_POS_AFFILIATE_KEY','SumUp Affiliate Key'))]
+
     def configured():
-        return all(os.getenv(key) for key in ('SUMUP_API_KEY', 'SUMUP_MERCHANT_CODE', 'SUMUP_POS_AFFILIATE_KEY'))
+        return all(setting['present'] for setting in card_settings())
 
     def check():
         token = session.get('client_csrf', '')
@@ -309,7 +319,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             pending_loyalty_reviews=ledger.Refund.query.filter_by(loyalty_review_status='Needs review').order_by(ledger.Refund.id.desc()).limit(50).all() if ledger else [],
             products=Product.query.order_by(Product.name, Product.id).all(),
             product_categories=[row[0] for row in db.session.query(Product.category).distinct().order_by(Product.category).all()],
-            configured=configured(),
+            configured=configured(),card_settings=card_settings(),
             sale_token=secrets.token_urlsafe(24),
             sales=sales_page.items, sales_page=sales_page, sale_q=sale_query,
             history_waiver=history_waiver, completed_sale=completed)

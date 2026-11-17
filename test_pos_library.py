@@ -312,6 +312,67 @@ class PosLibraryTest(unittest.TestCase):
         self.assertEqual(self.client.post(f'/admin/pos/refunds/{refund.id}/receipt/retry',data={'csrf_token':'token'}).status_code,409)
 
     @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
+    def test_card_button_requires_server_settings_and_highlights_when_ready(self):
+        self.save()
+        for configured in (False,True):
+            with patch.dict(os.environ,SUMUP_API_KEY='secret-test-value' if configured else '',
+                    SUMUP_MERCHANT_CODE='MERCHANT' if configured else '',SUMUP_POS_AFFILIATE_KEY='affiliate-test-value' if configured else ''):
+                page=self.client.get('/admin/pos')
+                self.assertNotIn(b'secret-test-value',page.data)
+                if not configured:
+                    self.assertIn(b'SUMUP_POS_AFFILIATE_KEY',page.data)
+                    self.assertIn(b'Missing',page.data)
+                BrowserChecks.browser(self,page.data,'''
+                    const card=document.getElementById('pos-card-pay');
+                    assert(card.disabled,'empty basket can start card payment');
+                    document.querySelector('[data-product-id]').click();
+                    assert(card.disabled===EXPECTED_DISABLED,'card availability ignores server setup');
+                    assert(card.classList.contains('pos-card-ready')===!EXPECTED_DISABLED,'ready card button not highlighted');
+                    assert(document.getElementById('pos-card-status').textContent.includes(EXPECTED_DISABLED?'incomplete':'ready'),'card readiness explanation missing');
+                '''.replace('EXPECTED_DISABLED','false' if configured else 'true'),width=390)
+
+    @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
+    def test_mobile_basket_stays_pinned_and_preserves_checkout(self):
+        self.save()
+        markup=self.client.get('/admin/pos').data
+        for width in (320,390,800):
+            with self.subTest(width=width):
+                BrowserChecks.browser(self,markup,'''
+                    const toggle=document.getElementById('pos-mobile-basket-toggle');
+                    const panel=document.querySelector('.pos-sale-panel');
+                    const browse=document.querySelector('.pos-browse');
+                    assert(!toggle.hidden && panel.hidden,'mobile basket should have a visible pinned tab');
+                    document.querySelector('[data-product-id]').click();
+                    assert(document.getElementById('pos-mobile-basket-count').textContent==='1','basket count did not update');
+                    assert(document.getElementById('pos-mobile-basket-total').textContent.includes('7.50'),'pinned total did not update');
+                    const marker=document.createElement('div');marker.style.height='1500px';browse.append(marker);
+                    const tabTop=toggle.getBoundingClientRect().top;
+                    browse.scrollTop=browse.scrollHeight;
+                    assert(browse.scrollTop>0 && Math.abs(toggle.getBoundingClientRect().top-tabTop)<1,'basket tab moves when browsing');
+                    toggle.click();
+                    assert(!panel.hidden && browse.inert && toggle.getAttribute('aria-expanded')==='true','basket drawer did not open');
+                    const rect=panel.getBoundingClientRect();
+                    assert(rect.left>=0 && rect.right<=innerWidth && rect.top>=0 && rect.bottom<=innerHeight,'basket extends off screen');
+                    document.querySelector('.pos-custom-item').open=true;
+                    for(let index=0;index<7;index++){
+                        document.getElementById('pos-item-name').value='Extra '+index;
+                        document.getElementById('pos-item-price').value='1.00';
+                        document.getElementById('pos-add-item').requestSubmit();
+                    }
+                    panel.scrollTop=panel.scrollHeight;
+                    assert(panel.scrollTop>0,'basket does not scroll independently');
+                    assert(Math.abs(toggle.getBoundingClientRect().top-tabTop)<1,'basket tab moves with checkout scroll');
+                    const cancel=new Event('cancel',{cancelable:true});
+                    document.getElementById('pos-popup').dispatchEvent(cancel);
+                    assert(cancel.defaultPrevented && panel.hidden && !browse.inert,'Escape should close the basket first');
+                    toggle.click();
+                    assert(document.getElementById('pos-basket').children.length===8,'reopening basket lost items');
+                    document.getElementById('pos-clear-waiver').click();
+                    assert(panel.hidden && document.activeElement===document.getElementById('pos-query'),'clear waiver did not return to search');
+                    assert(document.documentElement.scrollWidth<=innerWidth,'pinned basket overflows mobile screen');
+                ''',width=width)
+
+    @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
     def test_categories_shortcuts_and_held_baskets_on_tablet(self):
         self.db.session.add_all([self.Product(name='Painting',price=Decimal('7.50'),category='Faces',shortcut=True),
             self.Product(name='Glitter',price=Decimal('3.00'),category='Extras',shortcut=False)])
@@ -624,6 +685,39 @@ class PosLibraryTest(unittest.TestCase):
             self.assertEqual(Visit.query.count(), 1)
             self.assertEqual(self.db.session.get(Balance, people[0].id).points, 1)
 
+    def test_prepare_sumup_payment_renders_handoff_once(self):
+        with patch.dict(os.environ,SUMUP_API_KEY='private-key',SUMUP_MERCHANT_CODE='MERCHANT',SUMUP_POS_AFFILIATE_KEY='affiliate-key'):
+            self.client.post('/admin/pos/sales',data=dict(csrf_token='token',sale_token='p'*24,method='Card',
+                items=json.dumps([dict(name='Painting',quantity=1,price='7.50')])))
+            sale=self.Sale.query.one()
+            response=self.client.post(f'/admin/pos/sales/{sale.id}/start',data={'csrf_token':'token'})
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(sale.status,'Awaiting verification')
+            self.assertIn(b'sumupmerchant://pay/1.0?',response.data)
+            self.assertIn(b'Open SumUp and take',response.data)
+            self.assertNotIn(b'private-key',response.data)
+            self.assertLessEqual(len(sale.status),self.Sale.__table__.c.status.type.length)
+            repeated=self.client.post(f'/admin/pos/sales/{sale.id}/start',data={'csrf_token':'token'})
+            self.assertEqual(repeated.status_code,302)
+            self.assertEqual(self.Sale.query.count(),1)
+
+    def test_postgresql_upgrade_widens_payment_status_column(self):
+        from sqlalchemy import inspect
+        engine=self.db.engine
+        inspector=inspect(engine)
+        tables=inspector.get_table_names()
+        columns={table:inspector.get_columns(table) for table in tables}
+        for column in columns['pos_sale']:
+            if column['name']=='status':column['type']=self.db.String(20)
+        mocked=Mock()
+        mocked.get_columns.side_effect=lambda name:columns[name]
+        mocked.get_table_names.return_value=tables
+        with patch('pos.inspect',return_value=mocked),patch.object(engine.dialect,'name','postgresql'),patch.object(engine,'begin') as begin:
+            connection=begin.return_value.__enter__.return_value
+            pos.ensure_schema(self.db)
+        statements=[call.args[0] for call in connection.exec_driver_sql.call_args_list]
+        self.assertIn('ALTER TABLE pos_sale ALTER COLUMN status TYPE VARCHAR(32)',statements)
+
     def test_library_crud_and_sale_price_snapshot(self):
         self.assertEqual(self.save().status_code, 302)
         product = self.Product.query.one()
@@ -843,7 +937,7 @@ class PosLibraryTest(unittest.TestCase):
                 assert(popup.open && popup.matches(':modal'), 'reopen till failed');
                 assert(document.getElementById('pos-basket').children.length === 1, 'closing popup lost basket');
                 assert(document.documentElement.classList.contains('pos-modal-open'), 'background scroll is not locked');
-                const content = popup.querySelector(innerWidth >= 900 ? '.pos-browse' : '.pos-popup-content');
+                const content = popup.querySelector('.pos-browse');
                 const history = document.getElementById('pos-history');
                 assert(!history.open, 'sale history should start folded');
                 history.querySelector('summary').click();
@@ -988,7 +1082,8 @@ class PosLibraryTest(unittest.TestCase):
                         assert(libraryRect.right <= basketRect.left, 'basket must sit beside the library');
                     } else {
                         assert(waiverRect.bottom <= libraryRect.top, 'waiver search must sit above library on phone');
-                        assert(libraryRect.bottom <= basketRect.top, 'basket must follow library on phone');
+                        assert(!document.getElementById('pos-mobile-basket-toggle').hidden, 'phone basket tab missing');
+                        assert(document.querySelector('.pos-sale-panel').hidden, 'phone basket should start tucked away');
                     }
                     product.click(); product.click();
                     const basket = document.getElementById('pos-basket');

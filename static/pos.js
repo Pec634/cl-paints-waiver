@@ -110,6 +110,12 @@
       row.append(fields); get('pos-basket').append(row);
     });
     get('pos-total').textContent = `Total ${money(total)}`;
+    if(get('pos-mobile-basket-count')){
+      const count=items.reduce((sum,item)=>sum+item.quantity,0);
+      get('pos-mobile-basket-count').textContent=count;
+      get('pos-mobile-basket-total').textContent=money(total);
+      get('pos-mobile-basket-toggle').setAttribute('aria-label',`Basket: ${count} items, total ${money(total)}`);
+    }
     get('pos-items').value = JSON.stringify(items.map(i => ({name:i.name, quantity:i.quantity, price:(i.pence / 100).toFixed(2), ...(i.product_id ? {product_id:i.product_id} : {})})));
     get('pos-waiver-id').value = waiver ? waiver.id : '';
     get('pos-participant-id').value = waiver?.participantId || '';
@@ -117,6 +123,13 @@
     get('pos-waiver-selection').textContent = waiver ? `${get('pos-linked').textContent} — open to change` : '';
     get('pos-waiver-selection').hidden = !waiver;
     get('pos-checkout').querySelectorAll('button').forEach(button => { button.disabled = !items.length || total > 9999999 || button.dataset.unconfigured === 'true'; });
+    const card=get('pos-card-pay');
+    if(card){
+      card.classList.toggle('pos-card-ready',!card.disabled);
+      card.textContent=card.dataset.unconfigured==='true' ? 'Card setup required' : 'Pay with Solo Lite';
+      get('pos-card-status').textContent=card.dataset.unconfigured==='true' ? 'Card payment unavailable: SumUp setup is incomplete on the website server.' :
+        !items.length ? 'Add an item to enable card payment.' : total>9999999 ? 'The basket exceeds the maximum sale amount.' : 'Card payment is ready. SumUp will open on this Android device.';
+    }
     if (!items.length) closeCash();
     updateCash();
     save();
@@ -222,6 +235,7 @@
     render();
     updateLoyalty();
     get('pos-waiver-fold').open = true;
+    document.dispatchEvent(new Event('pos-basket-close'));
     get('pos-query').focus();
   };
   get('pos-clear-basket').onclick = () => {
@@ -231,6 +245,7 @@
     if (get('pos-library-status')) get('pos-library-status').textContent = 'Basket cleared.';
   };
   get('pos-cash-open').onclick = () => {
+    document.dispatchEvent(new Event('pos-basket-open'));
     get('pos-cash-panel').hidden = false;
     get('pos-cash-open').setAttribute('aria-expanded', 'true');
     get('pos-cash-tender').disabled = false;
@@ -273,6 +288,7 @@
               updateLoyalty(people.map(person=>({value:String(person.id),textContent:person.name,dataset:{points:String(person.points || 0)}})),waiver?.participantId || '');
               document.querySelectorAll('input[name=loyalty_participant_id]').forEach(field=>{field.checked=people.some(person=>String(person.id)===field.value && person.checked);});
               updateReceipt();render();
+              document.dispatchEvent(new Event('pos-basket-open'));
               get('pos-waiver-fold').open=!waiver;
               feedback.textContent='Basket resumed. Check prices, waiver validity and event before payment.';
             } catch(error) {feedback.textContent=error.message;}
