@@ -583,6 +583,10 @@ from website_enquiries import define_models as define_website_enquiry_models
 website_enquiry_models = define_website_enquiry_models(db)
 from sumup_checkout import define_model as define_sumup_checkout
 SumupCheckout = define_sumup_checkout(db)
+from pos import define_model as define_pos_sale
+PosSale = define_pos_sale(db)
+from pos import define_product_model as define_pos_product
+PosProduct = define_pos_product(db)
 from staff_reports import define_models as define_staff_report_models
 staff_report_models = define_staff_report_models(db)
 from connecteam_rota import define_model as define_rota_model
@@ -621,6 +625,8 @@ MoodboardOrder = define_moodboard_order(db)
 
 with app.app_context():
     db.create_all()
+    from pos import ensure_schema as ensure_pos_schema
+    ensure_pos_schema(db)
     from staff_timesheets import ensure_schema as ensure_staff_time_schema
     ensure_staff_time_schema(db)
     from moodboard_payments import ensure_schema as ensure_moodboard_payment_schema
@@ -2741,6 +2747,9 @@ def delete_waiver(waiver_id):
     if waiver is None:
         return jsonify({"error": "Waiver not found."}), 404
 
+    if PosSale.query.filter_by(waiver_id=waiver.id).first():
+        return jsonify({"error": "This waiver is linked to a till sale. Archive it instead to preserve sale records."}), 409
+
     _, balance_model, visit_model, custodian_model, transfer_model = loyalty_models
     member_ids = [person.id for person in waiver.participants]
     protected = (balance_model.query.filter(balance_model.participant_id.in_(member_ids)).first()
@@ -3047,6 +3056,10 @@ from invoice_documents import register as register_invoice_documents
 register_invoice_documents(app, db, InvoiceDocument, BookingInvoice, Booking, ClientAccount, admin_required, get_current_client)
 from sumup_checkout import register as register_sumup_checkout
 register_sumup_checkout(app, db, SumupCheckout, Booking, tool_models[1], get_current_client, admin_required, get_business_settings)
+from pos import register as register_pos
+from pos_loyalty import PosLoyalty
+pos_loyalty = PosLoyalty(app, db, loyalty_models, ClientAccount, Participant, Waiver, Event)
+register_pos(app, db, PosSale, Waiver, Participant, admin_required, PosProduct, send_client_email, pos_loyalty)
 from sumup_invoice_sync import register as register_sumup_invoice_sync
 register_sumup_invoice_sync(app, db, BookingInvoice, Booking, tool_models[1], admin_required)
 from google_calendar_sync import register as register_google_calendar_sync

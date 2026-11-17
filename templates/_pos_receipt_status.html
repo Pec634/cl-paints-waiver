@@ -1,0 +1,2 @@
+{% if sale.receipt_email %}<div class="pos-receipt-status"><p>Email receipt: <strong>{{ sale.receipt_status }}</strong> · {{ sale.receipt_email }}{% if sale.receipt_sent_at %}<br>{{ sale.receipt_sent_at|pos_timestamp }}{% endif %}</p>
+{% if sale.status == 'Paid' and sale.receipt_status in ['Failed', 'Requested'] %}<form method="post" action="{{ url_for('pos_retry_receipt', sale_id=sale.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button class="pos-secondary">Retry email receipt</button></form>{% endif %}</div>{% endif %}

@@ -7,6 +7,7 @@
     </div>
     <nav id="admin-tool-navigation" aria-label="Admin navigation">
         <a href="{{ url_for('admin_dashboard') }}" {% if request.endpoint == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
+        <a href="{{ url_for('pos_home') }}" {% if (request.endpoint or '').startswith('pos_') %}class="active" aria-current="page"{% endif %}>Point of sale &amp; waiver search</a>
         <a href="{{ url_for('creates_admin') }}" {% if (request.endpoint or '').startswith('creates_') %}class="active"{% endif %}>CL Creates</a>
         {% if (request.endpoint or '').startswith('creates_') %}<a href="{{ url_for('admin_dashboard') }}">&larr; Back to admin portal</a>{% endif %}
         <hr class="admin-nav-divider">

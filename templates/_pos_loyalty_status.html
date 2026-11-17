@@ -1,0 +1,1 @@
+{% if sale.loyalty_results %}<div class="pos-loyalty-status"><strong>Loyalty</strong>{% for result in sale.loyalty_results %}<p>{{ result.name }}: {{ result.message }}</p>{% endfor %}</div>{% elif sale.loyalty_event_id and sale.status != 'Paid' %}<p>Loyalty points will be added after payment is verified.</p>{% endif %}

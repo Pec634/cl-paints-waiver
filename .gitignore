@@ -6,6 +6,7 @@ instance/
 .vscode/
 *.db
 portal-server.*.log
+debug.log
 android-client/.gradle/
 android-client/.idea/
 android-client/**/build/

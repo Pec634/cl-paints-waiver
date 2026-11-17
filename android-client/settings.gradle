@@ -7,3 +7,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = 'CL Paints'
 include ':app'
+include ':pos'

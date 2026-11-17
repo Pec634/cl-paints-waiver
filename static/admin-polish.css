@@ -1,0 +1,65 @@
+/* Shared finishing layer: management screens only. */
+.admin { --admin-space: clamp(16px, 2vw, 24px); }
+.admin main { line-height: 1.5; }
+.admin main :is(section, article, form, fieldset, details, .settings-column) { min-width: 0; }
+.admin main > .panel { margin-bottom: var(--admin-space); }
+.admin main .panel { padding: var(--admin-space); }
+.admin main :is(.panel-heading, .actions, .client-action-row, .paint-actions) { gap: 10px; }
+.admin main :is(.actions, .client-action-row, .paint-actions) { flex-wrap: wrap; }
+.admin main .panel-heading { align-items: flex-start; }
+.admin main .panel-heading h2 { margin-top: 0; margin-bottom: 6px; }
+.admin main :is(.panel-heading p, .report-note) { color: var(--muted); line-height: 1.6; }
+.admin main :is(input, select, textarea) { font: inherit; border-radius: 9px; }
+.admin main :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=color]):not([type=range]), select) { min-height: 42px; }
+.admin main textarea { min-height: 100px; max-height: 360px; overflow-y: auto; resize: vertical; line-height: 1.6; scrollbar-gutter: stable; }
+.admin main select[multiple] { min-height: 140px; max-height: 280px; overflow: auto; }
+.admin main fieldset { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-inline: 0; }
+.admin main legend { padding-inline: 6px; font-weight: 700; }
+.admin main :is(.booking-fields, .client-form) { gap: 16px; }
+.admin main .booking-field { min-width: 0; }
+.admin main .btn { white-space: normal; text-align: center; line-height: 1.4; }
+.admin main .btn:disabled { cursor: default; opacity: .5; }
+.admin main details > summary { cursor: pointer; line-height: 1.5; }
+.admin main details > summary:focus-visible { outline: 3px solid #f52f8366; outline-offset: 3px; }
+.admin main :is(h2, h3, summary, [id]) { scroll-margin-top: 100px; }
+
+.admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap) {
+  max-width: 100%; max-height: min(70vh, 760px); overflow: auto;
+  scrollbar-gutter: stable; border: 1px solid var(--border); border-radius: 12px;
+  background: #fff; margin-block: 16px; -webkit-overflow-scrolling: touch;
+}
+.admin main .admin-table-scroll > table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap) th {
+  position: sticky; top: 0; z-index: 2; background: #f1f4f9;
+  box-shadow: 0 1px 0 var(--border); text-align: left;
+}
+.admin main .admin-table-scroll :is(th, td) { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.admin main .admin-table-scroll tbody tr:hover { background: #f8faff; }
+.admin main :is(.table-wrap, .admin-table-scroll, [data-admin-scroll]):focus-visible { outline: 3px solid #f52f8366; outline-offset: 3px; }
+.admin main [data-admin-scroll] { max-height: 65vh; overflow: auto; scrollbar-gutter: stable; }
+.admin main pre { max-height: 360px; max-width: 100%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.admin .settings-fold-body { max-height: 72vh; overflow: auto; scrollbar-gutter: stable; }
+.admin .dashboard-attention { max-height: 720px; overflow-y: auto; scrollbar-gutter: stable; }
+.admin .admin-section-menu { display: flex; margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: white; }
+.admin .admin-section-menu label { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: .85rem; font-weight: 700; width: 100%; }
+.admin .admin-section-menu select { flex: 1 1 220px; max-width: 520px; padding: 9px 12px; background: #f8faff; border: 1px solid var(--border); color: var(--text); }
+.admin > aside { scrollbar-width: thin; scrollbar-color: #8290a8 #10213f; }
+.admin .admin-favourites > div { max-height: 240px; overflow-y: auto; }
+#admin-quick-actions { max-height: 85vh; overflow-y: auto; }
+@media (min-width: 801px) and (max-width: 1100px) {
+  .admin .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 800px) {
+  .admin main .panel { padding: 16px; }
+  .admin main .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin main :is(.table-wrap, .admin-table-scroll) { max-height: 65vh; }
+  .admin .settings-fold-body { max-height: none; overflow: visible; }
+  .admin .dashboard-attention { max-height: none; overflow: visible; }
+  .admin .admin-section-menu select { max-width: 100%; width: 100%; }
+}
+@media print {
+  .admin .admin-section-menu { display: none; }
+  .admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap, .settings-fold-body, .dashboard-attention, pre, [data-admin-scroll]) { max-height: none; overflow: visible; }
+  .admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap) th { position: static; }
+  .admin main textarea { max-height: none; }
+}

@@ -1,0 +1,11 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><title>CL Paints receipt</title></head>
+<body style="margin:0;padding:24px;background:#f6f7fb;font-family:Arial,sans-serif;color:#10213f">
+<div style="max-width:560px;margin:auto;padding:24px;background:white;border-top:5px solid #a71659;border-radius:12px">
+  <h1 style="font-size:24px">CL Paints</h1><h2 style="font-size:18px">Your receipt · Sale #{{ sale.id }}</h2>
+  <p>Paid: {{ sale.paid_at|pos_timestamp }}<br>Payment: {{ sale.method }}<br>Reference: {{ sale.reference }}</p>
+  <table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:10px 0;border-bottom:1px solid #ddd">Item</th><th style="text-align:right;padding:10px 0;border-bottom:1px solid #ddd">Amount</th></tr></thead><tbody>
+  {% for item in items %}<tr><td style="padding:12px 0;border-bottom:1px solid #eee">{{ item.name }}<br><small>{{ item.quantity }} × £{{ item.price }}</small></td><td style="text-align:right;padding:12px 0;border-bottom:1px solid #eee">£{{ '%.2f'|format(item.quantity * (item.price|float)) }}</td></tr>{% endfor %}
+  </tbody></table><p style="font-size:20px;font-weight:bold">Total paid: £{{ '%.2f'|format(sale.amount) }}</p>
+  {% if sale.cash_tender is not none %}<p>Cash received: £{{ '%.2f'|format(sale.cash_tender) }}<br>Change: £{{ '%.2f'|format(sale.change_due) }}</p>{% endif %}
+  <p>Thank you for visiting CL Paints.</p><p style="font-size:13px">Questions about your receipt? Contact <a href="mailto:info@clpaints.com">info@clpaints.com</a> with the sale reference.</p>
+</div></body></html>

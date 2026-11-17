@@ -1,0 +1,9 @@
+.venv/
+models/
+__pycache__/
+data/
+recordings/
+build/
+dist/
+package-check/
+build-output.log

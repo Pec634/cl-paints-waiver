@@ -4,6 +4,11 @@ This is the first safe development stage for the new Waiver module.
 
 ## What it includes
 
+Staff **Point of sale & waiver search** is available at `/admin/pos`. The separate
+Android POS preview supports baskets, cash sales, linked waivers and SumUp Solo
+Lite payment handoff with server verification. See [Android POS setup](android-client/POS.md)
+for configuration, installation and current limits.
+
 The Android client app is in [android-client](android-client/README.md). It connects
 to the existing portal with native navigation, file uploads and downloads.
 The Android preview APK GitHub workflow tests and builds an installable preview;

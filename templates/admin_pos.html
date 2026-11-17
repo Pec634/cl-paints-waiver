@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Point of sale | CL Paints{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static', filename='pos.css') }}">
+<div class="admin">{% include '_admin_sidebar.html' %}<main id="portal-main" class="pos-main">
+  <header><small>CL PAINTS · STAFF TILL</small><h1>Point of sale</h1><p>Build a sale, check a waiver and take payment.</p></header>
+  {% for category, message in get_flashed_messages(with_categories=true) %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}
+  <div class="pos-columns">
+    <section class="panel pos-waiver-panel"><details id="pos-waiver-fold" open><summary id="pos-waiver-summary"><h2>Waiver search</h2><span id="pos-waiver-selection" hidden></span></summary>
+      <form method="get" id="pos-search"><label for="pos-query">Adult or participant name, email or waiver reference</label>
+        <div class="pos-search-row"><input id="pos-query" name="q" type="search" value="{{ q }}" minlength="2" maxlength="150" placeholder="Search existing waivers"><button>Search</button></div>
+      </form>
+      <p>Search checks existing consent; linking a waiver does not renew it.</p>
+      <div class="pos-waiver-results" aria-live="polite">
+      {% for waiver in matches %}{% set status = waiver_status(waiver) %}
+        <article class="pos-waiver"><strong>{{ waiver.responsible_first_name }} {{ waiver.responsible_last_name }}</strong>
+          <p>{{ waiver.waiver_reference }} · <b>{{ status }}</b> · Expires {{ waiver.expiry_date.strftime('%d/%m/%Y') }}</p>
+          <p>Participants: {% for person in waiver_people[waiver.id] %}{{ person.first_name }} {{ person.last_name }}{% if not loop.last %}, {% endif %}{% else %}None recorded{% endfor %}</p>
+          <p>{{ waiver.event_name }} · {{ waiver.responsible_email }}</p>
+          <a href="{{ url_for('admin_waiver_detail', waiver_id=waiver.id) }}">View waiver</a>
+          <a href="{{ url_for('pos_home', history_waiver=waiver.id, _anchor='pos-history') }}">Sale history</a>
+          {% if status == 'Valid' %}<label>Participant (optional)<select class="pos-participant"><option value="">Whole waiver / account</option>{% for person in waiver_people[waiver.id] %}<option value="{{ person.id }}" data-points="{{ loyalty_balances.get(person.id, 0) }}" {% if waiver_people[waiver.id]|length == 1 %}selected{% endif %}>{{ person.first_name }} {{ person.last_name }}</option>{% endfor %}</select></label><button type="button" data-waiver-id="{{ waiver.id }}" data-waiver-email="{{ waiver.responsible_email }}" data-waiver-label="{{ waiver.waiver_reference }} — {{ waiver.responsible_first_name }} {{ waiver.responsible_last_name }}">Link to sale</button>{% endif %}
+        </article>
+      {% else %}{% if q %}<p role="status">No matching waivers. Enter at least two characters or try a different name or reference.</p>{% endif %}{% endfor %}
+      {% if matches|length == 30 %}<p>Showing the latest 30 matches. Refine your search for more specific results.</p>{% endif %}
+      </div></details>
+    </section>
+    <section class="panel pos-library" id="pos-library"><h2>Item library</h2>
+      <p>Tap an item to add it to the basket. Tap again to increase its quantity.</p>
+      <label for="pos-library-search">Find an item</label><input id="pos-library-search" type="search" placeholder="Search your library" autocomplete="off">
+      <div class="pos-product-grid" aria-label="Items for sale">
+      {% for product in products %}<button type="button" class="pos-product" data-product-id="{{ product.id }}" data-product-name="{{ product.name }}" data-product-price="{{ '%.2f'|format(product.price) }}"><strong>{{ product.name }}</strong><span>£{{ '%.2f'|format(product.price) }}</span></button>{% else %}<p>Add your first item below to start using the till library.</p>{% endfor %}
+      </div><p id="pos-library-status" role="status"></p>
+      <details class="pos-library-manager"><summary>Manage items &amp; saved prices</summary>
+        <form method="post" action="{{ url_for('pos_library_save') }}" class="pos-library-form"><h3>Add a library item</h3>
+          <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}">
+          <label>Item name<input name="name" maxlength="120" required></label><label>Unit price (£)<input name="price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" required></label><button>Save new item</button>
+        </form>
+        <p>Saved prices apply to future additions. Change a basket price for a one-off discount or adjustment.</p>
+        <div class="table-wrap pos-library-edit-list" tabindex="0" role="region" aria-label="Manage library items">
+          <table class="pos-management-table"><thead><tr><th scope="col">Item</th><th scope="col">Price (£)</th><th scope="col">Actions</th></tr></thead><tbody>
+          {% for product in products %}<tr>
+            <td><input form="pos-edit-{{ product.id }}" name="name" value="{{ product.name }}" maxlength="120" required aria-label="Item name for {{ product.name }}"></td>
+            <td><input form="pos-edit-{{ product.id }}" name="price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="{{ '%.2f'|format(product.price) }}" required aria-label="Unit price for {{ product.name }}"></td>
+            <td><div class="pos-management-actions"><form id="pos-edit-{{ product.id }}" method="post" action="{{ url_for('pos_library_save') }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><input type="hidden" name="product_id" value="{{ product.id }}"><button aria-label="Save {{ product.name }}">Save</button></form>
+              <form method="post" action="{{ url_for('pos_library_delete', product_id=product.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button class="pos-secondary" aria-label="Remove {{ product.name }} from library">Remove</button></form></div></td>
+          </tr>{% else %}<tr><td colspan="3">No saved items yet.</td></tr>{% endfor %}
+          </tbody></table>
+        </div>
+      </details>
+    </section>
+    <section class="panel pos-sale-panel"><h2>Basket</h2>
+      {% if completed_sale %}<div id="pos-cash-receipt" class="pos-cash-receipt" role="status" data-completed-reference="{{ completed_sale.reference }}"><strong>Cash sale #{{ completed_sale.id }} recorded</strong><p>{{ completed_sale.created_at|pos_timestamp }}</p><p>Total £{{ '%.2f'|format(completed_sale.amount) }} · Cash received £{{ '%.2f'|format(completed_sale.cash_tender) if completed_sale.cash_tender is not none else 'not recorded' }}</p>{% if completed_sale.change_due is not none %}<p class="pos-change">Change to give: £{{ '%.2f'|format(completed_sale.change_due) }}</p>{% endif %}<a href="{{ url_for('pos_sale', sale_id=completed_sale.id) }}">View saved sale</a>{% with sale=completed_sale %}{% include '_pos_receipt_status.html' %}{% include '_pos_loyalty_status.html' %}{% endwith %}</div>{% endif %}
+      <button type="button" id="pos-clear-basket" class="pos-secondary" disabled>Clear all</button>
+      <p id="pos-linked">No waiver linked</p><button type="button" id="pos-clear-waiver">Clear waiver</button>
+      <details class="pos-custom-item"><summary>Add a custom item</summary><form id="pos-add-item"><label for="pos-item-name">Item or service</label><input id="pos-item-name" maxlength="120" required placeholder="e.g. Face painting">
+        <div class="pos-fields"><label>Quantity<input id="pos-item-quantity" type="number" min="1" max="999" step="1" value="1" required></label><label>Unit price (£)<input id="pos-item-price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" required></label></div>
+        <button>Add to sale</button>
+      </form></details>
+      <ul id="pos-basket" aria-label="Basket"></ul><p id="pos-total" class="pos-total" aria-live="polite">Total £0.00</p><p id="pos-error" role="alert"></p>
+      <form method="post" action="{{ url_for('pos_create_sale') }}" id="pos-checkout">
+        <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><input type="hidden" name="sale_token" value="{{ sale_token }}">
+        <input type="hidden" name="items" id="pos-items"><input type="hidden" name="waiver_id" id="pos-waiver-id"><input type="hidden" name="participant_id" id="pos-participant-id">
+        {% if loyalty_enabled %}<fieldset id="pos-loyalty-fields" hidden><legend>Loyalty points</legend><p>Choose the individuals being painted. Each earns one point after payment, once per public event.</p>
+          {% if loyalty_events %}<label for="pos-loyalty-event">Public event</label><select id="pos-loyalty-event" name="loyalty_event_id"><option value="">Choose today's event</option>{% for event in loyalty_events %}<option value="{{ event.id }}" {% if loyalty_events|length == 1 %}selected{% endif %}>{{ event.name }}</option>{% endfor %}</select><div id="pos-loyalty-people"></div>
+          {% else %}<p>No open public events today. This sale will not award loyalty points.</p>{% endif %}
+        </fieldset>{% endif %}
+        <div class="pos-receipt-option"><label class="pos-receipt-check"><input type="checkbox" id="pos-receipt-requested" name="receipt_requested" value="1" aria-controls="pos-receipt-fields"> Customer wants an email receipt</label><div id="pos-receipt-fields" hidden><label for="pos-receipt-email">Send receipt to</label><input id="pos-receipt-email" name="receipt_email" type="email" maxlength="320" autocomplete="email" placeholder="customer@example.com" disabled><small>Sent automatically after successful payment. Confirm the address with the customer.</small></div></div>
+        <button type="button" id="pos-cash-open" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
+        <button name="method" value="Card" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button>
+        <div id="pos-cash-panel" hidden>
+          <label for="pos-cash-tender">Cash received (£)</label><input id="pos-cash-tender" name="cash_tender" type="number" min="0.01" max="999999.99" step="0.01" inputmode="decimal" disabled aria-describedby="pos-cash-change">
+          <p id="pos-cash-change" class="pos-change" role="status">Enter the amount received.</p>
+          <button name="method" value="Cash" id="pos-cash-confirm" disabled>Complete cash sale</button><button type="button" id="pos-cash-cancel" class="pos-secondary">Cancel</button>
+        </div>
+      </form>
+      {% if not configured %}<p>Card payments need SumUp setup. Cash sales and waiver search are available.</p>{% else %}<p>Solo Lite payments open the SumUp app on Android. Pair your reader and check the signed-in merchant there.</p>{% endif %}
+      <noscript>Enable JavaScript to build a sale. Waiver search still works.</noscript>
+    </section>
+  </div>
+  <section class="panel" id="pos-history"><h2>Sale history</h2><p>Search sale number, transaction reference, waiver reference, account email, adult or participant name. Till sales remain separate from booking payments and cash-up.</p>
+    <form method="get" action="{{ url_for('pos_home', _anchor='pos-history') }}" class="pos-history-search"><label for="pos-sale-query">Find a sale</label><div class="pos-search-row"><input id="pos-sale-query" name="sale_q" type="search" value="{{ sale_q }}" maxlength="150"><button>Search sales</button></div>{% if history_waiver %}<input type="hidden" name="history_waiver" value="{{ history_waiver }}"><p>Showing sales for waiver #{{ history_waiver }}.</p>{% endif %}<a href="{{ url_for('pos_home', _anchor='pos-history') }}">Show all sales</a></form>
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Sale history"><table class="pos-history-table"><thead><tr><th>Sale / date &amp; time (UK)</th><th>Waiver / participant</th><th>Payment</th><th>Total</th><th>Cash received / change</th></tr></thead><tbody>
+    {% for sale in sales %}<tr><td><a href="{{ url_for('pos_sale', sale_id=sale.id) }}">Sale #{{ sale.id }}</a><br>{{ sale.created_at|pos_timestamp }}</td><td>{% if sale.waiver_id %}<a href="{{ url_for('admin_waiver_detail', waiver_id=sale.waiver_id) }}">{{ sale.customer_label or ('Waiver #' ~ sale.waiver_id) }}</a>{% else %}Unlinked sale{% endif %}{% if sale.participant_name %}<br>{{ sale.participant_name }}{% endif %}</td><td>{{ sale.method }} · {{ sale.status }}{% for result in sale.loyalty_results %}<br>{{ result.name }}: {{ result.message }}{% endfor %}{% if sale.receipt_email %}<br>Receipt: {{ sale.receipt_status }}{% endif %}{% if sale.paid_at %}<br>Paid: {{ sale.paid_at|pos_timestamp }}{% endif %}</td><td>£{{ '%.2f'|format(sale.amount) }}</td><td>{% if sale.cash_tender is not none %}£{{ '%.2f'|format(sale.cash_tender) }} / £{{ '%.2f'|format(sale.change_due) }}{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5">No sales found.</td></tr>{% endfor %}
+    </tbody></table></div><div class="pos-history-pagination"><span>{{ sales_page.total }} sales · Page {{ sales_page.page }} of {{ sales_page.pages or 1 }}</span>{% if sales_page.has_prev %}<a class="btn" href="{{ url_for('pos_home', sale_q=sale_q, history_waiver=history_waiver, sales_page=sales_page.prev_num, _anchor='pos-history') }}">Previous</a>{% endif %}{% if sales_page.has_next %}<a class="btn" href="{{ url_for('pos_home', sale_q=sale_q, history_waiver=history_waiver, sales_page=sales_page.next_num, _anchor='pos-history') }}">Next</a>{% endif %}</div>
+  </section>
+</main></div><script src="{{ url_for('static', filename='pos.js') }}" defer></script>
+{% endblock %}

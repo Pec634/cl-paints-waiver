@@ -28,6 +28,7 @@ def define_models(db):
         scanned_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
         confirmed_at = db.Column(db.DateTime)
         moodboard_id = db.Column(db.Integer, db.ForeignKey('moodboard_image.id'))
+        pos_sale_id = db.Column(db.Integer, db.ForeignKey('pos_sale.id'), nullable=True)
         __table_args__ = (db.UniqueConstraint('participant_id', 'event_id', name='uq_loyalty_person_event'),)
 
     class MemberCustodian(db.Model):

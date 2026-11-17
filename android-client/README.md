@@ -1,5 +1,7 @@
 # CL Paints Android client
 
+For the separate staff till and waiver search app, see [Android POS](POS.md).
+
 An Android app for the existing HTTPS client portal. It uses the same accounts,
 email-code verification, bookings, payments, waivers, QR codes, rewards and
 messages as the website. This first version uses Android WebView for portal

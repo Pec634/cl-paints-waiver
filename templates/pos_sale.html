@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Sale #{{ sale.id }} | CL Paints{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static', filename='pos.css') }}">
+<div class="admin">{% include '_admin_sidebar.html' %}<main id="portal-main" class="pos-main">
+  <h1>Sale #{{ sale.id }}</h1><p id="pos-sale-reference" data-reference="{{ sale.reference }}">{{ sale.reference }}</p>
+  {% for category, message in get_flashed_messages(with_categories=true) %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}
+  <section class="panel"><h2>{{ sale.status }}</h2><p>{{ sale.method }}</p><p>Sale recorded: {{ sale.created_at|pos_timestamp }}</p>{% if sale.paid_at %}<p>Payment recorded: {{ sale.paid_at|pos_timestamp }}</p>{% endif %}
+    {% for item in items %}<p>{{ item.quantity }} × {{ item.name }} · £{{ item.price }} each</p>{% endfor %}
+    <p class="pos-total">Total £{{ '%.2f'|format(sale.amount) }}</p>
+    {% if sale.cash_tender is not none %}<p>Cash received: £{{ '%.2f'|format(sale.cash_tender) }}</p><p class="pos-change">Change: £{{ '%.2f'|format(sale.change_due) }}</p>{% endif %}
+    {% if sale.customer_label %}<p>Account at sale: {{ sale.customer_label }}</p>{% endif %}{% if sale.participant_name %}<p>Participant: {{ sale.participant_name }}</p>{% endif %}
+    {% include '_pos_receipt_status.html' %}
+    {% include '_pos_loyalty_status.html' %}
+    {% if waiver %}<p>Linked waiver: <a href="{{ url_for('admin_waiver_detail', waiver_id=waiver.id) }}">{{ waiver.waiver_reference }}</a></p>{% endif %}
+    {% if sale.status == 'Paid' %}<p>Payment recorded{% if sale.transaction_code %} · SumUp {{ sale.transaction_code }}{% endif %}.</p>
+    {% elif sale.status == 'Ready' %}<p>Open this sale in the CL Paints POS Android app before starting card payment.</p>
+      <form method="post" action="{{ url_for('pos_start_payment', sale_id=sale.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button>Prepare SumUp payment</button></form>
+    {% else %}
+      {% if payment_uri %}<p><a class="pos-pay-link" href="{{ payment_uri }}">Open SumUp and take £{{ '%.2f'|format(sale.amount) }}</a></p>{% endif %}
+      <p>After returning from SumUp, check the payment below. If cancelled, declined or interrupted, confirm its status in SumUp before creating another sale. This sale stays unpaid until verified.</p>
+      <form method="post" action="{{ url_for('pos_verify_payment', sale_id=sale.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button>Check payment with SumUp</button></form>
+    {% endif %}
+  </section><p><a href="{{ url_for('pos_home') }}">Back to till / new sale</a></p>
+</main></div><script src="{{ url_for('static', filename='pos-sale.js') }}" defer></script>
+{% endblock %}
