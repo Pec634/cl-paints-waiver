@@ -98,8 +98,13 @@ def register(app, db, Movement, Cashup, Setting, TillCount, admin_required, Even
             applied.append(movement.id)
         last = physical_records.order_by(Movement.id.desc()).first()
         version = f'{row.id if row else 0}:{last.id if last else 0}'
+        pos_ledger = app.extensions.get('pos_ledger')
+        pos_cash = pos_ledger.cash_since(at) if pos_ledger and till is not None else None
+        if pos_cash and pos_cash['count']:
+            till += pos_cash['amount']
+            version += ':pos:'+pos_cash['version']
         return dict(till=till, safe=safe, version=version, movement_ids=applied, baseline=row,
-                    has_movements=last is not None,
+                    has_movements=last is not None or bool(pos_cash and pos_cash['count']),
                     active=any(item.phase != 'Closed' for item in checks))
 
     app.extensions['cash_journal_position'] = position

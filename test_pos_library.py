@@ -4,6 +4,8 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
+from decimal import Decimal
+from urllib.error import URLError, HTTPError
 from functools import wraps
 from flask import Flask, abort, session
 from flask_sqlalchemy import SQLAlchemy
@@ -12,6 +14,10 @@ import pos
 from test_admin_polish_browser import BrowserChecks, EDGE
 from pos_loyalty import PosLoyalty
 from loyalty import define_models as define_loyalty_models
+from pos_finances import define_refund_model, PosLedger, register_refunds
+import booking_cashup
+import cash_journal
+import daily_handovers
 
 
 class PosLibraryTest(unittest.TestCase):
@@ -24,6 +30,7 @@ class PosLibraryTest(unittest.TestCase):
         self.db = SQLAlchemy(self.app)
         self.Sale = pos.define_model(self.db)
         self.Product = pos.define_product_model(self.db)
+        self.Refund = define_refund_model(self.db)
         class Waiver(self.db.Model):
             id = self.db.Column(self.db.Integer, primary_key=True)
             waiver_reference = self.db.Column(self.db.String(100))
@@ -46,6 +53,11 @@ class PosLibraryTest(unittest.TestCase):
             name = self.db.Column(self.db.String(100))
             event_date = self.db.Column(self.db.Date)
             status = self.db.Column(self.db.String(30))
+            booking_id = self.db.Column(self.db.Integer)
+            booking_day_number = self.db.Column(self.db.Integer)
+        class Booking(self.db.Model):
+            id = self.db.Column(self.db.Integer, primary_key=True)
+            status = self.db.Column(self.db.String(30))
         class ClientAccount(self.db.Model):
             id = self.db.Column(self.db.Integer, primary_key=True)
             email = self.db.Column(self.db.String(255), unique=True)
@@ -55,6 +67,16 @@ class PosLibraryTest(unittest.TestCase):
             id = self.db.Column(self.db.Integer, primary_key=True)
         self.Waiver, self.Participant = Waiver, Participant
         self.Event, self.Account = Event, ClientAccount
+        self.Booking = Booking
+        self.Cashup = booking_cashup.define_model(self.db)
+        self.Handover = daily_handovers.define_model(self.db)
+        self.Movement = cash_journal.define_model(self.db)
+        self.TillCount = cash_journal.define_till_count_model(self.db)
+        class BusinessSetting(self.db.Model):
+            key = self.db.Column(self.db.String(100),primary_key=True)
+            value = self.db.Column(self.db.Text)
+        self.ledger = PosLedger(self.app, self.db, self.Sale, self.Refund, Event)
+        self.app.extensions['pos_ledger'] = self.ledger
         self.loyalty_models = define_loyalty_models(self.db)
         self.app.extensions['kiosk_public_event'] = lambda event: event.name != 'Private event'
         self.loyalty = PosLoyalty(self.app, self.db, self.loyalty_models, ClientAccount, Participant, Waiver, Event)
@@ -66,6 +88,12 @@ class PosLibraryTest(unittest.TestCase):
             return wrapped
         self.mail = Mock(return_value=True)
         pos.register(self.app, self.db, self.Sale, Waiver, Participant, staff_only, self.Product, self.mail, self.loyalty)
+        self.reader = Mock()
+        register_refunds(self.app, self.db, self.Sale, self.Refund, staff_only, self.reader)
+        cash_journal.register(self.app,self.db,self.Movement,self.Cashup,BusinessSetting,self.TillCount,staff_only,Event)
+        daily_handovers.register(self.app,self.db,self.Handover,Booking,lambda booking:[],staff_only,self.Cashup)
+        for endpoint in ('event_day_dashboard','connecteam_rota'):
+            self.app.add_url_rule('/test/'+endpoint,endpoint,lambda:'Test')
         self.app.add_url_rule('/admin/waivers/<int:waiver_id>', 'admin_waiver_detail', lambda waiver_id: 'Waiver')
         self.context = self.app.app_context()
         self.context.push()
@@ -81,6 +109,174 @@ class PosLibraryTest(unittest.TestCase):
 
     def save(self, **values):
         return self.client.post('/admin/pos/library', data=dict(csrf_token='token', name='Face painting', price='7.50', **values))
+
+    def refundable_sale(self, method='Cash'):
+        sale = self.Sale(reference='POS-refund-sale', items_json=json.dumps([dict(name='Painting',quantity=2,price='7.50')]),
+            amount=Decimal('15.00'), method=method, status='Paid', cash_tender=Decimal('20') if method=='Cash' else None,
+            paid_at=datetime.utcnow(), merchant='MERCHANT' if method=='Card' else '', transaction_code='TX-REFUND' if method=='Card' else None)
+        self.db.session.add(sale); self.db.session.commit()
+        self.reader.return_value = dict(id='transaction-id', currency='GBP', foreign_transaction_id=sale.reference,
+            amount='15.00', transaction_code=sale.transaction_code, refunded_amount=0)
+        data = dict(csrf_token='token', refund_token='r'*24, reason='Customer request', refund_quantity_0='1', refund_confirmed='yes')
+        return sale, data
+
+    def test_cash_refunds_are_itemised_bounded_idempotent_and_audited(self):
+        sale, data = self.refundable_sale()
+        path = f'/admin/pos/sales/{sale.id}/refund'
+        self.assertEqual(self.app.test_client().post(path,data=data).status_code,401)
+        self.assertEqual(self.client.post(path,data={**data,'csrf_token':'bad'}).status_code,400)
+        for changes in ({'refund_quantity_0':'3'},{'refund_quantity_0':'-1'},{'refund_quantity_0':'1.5'},{'reason':''},{'refund_confirmed':''}):
+            self.client.post(path,data={**data,**changes})
+            self.assertEqual(self.Refund.query.count(),0)
+        self.client.post(path,data=data)
+        self.client.post(path,data=data)
+        refund = self.Refund.query.one()
+        self.assertEqual(refund.amount,Decimal('7.50'))
+        self.assertEqual(refund.status,'Refunded')
+        self.assertEqual(refund.items[0]['name'],'Painting')
+        self.assertIsNotNone(refund.completed_at)
+        self.assertEqual(sale.refunded_total,Decimal('7.50'))
+        self.client.post(path,data={**data,'refund_token':'s'*24,'refund_quantity_0':'2'})
+        self.assertEqual(self.Refund.query.count(),1)
+        self.client.post(path,data={**data,'refund_token':'s'*24})
+        self.assertEqual(sale.refunded_total,sale.amount)
+        self.assertIn(b'Net paid: &pound;0.00',self.client.get(f'/admin/pos/sales/{sale.id}').data)
+
+    def test_card_refund_success_and_unknown_response_verification(self):
+        sale,data = self.refundable_sale('Card')
+        path = f'/admin/pos/sales/{sale.id}/refund'
+        with patch.dict(os.environ,SUMUP_API_KEY='test'), patch('pos_finances.post_reader_refund') as provider:
+            provider.side_effect=URLError('Connection lost')
+            self.client.post(path,data=data)
+            refund=self.Refund.query.one()
+            self.assertEqual(refund.status,'Awaiting verification')
+            self.assertEqual(sale.refunded_total,0)
+            self.assertEqual(self.client.post(path,data={**data,'refund_token':'u'*24}).status_code,409)
+            self.client.post(path,data=data)
+            provider.assert_called_once_with('MERCHANT','transaction-id',Decimal('7.50'))
+            self.reader.return_value={**self.reader.return_value,'refunded_amount':'7.50'}
+            verify=f'/admin/pos/refunds/{refund.id}/verify'
+            self.client.post(verify,data={'csrf_token':'token'})
+            self.assertEqual(refund.status,'Refunded')
+            self.assertEqual(sale.refunded_total,Decimal('7.50'))
+            self.assertEqual(self.client.post(verify,data={'csrf_token':'token'}).status_code,409)
+            provider.side_effect=None
+            self.client.post(path,data={**data,'refund_token':'u'*24})
+            self.assertEqual(sale.refunded_total,Decimal('15.00'))
+
+    def test_card_refund_rejection_does_not_reduce_takings(self):
+        sale,data=self.refundable_sale('Card')
+        with patch.dict(os.environ,SUMUP_API_KEY='test'),patch('pos_finances.post_reader_refund',side_effect=HTTPError('https://api.sumup.com',403,'Denied',{},None)):
+            self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        self.assertEqual(self.Refund.query.one().status,'Failed')
+        self.assertEqual(sale.refunded_total,0)
+        self.assertIsNone(self.Refund.query.one().completed_at)
+
+    def test_day_ledger_counts_refunds_on_refund_date_and_breaks_down_items(self):
+        from zoneinfo import ZoneInfo
+        sale,data=self.refundable_sale()
+        today=datetime.now(ZoneInfo('Europe/London')).date()
+        yesterday=today-timedelta(days=1)
+        sale.paid_at=datetime.combine(yesterday,datetime.min.time())+timedelta(hours=12)
+        self.db.session.commit()
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        before=self.ledger.summary(yesterday)
+        after=self.ledger.summary(today)
+        self.assertEqual((before['gross'],before['refunds']),('15.00','0.00'))
+        self.assertEqual((after['gross'],after['refunds'],after['net']),('0.00','7.50','-7.50'))
+        self.assertEqual((before['items'][0]['sold'],after['items'][0]['refunded']),(2,1))
+        self.assertEqual(after['transactions'][0]['type'],'Refund')
+        self.assertEqual(self.ledger.cash_since(sale.paid_at)['amount'],Decimal('-7.50'))
+
+    def test_event_cashup_totals_include_only_allocated_pos_transactions(self):
+        from booking_cashup import totals
+        from zoneinfo import ZoneInfo
+        sale,data=self.refundable_sale()
+        booking=self.Booking(status='Accepted');self.db.session.add(booking);self.db.session.flush()
+        sale.booking_id=booking.id;sale.event_index=0;self.db.session.commit()
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        summary=self.ledger.summary(datetime.now(ZoneInfo('Europe/London')).date(),booking.id,0)
+        self.assertEqual(summary['net'],'7.50')
+        self.assertEqual(self.ledger.summary(datetime.now(ZoneInfo('Europe/London')).date(),booking.id,1)['gross'],'0.00')
+        values={**{'pos_'+key:summary[key] for key in ('cash_sales','card_sales','cash_refunds','card_refunds')},'opening_till':'20.00','closing_till':'27.50'}
+        result=totals(values)
+        self.assertEqual(result['expected_till'],Decimal('27.50'))
+        self.assertEqual(result['net'],Decimal('7.50'))
+        self.assertEqual(result['till_variance'],0)
+        values['opening_till']='35.00';values['pos_cash_before_opening']='15.00'
+        self.assertEqual(totals(values)['expected_till'],Decimal('27.50'))
+
+    def test_daily_handover_retains_transaction_and_item_snapshot(self):
+        from zoneinfo import ZoneInfo
+        sale,data=self.refundable_sale()
+        today=datetime.now(ZoneInfo('Europe/London')).date().isoformat()
+        page=self.client.get('/admin/handovers?date='+today)
+        self.assertEqual(page.status_code,200)
+        self.assertIn(b'Till sales &amp; refunds',page.data)
+        self.assertIn(b'Painting',page.data)
+        form=dict(csrf_token='token',handover_date=today,version='',action='complete',manager_name='Manager',
+            business_today='Trading',am_notes='Opened',pm_notes='Closed',incident_status='none')
+        result=self.client.post('/admin/handovers',data=form)
+        self.assertEqual(result.status_code,302)
+        saved=self.Handover.query.one()
+        self.assertEqual(saved.details['pos_ledger']['gross'],'15.00')
+        self.assertEqual(saved.details['pos_ledger']['items'][0]['sold'],2)
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        self.assertEqual(saved.details['pos_ledger']['refunds'],'0.00')
+        live=self.client.get('/admin/handovers?date='+today)
+        self.assertIn(b'REF-1',live.data)
+        printed=self.client.get('/admin/handovers?date='+today+'&print=1')
+        self.assertEqual(printed.status_code,200)
+        self.assertIn(b'Painting',printed.data)
+        self.assertNotIn(b'REF-1',printed.data)
+
+    def test_cash_position_accounts_for_till_sales_and_refunds_once(self):
+        opening=self.Movement(token='opening',kind='opening',source='other',destination='till',amount=0,
+            opening_till=Decimal('20'),opening_safe=Decimal('100'),reason='Opening',checked_by='Manager',
+            recorded_at=datetime.utcnow()-timedelta(hours=1))
+        self.db.session.add(opening);self.db.session.commit()
+        sale,data=self.refundable_sale()
+        state=self.app.extensions['cash_journal_position']()
+        self.assertEqual(state['till'],Decimal('35.00'))
+        before=state['version']
+        self.client.post(f'/admin/pos/sales/{sale.id}/refund',data=data)
+        state=self.app.extensions['cash_journal_position']()
+        self.assertEqual(state['till'],Decimal('27.50'))
+        self.assertNotEqual(before,state['version'])
+        booking=self.Booking(status='Accepted');self.db.session.add(booking);self.db.session.flush()
+        row=self.Cashup(booking_id=booking.id,event_index=0,event_date=datetime.utcnow().date().isoformat(),revision=1,phase='Closed',
+            recorded_by='Manager',data_json=json.dumps(dict(closing_till='27.50',closing_safe='100.00')))
+        self.db.session.add(row);self.db.session.commit()
+        state=self.app.extensions['cash_journal_position']()
+        self.assertEqual(state['till'],Decimal('27.50'))
+
+    def test_refund_provider_request_uses_exact_major_units_and_expected_status(self):
+        from pos_finances import post_reader_refund
+        response=Mock();response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=False)
+        response.status=204
+        with patch.dict(os.environ,SUMUP_API_KEY='test'),patch('pos_finances.urlopen',return_value=response) as provider:
+            post_reader_refund('MERCHANT','transaction/id',Decimal('7.50'))
+        req=provider.call_args.args[0]
+        self.assertEqual(req.full_url,'https://api.sumup.com/v0.1/me/refund/transaction%2Fid')
+        self.assertEqual(req.data,b'{"amount":7.50}')
+        self.assertEqual(req.method,'POST')
+
+    @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
+    def test_refund_quantities_preview_and_cash_confirmation(self):
+        sale,data=self.refundable_sale()
+        markup=self.client.get(f'/admin/pos/sales/{sale.id}').data
+        BrowserChecks.browser(self,markup,'''
+            const form=document.querySelector('[data-refund-form]');
+            form.closest('details').open=true;
+            form.querySelector('[data-refund-all]').click();
+            assert(form.querySelector('[data-refund-total]').textContent.includes('15.00'),'refund preview incorrect');
+            const field=form.querySelector('[data-refund-price]');
+            assert(field.value==='2' && field.max==='2','remaining quantities incorrect');
+            field.value='1';field.dispatchEvent(new Event('input'));
+            assert(form.querySelector('[data-refund-total]').textContent.includes('7.50'),'partial preview incorrect');
+            assert(form.querySelector('[name=refund_confirmed]').required,'cash returned confirmation missing');
+            assert(document.documentElement.scrollWidth<=innerWidth,'refund popup overflows phone');
+        ''',width=390)
 
     def loyalty_fixture(self, count=2):
         from zoneinfo import ZoneInfo
@@ -138,6 +334,24 @@ class PosLibraryTest(unittest.TestCase):
         event.name = 'Public event'; event.status = 'Closed'; self.db.session.commit()
         self.client.post('/admin/pos/sales', data=data)
         self.assertEqual(self.Sale.query.count(), 0)
+
+    def test_live_waiver_endpoint_supports_one_character_and_protects_results(self):
+        waiver, people, event, data = self.loyalty_fixture(1)
+        endpoint = '/admin/pos/waivers'
+        self.assertEqual(self.app.test_client().get(endpoint+'?q=L').status_code, 401)
+        page = self.client.get(endpoint, query_string={'q':'L'})
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.headers['Cache-Control'], 'no-store')
+        self.assertEqual(page.json['count'], 1)
+        self.assertIn('LOYALTY-WAIVER', page.json['html'])
+        self.assertNotIn('pos-checkout', page.json['html'])
+        self.assertEqual(self.client.get(endpoint+'?q=').json['count'], 0)
+        self.assertEqual(self.client.get(endpoint+'?q=%25').json['count'], 0)
+        waiver.expiry_date = datetime.utcnow()-timedelta(days=1)
+        self.db.session.commit()
+        self.assertNotIn('Link to sale', self.client.get(endpoint+'?q=L').json['html'])
+        waiver.is_archived = True; self.db.session.commit()
+        self.assertEqual(self.client.get(endpoint+'?q=L').json['count'], 0)
 
     def test_card_loyalty_waits_for_successful_payment(self):
         waiver, people, event, data = self.loyalty_fixture(1)
@@ -318,6 +532,94 @@ class PosLibraryTest(unittest.TestCase):
         self.assertIn(b'Robin Green', self.client.get(f'/admin/pos/sales/{sale.id}').data)
 
     @unittest.skipUnless(EDGE.is_file(), 'Edge is not installed')
+    def test_live_search_retains_basket_handles_new_links_and_ignores_old_responses(self):
+        self.save()
+        waiver, people, event, data = self.loyalty_fixture(1)
+        fixture = self.client.get('/admin/pos/waivers?q=L').json
+        markup = self.client.get('/admin/pos').data
+        seed = '<script>window.posSearchFixture = '+json.dumps(fixture).replace('<', '\\u003c')+';</script>'
+        markup = markup.replace(b'<head>', b'<head>'+seed.encode(), 1)
+        BrowserChecks.browser(self, markup, '''
+            const requests = [];
+            window.fetch = (url, options) => new Promise((resolve, reject) => requests.push({url, options, resolve, reject}));
+            const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+            document.querySelector('[data-product-id]').click();
+            const search = document.getElementById('pos-query');
+            search.focus(); search.value = 'L'; search.dispatchEvent(new Event('input'));
+            await pause(250);
+            assert(requests.length === 1 && new URL(requests[0].url).searchParams.get('q') === 'L', 'first character did not trigger search');
+            search.value = 'Lo'; search.dispatchEvent(new Event('input'));
+            await pause(250);
+            assert(requests.length === 2 && requests[0].options.signal.aborted, 'superseded search was not cancelled');
+            requests[1].resolve({ok:true, redirected:false, json:async () => window.posSearchFixture});
+            await pause(0);
+            assert(document.querySelector('#pos-waiver-results button[data-waiver-id]'), 'live results missing');
+            assert(document.activeElement === search, 'live results stole typing focus');
+            requests[0].resolve({ok:true, redirected:false, json:async () => ({html:'<p>Old results</p>', count:99})});
+            await pause(0);
+            assert(!document.getElementById('pos-waiver-results').textContent.includes('Old results'), 'stale response replaced newer results');
+            const link = document.querySelector('#pos-waiver-results button[data-waiver-id]');
+            link.click();
+            assert(document.getElementById('pos-waiver-id').value === link.dataset.waiverId, 'new search result cannot link to basket');
+            assert(!document.getElementById('pos-waiver-fold').open, 'new link did not fold search');
+            assert(document.getElementById('pos-basket').children.length === 1, 'search lost basket');
+            search.value = ''; search.dispatchEvent(new Event('input'));
+            assert(!document.getElementById('pos-waiver-results').children.length, 'cleared search left old results');
+            assert(document.getElementById('pos-waiver-id').value, 'clearing search unlinked waiver');
+            search.value = 'Error';
+            document.getElementById('pos-search').dispatchEvent(new Event('submit', {cancelable:true}));
+            requests[2].reject(new Error('Offline')); await pause(0);
+            assert(document.getElementById('pos-waiver-search-status').textContent.includes('try Search again'), 'search failure gave no retry guidance');
+            assert(document.getElementById('pos-basket').children.length === 1, 'failed search lost basket');
+        ''', width=390)
+
+    @unittest.skipUnless(EDGE.is_file(), 'Edge is not installed')
+    def test_popup_reopens_without_losing_basket_and_scrolls_inside_screen(self):
+        self.save()
+        for index in range(12):
+            self.db.session.add(self.Sale(reference=f'POS-history-{index}', items_json='[]', amount=7.50, method='Cash', status='Paid'))
+        self.db.session.commit()
+        markup = self.client.get('/admin/pos').data
+        for width in (1280, 390):
+            BrowserChecks.browser(self, markup, '''
+                const popup = document.getElementById('pos-popup');
+                assert(popup.open && popup.matches(':modal'), 'till did not open as a modal');
+                assert(popup.contains(document.getElementById('pos-library')) && popup.contains(document.getElementById('pos-history')), 'POS features remain outside popup');
+                document.querySelector('[data-product-id]').click();
+                document.getElementById('pos-popup-close').click();
+                assert(!popup.open, 'close till failed');
+                document.getElementById('pos-popup-open').click();
+                assert(popup.open && popup.matches(':modal'), 'reopen till failed');
+                assert(document.getElementById('pos-basket').children.length === 1, 'closing popup lost basket');
+                assert(document.documentElement.classList.contains('pos-modal-open'), 'background scroll is not locked');
+                const content = popup.querySelector(innerWidth >= 900 ? '.pos-browse' : '.pos-popup-content');
+                const history = document.getElementById('pos-history');
+                assert(!history.open, 'sale history should start folded');
+                history.querySelector('summary').click();
+                assert(history.open, 'sale history dropdown did not open');
+                const historyList = history.querySelector('.pos-history-list');
+                historyList.scrollTop = historyList.scrollHeight;
+                assert(historyList.scrollTop > 0, 'sale history list cannot scroll');
+                const basketPanel = popup.querySelector('.pos-sale-panel');
+                const basketTop = basketPanel.getBoundingClientRect().top;
+                content.scrollTop = content.scrollHeight;
+                assert(content.scrollTop > 0, 'popup content cannot scroll');
+                if (innerWidth >= 900) {
+                    assert(Math.abs(basketPanel.getBoundingClientRect().top - basketTop) < 1, 'basket moved while browsing');
+                    for (let index = 0; index < 6; index++) {
+                        document.getElementById('pos-item-name').value = 'Extra item ' + index;
+                        document.getElementById('pos-item-price').value = '1.00';
+                        document.getElementById('pos-add-item').requestSubmit();
+                    }
+                    basketPanel.scrollTop = basketPanel.scrollHeight;
+                    assert(basketPanel.scrollTop > 0, 'long basket cannot scroll independently');
+                    assert(Math.abs(basketPanel.getBoundingClientRect().top - basketTop) < 1, 'basket position changed while scrolling its contents');
+                }
+                const rect = popup.getBoundingClientRect();
+                assert(rect.left >= 0 && rect.right <= innerWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight + 1, 'popup exceeds screen');
+            ''', width=width)
+
+    @unittest.skipUnless(EDGE.is_file(), 'Edge is not installed')
     def test_loyalty_member_selection_stays_with_basket_when_waiver_folds(self):
         for count in (1, 2):
             waiver, people, event, data = self.loyalty_fixture(count)
@@ -428,11 +730,13 @@ class PosLibraryTest(unittest.TestCase):
                     const libraryRect = document.querySelector('.pos-library').getBoundingClientRect();
                     const basketRect = document.querySelector('.pos-sale-panel').getBoundingClientRect();
                     const waiverRect = document.querySelector('.pos-waiver-panel').getBoundingClientRect();
-                    assert(waiverRect.bottom <= libraryRect.top, 'waiver search must sit above the till');
-                    if (innerWidth > 1000) {
-                        assert(Math.abs(libraryRect.top - basketRect.top) < 2, 'library and basket are not aligned');
+                    if (innerWidth >= 900) {
+                        assert(Math.abs(waiverRect.top - libraryRect.top) < 2, 'waiver search and library are not aligned');
+                        assert(waiverRect.right <= libraryRect.left, 'waiver search must sit beside library');
+                        assert(Math.abs(waiverRect.top - basketRect.top) < 2, 'basket is not anchored beside the browsing area');
                         assert(libraryRect.right <= basketRect.left, 'basket must sit beside the library');
                     } else {
+                        assert(waiverRect.bottom <= libraryRect.top, 'waiver search must sit above library on phone');
                         assert(libraryRect.bottom <= basketRect.top, 'basket must follow library on phone');
                     }
                     product.click(); product.click();

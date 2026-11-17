@@ -39,11 +39,11 @@
   };
   const update = () => {
     try {
-      const netCash = amount('cash_sales') - amount('cash_refunds');
-      const net = netCash + amount('card_sales') - amount('card_refunds');
+      const netCash = amount('cash_sales') - amount('cash_refunds') + Number(form.dataset.posCash || 0) - Number(form.dataset.posCashRefunds || 0);
+      const net = netCash + amount('card_sales') - amount('card_refunds') + Number(form.dataset.posCard || 0) - Number(form.dataset.posCardRefunds || 0);
       const shared = amount('share_till') + amount('share_safe') + amount('share_bank');
       const shareDue = Math.round(Math.max(0, net) * amount('share_percent') / 10000);
-      const till = amount('opening_till') + netCash + amount('safe_to_till') - amount('till_to_safe') - amount('share_till') + amount('till_other_in') - amount('till_other_out') + Number(form.dataset.invoiceTill || 0);
+      const till = amount('opening_till') + netCash - Number(form.dataset.posOpening || 0) + amount('safe_to_till') - amount('till_to_safe') - amount('share_till') + amount('till_other_in') - amount('till_other_out') + Number(form.dataset.invoiceTill || 0);
       const safe = amount('opening_safe') + amount('till_to_safe') - amount('safe_to_till') - amount('share_safe') + amount('safe_other_in') - amount('safe_other_out') + Number(form.dataset.invoiceSafe || 0);
       const values = {net, shared, share_due: shareDue, share_remaining: shareDue - shared,
         retained: net - shared, expected_till: till, expected_safe: safe,

@@ -3,7 +3,8 @@
 The `pos` module builds a separate **CL Paints POS** app for Android 8 or newer.
 It opens the authenticated staff till at `https://my.clpaints.com/admin/pos`.
 Deploy the server changes and restart it before using the app; startup creates
-the `pos_sale` and `pos_product` tables. The existing client app remains a separate application.
+the `pos_sale`, `pos_product` and `pos_refund` tables and upgrades existing till
+records. The existing client app remains a separate application.
 
 ## Included
 
@@ -41,10 +42,30 @@ the `pos_sale` and `pos_product` tables. The existing client app remains a separ
   retained even when the linked waiver is subsequently edited or archived.
 - Solo Lite payment handoff, persistent pending sales and server verification.
 
-The app needs an internet connection. Till sales are separate from booking payments,
-invoices, stock and existing cash-up totals. There is no automatic reconciliation,
-refund UI, receipt printer integration, offline queue or Play Store release yet.
-Refunds and unresolved payments must be checked in the SumUp dashboard.
+The app needs an internet connection. Till sales remain separate from booking
+payments, invoices and stock. Confirmed sales and refunds now feed daily handovers
+and cash balances. Choose the trading event at checkout to allocate transactions
+to its booking cash-up. Enter only additional non-POS takings in the manual fields;
+the linked POS figures are included automatically. Unallocated sales still appear
+in the daily handover. Saved handovers and cash-ups retain their financial and item
+snapshots; later transactions require a new handover revision or cash-up correction.
+
+Open a saved paid sale to refund all or selected remaining item quantities. Refunds
+use the original unit prices and payment method, require a reason, and retain their
+time, operator, items and status. For cash, confirm that the money was returned.
+For cards, the server verifies the original merchant transaction then requests the
+refund through SumUp. The API key must have refund permission. If a response is
+lost, use **Check refund with SumUp**; an unresolved refund blocks another request.
+Only confirmed refunds reduce takings, on the UK date the refund is recorded.
+Failed and unconfirmed transactions remain visible in the daily transaction log.
+
+Daily handovers, event cash-ups and saved printable reports include cash/card
+sales, cash/card refunds, net takings and a breakdown by item and original unit
+price, showing quantities sold/refunded and monetary totals. Refunds do not
+automatically reverse loyalty history; use the existing event loyalty correction
+workflow when an award also needs correcting.
+
+There is no receipt printer integration, offline queue or Play Store release yet.
 
 ## SumUp configuration
 

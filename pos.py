@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 from zoneinfo import ZoneInfo
 
-from flask import abort, flash, redirect, render_template, request, session, url_for
+from flask import abort, flash, redirect, render_template, request, session, url_for, jsonify
 from sqlalchemy import or_, inspect
 from sqlalchemy.exc import IntegrityError
 from email_validator import validate_email, EmailNotValidError
@@ -18,6 +18,8 @@ from email_validator import validate_email, EmailNotValidError
 def format_sale_time(value):
     if value is None:
         return 'Not recorded'
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(ZoneInfo('Europe/London')).strftime('%d/%m/%Y %H:%M:%S %Z')
@@ -47,6 +49,15 @@ def define_model(db):
         loyalty_event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
         loyalty_participants_json = db.Column(db.Text, nullable=True)
         loyalty_result_json = db.Column(db.Text, nullable=True)
+        trading_event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
+        booking_id = db.Column(db.Integer, db.ForeignKey('booking.id'), nullable=True)
+        event_index = db.Column(db.Integer, nullable=True)
+        refund_version = db.Column(db.Integer, nullable=False, default=0)
+        refunds = db.relationship('PosRefund', lazy='select', order_by='PosRefund.id')
+
+        @property
+        def refunded_total(self):
+            return sum((row.amount for row in self.refunds if row.status=='Refunded'), Decimal('0.00'))
 
         @property
         def loyalty_results(self):
@@ -64,7 +75,9 @@ def ensure_schema(db):
         'participant_id': 'INTEGER REFERENCES participant(id) ON DELETE SET NULL',
         'participant_name': 'VARCHAR(255)', 'customer_label': 'TEXT', 'customer_search': 'TEXT',
         'receipt_email': 'VARCHAR(320)', 'receipt_status': 'VARCHAR(20)', 'receipt_sent_at': 'TIMESTAMP',
-        'loyalty_event_id':'INTEGER REFERENCES event(id)', 'loyalty_participants_json':'TEXT', 'loyalty_result_json':'TEXT'}
+        'loyalty_event_id':'INTEGER REFERENCES event(id)', 'loyalty_participants_json':'TEXT', 'loyalty_result_json':'TEXT',
+        'trading_event_id':'INTEGER REFERENCES event(id)', 'booking_id':'INTEGER REFERENCES booking(id)',
+        'event_index':'INTEGER', 'refund_version':'INTEGER NOT NULL DEFAULT 0'}
     with db.engine.begin() as connection:
         for name, definition in additions.items():
             if name not in columns:
@@ -144,6 +157,7 @@ def parse_items(raw):
 
 def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_email=None, loyalty=None):
     app.add_template_filter(format_sale_time, 'pos_timestamp')
+    ledger = app.extensions.get('pos_ledger')
     def send_receipt(sale, retry=False):
         # Claim delivery before contacting the provider so concurrent requests cannot send twice.
         states = ['Requested', 'Failed'] if retry else ['Requested']
@@ -184,6 +198,21 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
     def search_pattern(value):
         return '%' + value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
 
+    def waiver_search_context():
+        query = request.args.get('q', '').strip()[:150]
+        matches = Waiver.query.filter(Waiver.is_archived.is_(False),
+            matching_waivers(search_pattern(query))).order_by(Waiver.signed_date.desc()).limit(30).all() if query else []
+        waiver_people = {waiver.id:(loyalty.people(waiver) if loyalty else list(waiver.participants)) for waiver in matches}
+        people = [person for records in waiver_people.values() for person in records]
+        return dict(q=query, matches=matches, waiver_people=waiver_people,
+            loyalty_balances=loyalty.balances(people) if loyalty else {}, waiver_status=waiver_status)
+
+    @app.get('/admin/pos/waivers')
+    @admin_required
+    def pos_waiver_search():
+        context = waiver_search_context()
+        return jsonify(html=render_template('_pos_waiver_results.html', **context), count=len(context['matches']))
+
     def sale_destination(sale):
         if sale.method == 'Cash':
             return redirect(url_for('pos_home', completed=sale.id, _anchor='pos-cash-receipt'))
@@ -208,11 +237,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
     @admin_required
     def pos_home():
         session.setdefault('client_csrf', secrets.token_urlsafe(32))
-        query = request.args.get('q', '').strip()[:150]
-        matches = []
-        if len(query) >= 2:
-            matches = Waiver.query.filter(Waiver.is_archived.is_(False),
-                matching_waivers(search_pattern(query))).order_by(Waiver.signed_date.desc()).limit(30).all()
+        search_context = waiver_search_context()
         sale_query = request.args.get('sale_q', '').strip()[:150]
         history = Sale.query
         if sale_query:
@@ -231,13 +256,11 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         completed = db.session.get(Sale, request.args.get('completed', type=int)) if request.args.get('completed', type=int) else None
         if completed and (completed.method != 'Cash' or completed.status != 'Paid'):
             completed = None
-        waiver_people = {waiver.id:(loyalty.people(waiver) if loyalty else list(waiver.participants)) for waiver in matches}
-        people = [person for records in waiver_people.values() for person in records]
-        return render_template('admin_pos.html', matches=matches, q=query,
-            waiver_people=waiver_people, loyalty_events=loyalty.events() if loyalty else [],
-            loyalty_enabled=bool(loyalty), loyalty_balances=loyalty.balances(people) if loyalty else {},
+        return render_template('admin_pos.html', **search_context,
+            loyalty_events=loyalty.events() if loyalty else [], loyalty_enabled=bool(loyalty),
+            trading_events=ledger.events() if ledger else [],
             products=Product.query.order_by(Product.name, Product.id).all(),
-            waiver_status=waiver_status, configured=configured(),
+            configured=configured(),
             sale_token=secrets.token_urlsafe(24),
             sales=sales_page.items, sales_page=sales_page, sale_q=sale_query,
             history_waiver=history_waiver, completed_sale=completed)
@@ -307,6 +330,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             if participant_id and (not participant or participant.id not in {person.id for person in allowed_people}):
                 raise ValueError('Choose a participant belonging to the linked waiver.')
             event_id, loyalty_ids = loyalty.prepare(waiver, request.form) if loyalty else (None, [])
+            trading_id, booking_id, event_index = ledger.prepare(request.form) if ledger else (None, None, None)
             customer_label = f'{waiver.waiver_reference} — {waiver.responsible_first_name} {waiver.responsible_last_name}' if waiver else None
             customer_search = '\n'.join([customer_label, waiver.responsible_email or ''] +
                 [f'{person.first_name} {person.last_name}' for person in allowed_people]) if waiver else None
@@ -314,6 +338,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
                 cash_tender=tender, participant_id=participant.id if participant else None,
                 receipt_email=receipt_email, receipt_status='Requested' if receipt_email else None,
                 loyalty_event_id=event_id, loyalty_participants_json=json.dumps(loyalty_ids),
+                trading_event_id=trading_id, booking_id=booking_id, event_index=event_index,
                 participant_name=f'{participant.first_name} {participant.last_name}' if participant else None,
                 customer_label=customer_label, customer_search=customer_search,
                 waiver_id=waiver.id if waiver else None, method=method,
@@ -354,7 +379,10 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
     def pos_sale(sale_id):
         sale = db.get_or_404(Sale, sale_id)
         session.setdefault('client_csrf', secrets.token_urlsafe(32))
+        from pos_finances import refund_lines
         return render_template('pos_sale.html', sale=sale, items=json.loads(sale.items_json),
+            refund_items=refund_lines(sale), refund_token=secrets.token_urlsafe(24),
+            refund_blocked=any(row.status in ('Processing','Awaiting verification') for row in sale.refunds),
             waiver=db.session.get(Waiver, sale.waiver_id) if sale.waiver_id else None, payment_uri=None)
 
     @app.post('/admin/pos/sales/<int:sale_id>/start')

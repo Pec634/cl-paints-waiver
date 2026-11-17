@@ -3,6 +3,7 @@
 {% block body %}
 <link rel="stylesheet" href="{{ url_for('static', filename='pos.css') }}">
 <div class="admin">{% include '_admin_sidebar.html' %}<main id="portal-main" class="pos-main">
+  {% include '_pos_popup_start.html' %}
   <h1>Sale #{{ sale.id }}</h1><p id="pos-sale-reference" data-reference="{{ sale.reference }}">{{ sale.reference }}</p>
   {% for category, message in get_flashed_messages(with_categories=true) %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}
   <section class="panel"><h2>{{ sale.status }}</h2><p>{{ sale.method }}</p><p>Sale recorded: {{ sale.created_at|pos_timestamp }}</p>{% if sale.paid_at %}<p>Payment recorded: {{ sale.paid_at|pos_timestamp }}</p>{% endif %}
@@ -21,6 +22,7 @@
       <p>After returning from SumUp, check the payment below. If cancelled, declined or interrupted, confirm its status in SumUp before creating another sale. This sale stays unpaid until verified.</p>
       <form method="post" action="{{ url_for('pos_verify_payment', sale_id=sale.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button>Check payment with SumUp</button></form>
     {% endif %}
-  </section><p><a href="{{ url_for('pos_home') }}">Back to till / new sale</a></p>
-</main></div><script src="{{ url_for('static', filename='pos-sale.js') }}" defer></script>
+  </section>{% include '_pos_refunds.html' %}<p><a href="{{ url_for('pos_home') }}">Back to till / new sale</a></p>
+  </div></dialog>
+</main></div><script src="{{ url_for('static', filename='pos-popup.js') }}" defer></script><script src="{{ url_for('static', filename='pos-sale.js') }}" defer></script>
 {% endblock %}

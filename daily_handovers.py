@@ -67,6 +67,8 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
             response.headers['Cache-Control'] = 'private, no-store'
             return response
         error = None
+        pos_ledger = app.extensions.get('pos_ledger')
+        pos_summary = pos_ledger.summary(selected) if pos_ledger else None
         if request.method == 'POST':
             if not secrets.compare_digest(token, request.form.get('csrf_token', '')):
                 abort(400)
@@ -143,6 +145,8 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
                 values['cashups'] = [dict(booking_id=item['booking'].id, reference=item['booking'].public_reference,
                     event_index=item['index'], event_date=selected.isoformat(), record_id=item['cashup'].id if item['cashup'] else None,
                     phase=item['cashup'].phase if item['cashup'] else 'Not started') for item in bookings]
+                if pos_summary is not None:
+                    values['pos_ledger'] = pos_summary
                 row = Handover(handover_date=selected, revision=latest.revision+1 if latest else 1,
                     status='Complete' if action == 'complete' else 'Draft', data_json=json.dumps(values),
                     recorded_by=os.getenv('ADMIN_EMAIL') or 'CL Paints admin')
@@ -161,6 +165,6 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
         recent = Handover.query.filter(Handover.id.in_(recent_ids)).order_by(Handover.handover_date.desc()).limit(30).all()
         response = app.make_response(render_template('admin_daily_handovers.html', selected=selected, today=today,
             latest=latest, values=values, history=history, recent=recent, bookings=bookings,
-            attendance_options=ATTENDANCE, client_csrf=token, error=error, cashups_pending=cashups_pending))
+            attendance_options=ATTENDANCE, client_csrf=token, error=error, cashups_pending=cashups_pending, pos_summary=pos_summary))
         response.headers['Cache-Control'] = 'private, no-store'
         return response, 400 if error else 200

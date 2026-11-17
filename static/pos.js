@@ -136,7 +136,10 @@
     products.forEach(button => { button.hidden = !button.dataset.productName.toLowerCase().includes(query); });
     get('pos-library-status').textContent = `${products.filter(button => !button.hidden).length} items shown`;
   });
-  document.querySelectorAll('[data-waiver-id]').forEach(button => button.addEventListener('click', () => {
+  const waiverResults = get('pos-waiver-results');
+  waiverResults.addEventListener('click', event => {
+    const button = event.target.closest('button[data-waiver-id]');
+    if (!button || !waiverResults.contains(button)) return;
     const participant = button.closest('.pos-waiver')?.querySelector('.pos-participant');
     waiver = {id:button.dataset.waiverId, label:button.dataset.waiverLabel,
       participantId:participant?.value || '', participantName:participant?.value ? participant.selectedOptions[0].textContent : ''}; render();
@@ -148,11 +151,56 @@
     }
     get('pos-waiver-fold').open = false;
     get('pos-waiver-summary').focus();
-  }));
-  document.querySelectorAll('.pos-participant').forEach(select => select.addEventListener('change', () => {
+  });
+  waiverResults.addEventListener('change', event => {
+    const select = event.target.closest('.pos-participant');
+    if (!select) return;
     const button = select.closest('.pos-waiver').querySelector('[data-waiver-id]');
     if (waiver?.id === button.dataset.waiverId) button.click();
-  }));
+  });
+  const searchForm = get('pos-search'), searchInput = get('pos-query');
+  const searchStatus = get('pos-waiver-search-status');
+  let searchTimer, searchController, searchVersion = 0;
+  async function searchWaivers(version) {
+    const query = searchInput.value.trim();
+    if (!query) {
+      waiverResults.replaceChildren();
+      searchStatus.textContent = 'Start typing a name, email or waiver reference.';
+      waiverResults.removeAttribute('aria-busy');
+      return;
+    }
+    searchController = new AbortController();
+    searchStatus.textContent = 'Searching waivers…';
+    waiverResults.setAttribute('aria-busy', 'true');
+    try {
+      const url = new URL(searchForm.dataset.searchUrl, location.href);
+      url.searchParams.set('q', query);
+      const response = await fetch(url, {signal:searchController.signal, credentials:'same-origin', cache:'no-store', headers:{Accept:'application/json'}});
+      if (!response.ok || response.redirected) throw new Error('Search unavailable');
+      const data = await response.json();
+      if (version !== searchVersion) return;
+      if (typeof data.html !== 'string' || !Number.isInteger(data.count)) throw new Error('Invalid search response');
+      waiverResults.innerHTML = data.html;
+      waiverResults.scrollTop = 0;
+      searchStatus.textContent = `${data.count === 30 ? 'Showing the latest ' : ''}${data.count} matching waiver${data.count === 1 ? '' : 's'}.`;
+    } catch (error) {
+      if (version !== searchVersion || error.name === 'AbortError') return;
+      waiverResults.replaceChildren();
+      searchStatus.textContent = 'Could not update waiver results. Check your connection or sign-in, then try Search again.';
+    } finally {
+      if (version === searchVersion) waiverResults.removeAttribute('aria-busy');
+    }
+  }
+  function queueWaiverSearch(immediate = false) {
+    clearTimeout(searchTimer);
+    searchController?.abort();
+    const version = ++searchVersion;
+    if (immediate || !searchInput.value.trim()) searchWaivers(version);
+    else searchTimer = setTimeout(() => searchWaivers(version), 200);
+  }
+  searchInput.addEventListener('input', event => { if (!event.isComposing) queueWaiverSearch(); });
+  searchInput.addEventListener('compositionend', () => queueWaiverSearch());
+  searchForm.addEventListener('submit', event => { event.preventDefault(); queueWaiverSearch(true); });
   get('pos-clear-waiver').onclick = () => {
     waiver = null;
     const receiptEmail = get('pos-receipt-email');

@@ -12,7 +12,7 @@ class BrowserChecks:
         static = (Path(__file__).resolve().parent / 'static').as_uri() + '/'
         markup = markup.decode().replace('src="/static/', 'src="' + static).replace('href="/static/', 'href="' + static)
         probe = """<p id="browser-result">PENDING</p><script>
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
           const assert = (condition, message) => { if (!condition) throw new Error(message); };
           const change = element => element.dispatchEvent(new Event('change', {bubbles:true}));
           try { %s document.getElementById('browser-result').textContent = 'PASS'; }

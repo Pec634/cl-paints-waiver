@@ -587,6 +587,8 @@ from pos import define_model as define_pos_sale
 PosSale = define_pos_sale(db)
 from pos import define_product_model as define_pos_product
 PosProduct = define_pos_product(db)
+from pos_finances import define_refund_model
+PosRefund = define_refund_model(db)
 from staff_reports import define_models as define_staff_report_models
 staff_report_models = define_staff_report_models(db)
 from connecteam_rota import define_model as define_rota_model
@@ -3059,7 +3061,11 @@ register_sumup_checkout(app, db, SumupCheckout, Booking, tool_models[1], get_cur
 from pos import register as register_pos
 from pos_loyalty import PosLoyalty
 pos_loyalty = PosLoyalty(app, db, loyalty_models, ClientAccount, Participant, Waiver, Event)
+from pos_finances import PosLedger, register_refunds
+app.extensions['pos_ledger'] = PosLedger(app, db, PosSale, PosRefund, Event)
 register_pos(app, db, PosSale, Waiver, Participant, admin_required, PosProduct, send_client_email, pos_loyalty)
+from pos import reader_transaction as pos_reader_transaction
+register_refunds(app, db, PosSale, PosRefund, admin_required, pos_reader_transaction)
 from sumup_invoice_sync import register as register_sumup_invoice_sync
 register_sumup_invoice_sync(app, db, BookingInvoice, Booking, tool_models[1], admin_required)
 from google_calendar_sync import register as register_google_calendar_sync

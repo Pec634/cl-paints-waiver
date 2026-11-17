@@ -61,13 +61,14 @@ def money(value, maximum='999999.99'):
 
 def totals(values):
     n = lambda field: Decimal(values.get(field, '0'))
-    cash = n('cash_sales') - n('cash_refunds')
-    net = cash + n('card_sales') - n('card_refunds')
+    cash = n('cash_sales') + n('pos_cash_sales') - n('cash_refunds') - n('pos_cash_refunds')
+    net = cash + n('card_sales') + n('pos_card_sales') - n('card_refunds') - n('pos_card_refunds')
     shared = n('share_till') + n('share_safe') + n('share_bank')
     due = (max(Decimal(0), net) * n('share_percent') / 100).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
-    till = n('opening_till') + cash + n('safe_to_till') - n('till_to_safe') - n('share_till') + n('till_other_in') - n('till_other_out') + n('invoice_cash_till')
+    till = n('opening_till') + cash - n('pos_cash_before_opening') + n('safe_to_till') - n('till_to_safe') - n('share_till') + n('till_other_in') - n('till_other_out') + n('invoice_cash_till')
     safe = n('opening_safe') + n('till_to_safe') - n('safe_to_till') - n('share_safe') + n('safe_other_in') - n('safe_other_out') + n('invoice_cash_safe')
-    return dict(gross=n('cash_sales') + n('card_sales'), refunds=n('cash_refunds') + n('card_refunds'),
+    return dict(gross=n('cash_sales') + n('card_sales') + n('pos_cash_sales') + n('pos_card_sales'),
+                refunds=n('cash_refunds') + n('card_refunds') + n('pos_cash_refunds') + n('pos_card_refunds'),
                 net=net, shared=shared, share_due=due, share_remaining=due-shared, retained=net-shared,
                 expected_till=till, expected_safe=safe, till_variance=n('closing_till')-till,
                 safe_variance=n('closing_safe')-safe)
@@ -172,6 +173,15 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
         values = latest.values if latest else {field: '0.00' for field, _ in OPEN_FIELDS + CLOSE_FIELDS}
         values.setdefault('share_percent', str(event.get('revenue_share_percent') or '0'))
         key=(booking.id,selected,date)
+        pos_ledger = app.extensions.get('pos_ledger')
+        first_open = Cashup.query.filter_by(booking_id=booking.id,event_index=selected,event_date=date,phase='Open').order_by(Cashup.id).first()
+        from datetime import date as date_type
+        pos_summary = pos_ledger.summary(date_type.fromisoformat(date), booking.id, selected,
+            since=first_open.recorded_at if first_open else None) if pos_ledger else None
+        if pos_summary and (not latest or latest.phase != 'Closed'):
+            for field in ('cash_sales','card_sales','cash_refunds','card_refunds'):
+                values['pos_'+field] = pos_summary[field]
+            values['pos_cash_before_opening'] = pos_summary['cash_before_opening']
         previous_safe = (db.session.get(Cashup,values.get('safe_previous_record_id'))
             if latest and values.get('safe_previous_record_id') else previous_safe_close(key))
         journal = app.extensions['cash_journal_position']()
@@ -266,6 +276,17 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                     values['opening_checked_at'] = datetime.now(ZoneInfo('Europe/London')).isoformat(timespec='minutes')
                     values['event_description'] = f"{date} {event.get('start_time', '')}-{event.get('finish_time', '')}: {event.get('event_type', '')}, {event.get('event_address', '')}"
                 else:
+                    if pos_summary:
+                        if (latest and not latest.values.get('pos_ledger') and pos_summary['transactions']
+                                and any(money(latest.values.get(field,'0')) for field in ('cash_sales','card_sales','cash_refunds','card_refunds'))
+                                and request.form.get('pos_manual_confirmed') != 'yes'):
+                            raise ValueError('Confirm that manual takings exclude the automatically included till transactions, to avoid counting them twice.')
+                        if pos_summary['transactions'] and request.form.get('pos_version') != pos_summary['version']:
+                            raise ValueError('Till transactions changed. Reload the cash-up and review the updated sales/refunds before saving.')
+                        values['pos_ledger'] = pos_summary
+                        for field in ('cash_sales','card_sales','cash_refunds','card_refunds'):
+                            values['pos_'+field] = pos_summary[field]
+                        values['pos_cash_before_opening'] = pos_summary['cash_before_opening']
                     values['share_percent'] = str(money(request.form.get('share_percent', ''), '100'))
                     result = totals(values)
                     if result['shared'] > 0 and not values['recipient']:
@@ -314,7 +335,7 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
         response = app.make_response(render_template('admin_booking_cashup.html', booking=booking, events=events,
             selected=selected, event=event, latest=latest, values=values, result=totals(values),
             opening_fields=OPEN_FIELDS, closing_fields=CLOSE_FIELDS, history=records(booking),
-            client_csrf=token, error=error, embedded=embedded, previous_safe=previous_safe,
+            client_csrf=token, error=error, embedded=embedded, previous_safe=previous_safe, pos_summary=pos_summary,
             safe_expected=safe_expected, cash_journal=journal,
             previous_checks=sorted((row for row in current_checks()
                 if (row.booking_id, row.event_index, row.event_date) != key
