@@ -332,7 +332,8 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
         ClientBillingAddress = app.extensions['client_billing_address_model']
         billing = db.session.get(ClientBillingAddress, account.id)
         form_data = request.form if request.method == 'POST' else (billing.details if billing else {})
-        return render_template('client/account.html', error=error, form_data=form_data, legacy_address=account.address if not billing else '')
+        return render_template('client/account.html', error=error, form_data=form_data,
+            legacy_address=account.address if not billing else '', google_maps_api_key=os.getenv('GOOGLE_MAPS_API_KEY', ''))
 
     @portal.route('/contact', methods=['GET', 'POST'])
     @client_required

@@ -22,8 +22,8 @@
       const widget = new PlaceAutocompleteElement();
       widget.includedRegionCodes = ['gb'];
       widget.placeholder = 'Search for a house, street or postcode';
-      widget.setAttribute('aria-label', 'Find the client address with Google Maps');
-      widget.style.width = '100%';
+      widget.setAttribute('aria-label', 'Find a billing address with Google Maps');
+      widget.classList.add('booking-google-autocomplete');
       widget.addEventListener('gmp-error', unavailable);
       widget.addEventListener('gmp-select', async ({placePrediction}) => {
         const current = ++revision;

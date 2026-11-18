@@ -1,6 +1,19 @@
 <fieldset class="booking-fields"><legend>Billing address</legend>
 <p>Please complete every field so your invoices show the correct address.</p>
+{% if google_maps_api_key %}
+<div class="billing-address-lookup" data-client-address-lookup>
+    <p>Find a billing address with Google Maps</p>
+    <div data-address-search-host hidden></div>
+    <p data-address-status role="status">Loading address lookup. You can also enter the address below.</p>
+</div>
+{% endif %}
 {% for name, label, autocomplete, limit in billing_address_fields %}
 <label class="booking-field"><span>{{ label }}</span><input name="{{ name }}" maxlength="{{ limit }}" autocomplete="{{ autocomplete }}" required value="{{ form_data.get(name, 'United Kingdom' if name == 'address_country' else '') }}"></label>
 {% endfor %}
 </fieldset>
+{% if google_maps_api_key %}
+<script src="{{ url_for('static', filename='admin-client-address.js') }}"></script>
+{% if not booking_maps_loader %}
+<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initializeClientAddressAutocomplete&amp;loading=async" onerror="clientAddressLookupUnavailable()"></script>
+{% endif %}
+{% endif %}

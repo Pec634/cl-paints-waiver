@@ -14,19 +14,8 @@
 <p id="email-help">Email is used for sign-in and links this account to booking and waiver history.</p>
 <label>Phone<input type="tel" name="phone" value="{{ values.get('phone','') }}" maxlength="50" autocomplete="tel"></label>
 {% if legacy_address %}<p>Previously saved address: <span class="client-message">{{ legacy_address }}</span>. Please enter it in the separate fields below.</p>{% endif %}
-{% if google_maps_api_key %}
-<div data-client-address-lookup>
-<p>Find an address with Google Maps</p>
-<div data-address-search-host hidden></div>
-<p data-address-status role="status">Loading address lookup. You can also enter the address below.</p>
-</div>
-{% endif %}
 {% include '_billing_address_fields.html' %}
 <div class="client-action-row"><button class="btn primary" type="submit">Save client details</button><a class="btn" href="{{ url_for('admin_client_profile',client_id=account.id) }}">Cancel</a></div>
 </form>
 </section>
-{% if google_maps_api_key %}
-<script src="{{ url_for('static',filename='admin-client-address.js') }}"></script>
-<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initializeClientAddressAutocomplete&amp;loading=async" onerror="clientAddressLookupUnavailable()"></script>
-{% endif %}
 {% endblock %}

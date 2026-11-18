@@ -787,6 +787,8 @@
     gap: 18px;
 }
 
+.billing-address-lookup { grid-column: 1 / -1; min-width: 0; }
+
 .booking-field {
     display: grid;
     align-content: start;

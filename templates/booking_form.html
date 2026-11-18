@@ -152,7 +152,7 @@ Client Booking Request | CL Paints
                         {% endfor %}
                     </select>
                 </label>
-                <div class="booking-field-wide">{% include '_billing_address_fields.html' %}</div>
+                <div class="booking-field-wide">{% with booking_maps_loader=true %}{% include '_billing_address_fields.html' %}{% endwith %}</div>
                 <label class="booking-field">
                     <span>Phone</span>
                     <input type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="For example, +44 7700 900000" maxlength="50" required value="{{ form_data.get('phone', '') }}">
@@ -804,6 +804,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 window.initializeBookingAddressAutocomplete = function() {
     if (!window.google?.maps?.importLibrary) return;
+    window.initializeClientAddressAutocomplete?.();
 
     window.google.maps.importLibrary("places").then(({ PlaceAutocompleteElement }) => {
         document.querySelectorAll(".address-autocomplete:not([data-autocomplete-attached])").forEach((input) => {
@@ -834,6 +835,6 @@ window.initializeBookingAddressAutocomplete = function() {
 };
 </script>
 {% if google_maps_api_key %}
-<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initializeBookingAddressAutocomplete&amp;loading=async"></script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initializeBookingAddressAutocomplete&amp;loading=async" onerror="window.clientAddressLookupUnavailable?.()"></script>
 {% endif %}
 {% endblock %}
