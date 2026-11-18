@@ -92,8 +92,8 @@ Client Booking Request | CL Paints
                     </select>
                 </label>
                 <label class="booking-field" id="businessNameField" {% if form_data.get('client_type') != 'business' %}hidden{% endif %}>
-                    <span>Business name <small>Optional</small></span>
-                    <input name="business_name" autocomplete="organization" maxlength="200" value="{{ form_data.get('business_name', '') }}">
+                    <span>Business name</span>
+                    <input name="business_name" autocomplete="organization" maxlength="200" value="{{ form_data.get('business_name', '') }}" {% if form_data.get('client_type') == 'business' %}required{% else %}disabled{% endif %}>
                 </label>
                 <label class="booking-field" id="businessJobTitleField" hidden>
                     <span>Job title</span>
@@ -406,6 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isBusiness = businessType.value === "business";
         businessNameField.hidden = !isBusiness;
         businessNameInput.disabled = !isBusiness;
+        businessNameInput.required = isBusiness;
         jobTitleField.hidden = !isBusiness;
         jobTitleInput.required = isBusiness;
         form.querySelector('[name="date_of_birth"]').required = !isBusiness;

@@ -50,6 +50,8 @@ class OnBehalfTest(unittest.TestCase):
 
     def test_admin_creation_never_records_client_consent_and_public_cannot_bypass(self):
         self.assertEqual(main.app.test_client().get(self.path).status_code, 302)
+        incomplete = self.admin.post(self.path, data=dict(self.form(), business_name=' '))
+        self.assertIn(b'Enter the business name for the business booking.', incomplete.data)
         booking = self.create()
         self.assertEqual(booking.business_name, 'Example Events Ltd')
         self.assertTrue(pending_agreement(booking))

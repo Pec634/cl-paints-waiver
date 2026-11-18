@@ -1894,6 +1894,8 @@ def booking_request():
 
             if client_type not in {"individual", "business"}:
                 raise ValueError("Choose whether you are a private individual or a business.")
+            if client_type == "business" and not business_name:
+                raise ValueError("Enter the business name for the business booking.")
             if len(business_name) > 200:
                 raise ValueError("Enter a business name of 200 characters or fewer.")
             if client_type == "business" and not job_title:
