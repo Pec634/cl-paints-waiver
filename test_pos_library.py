@@ -761,6 +761,27 @@ class PosLibraryTest(unittest.TestCase):
             self.assertEqual(Visit.query.count(), 1)
             self.assertEqual(self.db.session.get(Balance, people[0].id).points, 1)
 
+    def test_unpaid_checkout_times_out_and_only_verified_sales_enter_history(self):
+        with patch.dict(os.environ, SUMUP_API_KEY='test', SUMUP_MERCHANT_CODE='test', SUMUP_POS_AFFILIATE_KEY='test'):
+            self.client.post('/admin/pos/sales', data=dict(csrf_token='token', sale_token='t'*24, method='Card',
+                items=json.dumps([dict(name='Painting', quantity=1, price='7.50')])))
+            sale = self.Sale.query.one()
+            path = f'/admin/pos/sales/{sale.id}'
+            self.assertIn(b'data-payment-time-left=', self.client.get(path).data)
+            self.assertNotIn(f'Sale #{sale.id}'.encode(), self.client.get('/admin/pos', query_string={'sale_q': sale.id}).data)
+            sale.created_at -= timedelta(seconds=31)
+            self.db.session.commit()
+            self.assertEqual(self.client.get(path).location, '/admin/pos')
+            self.assertEqual(self.client.post(path+'/start', data={'csrf_token':'token'}).location, '/admin/pos')
+            sale.status = 'Awaiting verification'
+            self.db.session.commit()
+            self.assertIn(b'Checkout timed out', self.client.get(path).data)
+            result = dict(status='SUCCESSFUL', currency='GBP', foreign_transaction_id=sale.reference,
+                amount='7.50', transaction_code='late-card-payment')
+            with patch('pos.reader_transaction', return_value=result):
+                self.client.post(path+'/verify', data={'csrf_token':'token'})
+            self.assertIn(f'Sale #{sale.id}'.encode(), self.client.get('/admin/pos', query_string={'sale_q': sale.id}).data)
+
     def test_prepare_sumup_payment_renders_handoff_once(self):
         with patch.dict(os.environ,SUMUP_API_KEY='private-key',SUMUP_MERCHANT_CODE='MERCHANT',SUMUP_POS_AFFILIATE_KEY='affiliate-key'):
             self.client.post('/admin/pos/sales',data=dict(csrf_token='token',sale_token='p'*24,method='Card',

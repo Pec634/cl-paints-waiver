@@ -1,4 +1,13 @@
 (() => {
+  const sale = document.getElementById('pos-sale-reference');
+  if (sale?.dataset.paymentTimeLeft) {
+    const deadline = Date.now() + Number(sale.dataset.paymentTimeLeft);
+    const expire = () => location.replace(sale.dataset.tillUrl);
+    window.setTimeout(expire, Number(sale.dataset.paymentTimeLeft));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && Date.now() >= deadline) expire();
+    });
+  }
   const form = document.querySelector('[data-refund-form]');
   if (form) {
     const fields = [...form.querySelectorAll('[data-refund-price]')];
@@ -13,7 +22,7 @@
   }
   try {
     const submitted = sessionStorage.getItem('clpaints-pos-submitted');
-    if ('POS-' + submitted === document.getElementById('pos-sale-reference').dataset.reference) {
+    if ('POS-' + submitted === sale.dataset.reference) {
       sessionStorage.removeItem('clpaints-pos-draft');
       sessionStorage.removeItem('clpaints-pos-submitted');
     }

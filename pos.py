@@ -1,5 +1,5 @@
 """Staff till, consent lookup and independently verified reader payments."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import json
 import os
@@ -271,6 +271,11 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             return redirect(url_for('pos_home', completed=sale.id, _anchor='pos-cash-receipt'))
         return redirect(url_for('pos_sale', sale_id=sale.id))
 
+    def payment_time_left(sale):
+        if sale.status not in ('Ready', 'Awaiting verification'):
+            return None
+        return max(0, int((sale.created_at + timedelta(seconds=30) - datetime.utcnow()).total_seconds() * 1000))
+
     def card_settings():
         return [dict(key=key,label=label,present=bool(os.getenv(key,'').strip())) for key,label in (
             ('SUMUP_API_KEY','SumUp API key'),('SUMUP_MERCHANT_CODE','SumUp merchant code'),('SUMUP_POS_AFFILIATE_KEY','SumUp Affiliate Key'))]
@@ -296,7 +301,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         session.setdefault('client_csrf', secrets.token_urlsafe(32))
         search_context = waiver_search_context()
         sale_query = request.args.get('sale_q', '').strip()[:150]
-        history = Sale.query
+        history = Sale.query.filter_by(status='Paid')
         if sale_query:
             pattern = search_pattern(sale_query)
             criteria = [Sale.reference.ilike(pattern, escape='\\'),
@@ -313,6 +318,10 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         completed = db.session.get(Sale, request.args.get('completed', type=int)) if request.args.get('completed', type=int) else None
         if completed and (completed.method != 'Cash' or completed.status != 'Paid'):
             completed = None
+        timed_out_id = request.args.get('timed_out', type=int)
+        timed_out = db.session.get(Sale, timed_out_id) if timed_out_id else None
+        if timed_out and (timed_out.status != 'Awaiting verification' or payment_time_left(timed_out) != 0):
+            timed_out = None
         return render_template('admin_pos.html', **search_context,
             loyalty_events=loyalty.events() if loyalty else [], loyalty_enabled=bool(loyalty),
             trading_events=ledger.events() if ledger else [],
@@ -322,7 +331,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             configured=configured(),card_settings=card_settings(),
             sale_token=secrets.token_urlsafe(24),
             sales=sales_page.items, sales_page=sales_page, sale_q=sale_query,
-            history_waiver=history_waiver, completed_sale=completed)
+            history_waiver=history_waiver, completed_sale=completed, timed_out_sale=timed_out)
 
     @app.post('/admin/pos/library')
     @admin_required
@@ -453,8 +462,12 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
     def pos_sale(sale_id):
         sale = db.get_or_404(Sale, sale_id)
         session.setdefault('client_csrf', secrets.token_urlsafe(32))
+        time_left = payment_time_left(sale)
+        if time_left == 0 and sale.status == 'Ready':
+            return redirect(url_for('pos_home'))
         from pos_finances import refund_lines
         return render_template('pos_sale.html', sale=sale, items=json.loads(sale.items_json),
+            payment_time_left=time_left,
             refund_items=refund_lines(sale), refund_token=secrets.token_urlsafe(24),
             refund_blocked=any(row.status in ('Processing','Awaiting verification') for row in sale.refunds),
             waiver=db.session.get(Waiver, sale.waiver_id) if sale.waiver_id else None, payment_uri=None)
@@ -467,9 +480,13 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         if not configured() or sale.merchant != os.getenv('SUMUP_MERCHANT_CODE'):
             abort(409)
         # A lost response must never silently create a second card charge.
-        changed = Sale.query.filter_by(id=sale.id, method='Card', status='Ready').update({'status': 'Awaiting verification'})
+        cutoff = datetime.utcnow() - timedelta(seconds=30)
+        changed = Sale.query.filter_by(id=sale.id, method='Card', status='Ready').filter(
+            Sale.created_at > cutoff).update({'status': 'Awaiting verification'})
         db.session.commit()
         if not changed:
+            if sale.status == 'Ready' and payment_time_left(sale) == 0:
+                return redirect(url_for('pos_home'))
             flash('Check the existing payment with SumUp before taking another payment.', 'error')
             return redirect(url_for('pos_sale', sale_id=sale.id))
         uri = 'sumupmerchant://pay/1.0?' + urlencode({
@@ -479,6 +496,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             'merchant-code': sale.merchant,
             'foreign-tx-id': sale.reference, 'callback': 'clpaintspos://sumup-callback'})
         return render_template('pos_sale.html', sale=sale, items=json.loads(sale.items_json),
+            payment_time_left=payment_time_left(sale),
             waiver=db.session.get(Waiver, sale.waiver_id) if sale.waiver_id else None, payment_uri=uri)
 
     @app.post('/admin/pos/sales/<int:sale_id>/verify')

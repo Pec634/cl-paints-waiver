@@ -5,6 +5,7 @@
 <div class="admin">{% include '_pos_sidebar.html' %}<main id="portal-main" class="pos-main" data-pos-manager="{{ 'true' if pos_manager else 'false' }}">
   <header><small>CL PAINTS · STAFF TILL</small><h1>Point of sale</h1><p>Build a sale, check a waiver and take payment.</p></header>
   {% include '_pos_popup_start.html' %}
+  {% if timed_out_sale %}<p class="pos-notice" role="status">Card checkout timed out. If the customer paid on the reader, <a href="{{ url_for('pos_sale', sale_id=timed_out_sale.id) }}">check the payment with SumUp</a> before charging again.</p>{% endif %}
   {% for category, message in get_flashed_messages(with_categories=true) %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}
   <div class="pos-till-layout"><div class="pos-browse">
   <div class="pos-columns">
@@ -45,7 +46,7 @@
   <details class="panel pos-history-folder" id="pos-history" {% if sale_q or history_waiver or sales_page.page > 1 %}open{% endif %}>
     <summary><h2>Sale history</h2><span>{{ sales_page.total }} sales &middot; Open to search and view{% if pos_manager and pending_loyalty_reviews %} &middot; {{ pending_loyalty_reviews|length }} loyalty reviews{% endif %}</span></summary>
     {% if pos_manager and pending_loyalty_reviews %}<div class="pos-review-queue"><strong>Refund loyalty reviews awaiting a manager</strong>{% for refund in pending_loyalty_reviews %}<p><a href="{{ url_for('pos_sale',sale_id=refund.sale_id,_anchor='refund-' ~ refund.id) }}">Refund #{{ refund.id }} &middot; Sale #{{ refund.sale_id }} &middot; &pound;{{ '%.2f'|format(refund.amount) }}</a></p>{% endfor %}</div>{% endif %}
-    <div class="pos-history-content"><p>Search sale number, transaction reference, waiver reference, account email, adult or participant name. Till transactions appear in daily handovers and their linked event cash-up. Booking payment ledgers remain separate.</p>
+    <div class="pos-history-content"><p>Completed sales and refunds. Search sale number, transaction reference, waiver reference, account email, adult or participant name.</p>
     <form method="get" action="{{ url_for('pos_home', _anchor='pos-history') }}" class="pos-history-search"><label for="pos-sale-query">Find a sale</label><div class="pos-search-row"><input id="pos-sale-query" name="sale_q" type="search" value="{{ sale_q }}" maxlength="150"><button>Search sales</button></div>{% if history_waiver %}<input type="hidden" name="history_waiver" value="{{ history_waiver }}"><p>Showing sales for waiver #{{ history_waiver }}.</p>{% endif %}<a href="{{ url_for('pos_home', _anchor='pos-history') }}">Show all sales</a></form>
     <ul class="pos-history-list" tabindex="0" aria-label="Sale history records">
       {% for sale in sales %}<li>
@@ -54,6 +55,7 @@
         <p>{% if sale.waiver_id %}<a href="{{ url_for('pos_waiver_detail' if session.get('pos_staff_id') else 'admin_waiver_detail', waiver_id=sale.waiver_id) }}">{{ sale.customer_label or ('Waiver #' ~ sale.waiver_id) }}</a>{% else %}Unlinked sale{% endif %}{% if sale.participant_name %} &middot; {{ sale.participant_name }}{% endif %}</p>
         {% if sale.cash_tender is not none %}<p>Cash received &pound;{{ '%.2f'|format(sale.cash_tender) }} &middot; Change &pound;{{ '%.2f'|format(sale.change_due) }}</p>{% endif %}
         {% if sale.refunded_total %}<p>Refunded &pound;{{ '%.2f'|format(sale.refunded_total) }} &middot; Net &pound;{{ '%.2f'|format(sale.amount-sale.refunded_total) }}</p>{% endif %}{% if sale.paid_at %}<p>Paid: {{ sale.paid_at|pos_timestamp }}</p>{% endif %}
+        {% for refund in sale.refunds if refund.status == 'Refunded' %}<p><a href="{{ url_for('pos_sale', sale_id=sale.id, _anchor='refund-' ~ refund.id) }}">Refund #{{ refund.id }} &middot; &pound;{{ '%.2f'|format(refund.amount) }}</a></p>{% endfor %}
         {% for result in sale.loyalty_results %}<p>{{ result.name }}: {{ result.message }}</p>{% endfor %}
         {% if sale.receipt_email %}<p>Receipt: {{ sale.receipt_status }}</p>{% endif %}
       </li>{% else %}<li>No sales found.</li>{% endfor %}
