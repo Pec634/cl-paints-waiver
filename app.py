@@ -268,6 +268,7 @@ class Booking(db.Model):
     submitted_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
     request_type = db.Column(db.String(30), nullable=False)
     client_type = db.Column(db.String(30), nullable=False)
+    business_name = db.Column(db.String(200), nullable=True)
     title = db.Column(db.String(30), nullable=True)
     job_title = db.Column(db.String(120), nullable=True)
     first_name = db.Column(db.String(100), nullable=False)
@@ -700,6 +701,7 @@ with app.app_context():
     }
 
     booking_column_migrations = {
+        "business_name": "VARCHAR(200)",
         "single_date": "BOOLEAN NOT NULL DEFAULT 1",
         "job_title": "VARCHAR(120)",
         "ethnicity_detail": "VARCHAR(150)",
@@ -1709,6 +1711,7 @@ def send_booking_request_confirmation(booking):
         "CLIENT DETAILS",
         f"Name: {booking.title + ' ' if booking.title else ''}{booking.first_name} {booking.last_name}",
         f"Client type: {booking.client_type.title()}",
+        *([f"Business name: {booking.business_name}"] if booking.business_name else []),
         f"Job title: {booking.job_title or 'Not provided'}",
         f"Date of birth: {booking.date_of_birth.strftime('%d/%m/%Y') if booking.date_of_birth else 'Not provided'}",
         f"18 or over confirmed: {'Yes' if booking.is_over_18 else 'No'}",
@@ -1876,6 +1879,7 @@ def booking_request():
                 raise ValueError("Use the quick availability checker for availability requests.")
 
             client_type = request.form.get("client_type", "")
+            business_name = request.form.get("business_name", "").strip()
             first_name = request.form.get("first_name", "").strip()
             last_name = request.form.get("last_name", "").strip()
             email = prefill_account.email if prefill_account else request.form.get("email", "").strip()
@@ -1890,6 +1894,8 @@ def booking_request():
 
             if client_type not in {"individual", "business"}:
                 raise ValueError("Choose whether you are a private individual or a business.")
+            if len(business_name) > 200:
+                raise ValueError("Enter a business name of 200 characters or fewer.")
             if client_type == "business" and not job_title:
                 raise ValueError("Enter your job title for the business booking.")
             if not all((first_name, last_name, email, phone, client_address)) or (not on_behalf and not signature):
@@ -2078,6 +2084,7 @@ def booking_request():
             booking = Booking(
                 request_type=request_type,
                 client_type=client_type,
+                business_name=business_name or None,
                 title=request.form.get("title", "").strip() or None,
                 job_title=job_title or None,
                 first_name=first_name,

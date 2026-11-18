@@ -22,7 +22,7 @@ class OnBehalfTest(unittest.TestCase):
 
     def form(self):
         return dict(csrf_token=self.csrf, admin_authority='yes', request_type='booking', client_type='business',
-            job_title='Manager', first_name='Test', last_name='Client', email=self.email, phone='+447911123456',
+            business_name='Example Events Ltd', job_title='Manager', first_name='Test', last_name='Client', email=self.email, phone='+447911123456',
             address_property='10', address_street='High Street', address_city='London', address_postcode='SW1A 1AA',
             address_country='United Kingdom', date_of_birth='', ethnicity='Prefer not to say', religion='Prefer not to say',
             single_date='yes', payment_preference='Full payment', event_schedule=json.dumps({'events': [dict(
@@ -51,6 +51,7 @@ class OnBehalfTest(unittest.TestCase):
     def test_admin_creation_never_records_client_consent_and_public_cannot_bypass(self):
         self.assertEqual(main.app.test_client().get(self.path).status_code, 302)
         booking = self.create()
+        self.assertEqual(booking.business_name, 'Example Events Ltd')
         self.assertTrue(pending_agreement(booking))
         self.assertEqual(booking.signature, '')
         self.assertFalse(booking.liability_acknowledged)

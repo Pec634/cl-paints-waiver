@@ -9,7 +9,7 @@ from client_addresses import FIELDS
 from client_notifications import booking_snapshot
 
 EDITABLE_FIELDS = (
-    'request_type', 'client_type', 'title', 'job_title', 'first_name', 'last_name',
+    'request_type', 'client_type', 'title', 'job_title', 'business_name', 'first_name', 'last_name',
     'date_of_birth', 'is_over_18', 'ethnicity', 'ethnicity_detail', 'religion',
     'client_address', 'phone', 'email', 'event_date', 'single_date', 'additional_event_dates',
     'start_time', 'finish_time', 'event_address', 'publicity_type', 'charge_type',

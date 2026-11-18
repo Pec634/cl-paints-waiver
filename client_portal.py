@@ -322,6 +322,8 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 if not billing:
                     billing = ClientBillingAddress(client_id=account.id)
                     db.session.add(billing)
+                elif 'business_name' not in address_details and 'business_name' in billing.details:
+                    address_details['business_name'] = billing.details['business_name']
                 billing.details = address_details
                 account.address = format_address(address_details)
                 db.session.commit()

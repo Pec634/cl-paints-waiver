@@ -80,7 +80,7 @@ def booking_snapshot(booking, schedule):
         'Estimated event cost': f'£{booking.total_event_cost:.2f}',
         'Estimated total': f'£{booking.total_event_cost + booking.travel_charge:.2f}',
         'Payment preference': booking.payment_preference}
-    for field, label in [('client_type','Client type'), ('title','Title'), ('job_title','Job title'),
+    for field, label in [('client_type','Client type'), ('title','Title'), ('job_title','Job title'), ('business_name','Business name'),
                          ('first_name','First name'), ('last_name','Last name'), ('date_of_birth','Date of birth'),
                          ('is_over_18','Age 18 or over'), ('ethnicity','Ethnicity'), ('ethnicity_detail','Ethnic background'),
                          ('religion','Religion'), ('client_address','Client address'), ('phone','Phone'), ('email','Email')]:

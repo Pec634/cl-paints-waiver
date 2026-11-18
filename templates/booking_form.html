@@ -91,6 +91,10 @@ Client Booking Request | CL Paints
                         <option value="business" {% if form_data.get('client_type') == 'business' %}selected{% endif %}>Business</option>
                     </select>
                 </label>
+                <label class="booking-field">
+                    <span>Business name <small>Optional</small></span>
+                    <input name="business_name" autocomplete="organization" maxlength="200" value="{{ form_data.get('business_name', '') }}">
+                </label>
                 <label class="booking-field" id="businessJobTitleField" hidden>
                     <span>Job title</span>
                     <input name="job_title" maxlength="120" value="{{ form_data.get('job_title', '') }}">
@@ -729,6 +733,7 @@ document.addEventListener("DOMContentLoaded", () => {
             reviewSection('Client details', [
                 `${value('title')} ${value('first_name')} ${value('last_name')}`.trim(),
                 `${value('client_type')}${value('job_title') ? ' · '+value('job_title') : ''}`,
+                value('business_name') ? `Business name: ${value('business_name')}` : '',
                 `${value('email')} · ${value('phone')}`,
                 ['address_property','address_street','address_city','address_postcode','address_country'].map(value).join(', '),
                 `Date of birth: ${value('date_of_birth')}`,

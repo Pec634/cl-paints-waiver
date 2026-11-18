@@ -76,6 +76,10 @@ def profile_details(form, ethnicities):
     from zoneinfo import ZoneInfo
     values = {key: form.get(key, '').strip() for key in
               ['client_type', 'title', 'job_title', 'date_of_birth', 'ethnicity', 'ethnicity_detail', 'religion']}
+    if 'business_name' in form:
+        values['business_name'] = form.get('business_name', '').strip()
+        if len(values['business_name']) > 200:
+            raise ValueError('Enter a business name of 200 characters or fewer.')
     if values['client_type'] not in ('individual', 'business'):
         raise ValueError('Choose your client type.')
     if values['title'] not in ('', 'Mr', 'Mrs', 'Miss', 'Ms', 'Mx', 'Dr', 'Other'):
