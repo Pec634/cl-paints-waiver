@@ -45,7 +45,7 @@ Bookings | CL Paints
 
         {% if request.args.get('status_email') == 'sent' %}<p class="booking-admin-notice">The client has been emailed about the booking update.</p>{% elif request.args.get('status_email') == 'failed' %}<p class="booking-admin-error">The booking is saved, but its update email could not be sent. Contact the client to let them know.</p>{% endif %}
 
-        {% if request.args.get('payment_error') %}<p class="booking-admin-error" role="alert">Review the booking and mark it Awaiting Payment first. Confirmation requires the recorded deposit, or full payment if no deposit is set. Set the payment schedule on the booking's Payments page.</p>{% endif %}
+        {% if request.args.get('payment_error') %}<p class="booking-admin-error" role="alert">Bookings with a £0 total can be confirmed directly from Under Review. If payment is due, mark the booking Awaiting Payment first and record the deposit or full payment on the booking's Payments page.</p>{% endif %}
         {% if request.args.get('deleted') %}<p class="booking-admin-notice" role="status">Booking request {{ request.args.get('deleted') }} deleted.</p>{% endif %}
         {% if request.args.get('deletion_error') %}<p class="booking-admin-error" role="alert">{{ request.args.get('deletion_error') }}</p>{% endif %}
         <section class="stats">
@@ -149,7 +149,7 @@ Bookings | CL Paints
                                         </label>
                                         <div class="booking-manage-actions">
                                             <button class="btn small" type="submit" name="action" value="update">Update</button>
-                                            <button class="btn small primary" type="submit" name="action" value="request_payment">Reviewed &mdash; request payment</button><button class="btn small" type="submit" name="action" value="accept">Confirm booking after payment</button>
+                                            <button class="btn small primary" type="submit" name="action" value="request_payment">Reviewed &mdash; request payment</button><button class="btn small" type="submit" name="action" value="accept">Confirm booking</button>
                                             <button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>
                                         </div>
                                     </form>

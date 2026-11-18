@@ -29,6 +29,21 @@ class BusinessToolsTest(unittest.TestCase):
         with self.admin.session_transaction() as session:
             return dict(csrf_token=session['client_csrf'],entry_token=session[f'payment_entry_{self.booking.id}'])
 
+    def test_confirm_zero_total_booking_without_payment(self):
+        self.booking.status = 'Under Review'
+        self.booking.total_event_cost = Decimal('0')
+        main.db.session.commit()
+        path = f'/admin/bookings/{self.booking.id}/manage'
+
+        response = self.admin.post(path, data={'action': 'accept', 'travel_miles_0': '35'})
+        self.assertIn('payment_error=confirmation', response.location)
+        self.assertEqual(self.booking.status, 'Under Review')
+
+        response = self.admin.post(path, data={'action': 'accept', 'travel_miles_0': '0'})
+        self.assertIn('assign_booking=', response.location)
+        self.assertEqual(self.booking.status, 'Accepted')
+        self.assertEqual(Entry.query.filter_by(booking_id=self.booking.id).count(), 0)
+
     def test_payment_deposit_refund_idempotency_and_client_privacy(self):
         path=f'/admin/bookings/{self.booking.id}/payments'
         token=self.payment_form()

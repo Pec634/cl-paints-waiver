@@ -2459,7 +2459,11 @@ def admin_manage_booking(booking_id):
 
     from payment_workflow import confirmation_ready
     if booking.status == 'Accepted' and previous_status != 'Accepted':
-        if previous_status != 'Awaiting Payment' or not confirmation_ready(booking):
+        if previous_status == 'Under Review':
+            can_confirm = app.extensions['payment_summary'](booking)['total'] == 0
+        else:
+            can_confirm = previous_status == 'Awaiting Payment' and confirmation_ready(booking)
+        if not can_confirm:
             db.session.rollback()
             return redirect(url_for('admin_bookings', payment_error='confirmation'))
     db.session.commit()
