@@ -43,7 +43,8 @@ records. The existing client app remains a separate application.
   transaction reference, waiver reference, email or names. Client profiles and
   waiver details link to the matching till history. Customer names at sale are
   retained even when the linked waiver is subsequently edited or archived.
-- Solo Lite payment handoff, persistent pending sales and server verification.
+- Direct Solo Lite reader payments inside the Android POS, persistent pending sales
+  and server verification. The separate SumUp app is not required by this APK.
 
 The app needs an internet connection. Till sales remain separate from booking
 payments, invoices and stock. Confirmed sales and refunds now feed daily handovers
@@ -122,16 +123,32 @@ The debug APK uses `com.clpaints.pos.preview`; release uses `com.clpaints.pos`.
 Register the matching ID and update the server setting before switching builds.
 Only the affiliate key is passed to the device; the API key stays on the server.
 
-Install SumUp's Android app on the same device, sign into the CL Paints merchant
-account, and pair the Solo Lite in SumUp. Confirm the merchant and GBP currency
-before use. The reader connects to SumUp over Bluetooth; it does not use Solo's
-Cloud API. This initial version uses Payment Switch to fit the existing WebView
-and Gradle setup without adding the reader SDK and its newer toolchain. SumUp no
-longer actively develops Payment Switch and recommends the native SDK for new
-native integrations; migrating to that SDK is a future integration step.
+Install the updated POS APK over the existing preview. Start a card sale, tap
+**Prepare SumUp payment**, then **Activate card reader and take ...**. On first
+use the embedded SumUp SDK asks you to sign in; use the intended CL Paints
+merchant's account. Allow the SDK's Bluetooth / nearby-device and location
+permissions when requested, turn on Bluetooth and select the Solo Lite. The
+app checks the SDK merchant code and GBP currency against the server before
+starting checkout. A mismatched account is blocked before charging; use
+**More > Sign out of SumUp**, then activate the reader and sign in again.
 
-Create a card sale, tap **Prepare SumUp payment**, then **Open SumUp**. Finish
-payment in SumUp. On return tap **Check payment with SumUp**. A callback alone
+Payments now use the native SumUp reader SDK 7.1.0, which supports Solo Lite
+and the existing Android Gradle Plugin 8 toolchain. SDK 7.2 requires an AGP 9
+toolchain upgrade. SumUp's own payment UI appears within the POS application;
+there is no switch to the separate SumUp app. Reader connection, battery,
+firmware updates and pairing are available under **More > SumUp card reader**
+after sign-in. Native merchant login uses the account's default merchant; use a
+managed user for the intended merchant if the account has multiple merchants.
+The SDK handles login credentials, not the portal. No API secret is in the APK.
+
+The HTTPS preparation page still provides the legacy Payment Switch URI for
+older APKs. The updated APK intercepts that URI only after a user tap on a
+trusted prepared-sale page, validates it, and invokes native checkout instead.
+Deploy the server update before using the new APK: the payment request now
+includes the intended merchant code. The server environment variable names
+and preview application ID are unchanged.
+
+After checkout tap **Check payment with SumUp**. An SDK result or callback alone
 never marks a sale paid: the server checks the merchant-scoped transaction's
 reference, successful status, currency and exact amount. A payment launches only
 once from the sale; Android also remembers launched references. When interrupted,
@@ -155,13 +172,14 @@ This is an unsigned-for-production preview, not a Play Store submission.
 
 Before live use, test on a physical Android device with the Solo Lite: staff
 login/expiry, searches, cash totals, consent links, card approval/decline/cancel,
-missing SumUp app, double taps, loss of connectivity, app termination during payment,
-return callbacks and successful verification. Use SumUp's supported sandbox setup
+first-use SumUp sign-in, wrong merchant, denied Bluetooth/location permissions,
+double taps, loss of connectivity, app termination during payment, return
+callbacks and successful verification. Use SumUp's supported sandbox setup
 first. No live device payment has been established by adding this code.
 
 Server regression tests: `python -m unittest test_pos -q`.
 
 References:
 - https://developer.sumup.com/terminal-payments/readers/solo-lite/
-- https://developer.sumup.com/terminal-payments/payment-switch/android/
+- https://developer.sumup.com/terminal-payments/sdks/android/
 - https://developer.sumup.com/api/transactions/get/

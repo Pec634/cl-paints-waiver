@@ -7,8 +7,11 @@ account or email provider is configured correctly.
 ## Device setup
 
 1. Deploy the server update and restart it before testing the installed POS app.
-2. Install/open CL Paints POS and the SumUp app on the Android tablet. Sign into
-   the intended merchant account and pair the Solo Lite in SumUp.
+2. Install/open the updated CL Paints POS APK on the Android tablet. During the
+   first card checkout sign into the intended SumUp merchant within the POS and
+   pair the Solo Lite. Allow Bluetooth / nearby-device and location permissions
+   when requested. The separate SumUp app is no longer required. Check that
+   **More > SumUp card reader** opens reader settings after sign-in.
 3. From the portal administrator sign-in, create one cashier and one manager via
    the till's **Staff** link. Sign in on the tablet with the cashier account.
 
@@ -28,8 +31,12 @@ account or email provider is configured correctly.
 
 ## Reader flow (performed by the merchant with an agreed test amount)
 
-1. Create a card sale and start SumUp once. Complete the reader payment, return
-   to CL Paints and check payment verification.
+1. Create a card sale, prepare it and tap **Activate card reader and take ...**
+   once. Confirm checkout stays within CL Paints POS, complete the reader payment
+   and check payment verification. Test wrong-merchant sign-in (must block before
+   checkout), cancelled sign-in (must allow sign-in retry), denied reader
+   permissions, approval, decline and cancellation. No result may mark a sale
+   paid before the server verifies it.
 2. Verify the saved total, original SumUp reference, waiver link, receipt status
    and loyalty award. Refresh/check again and confirm no duplicate payment or point.
 3. Check cancellation and interrupted-return recovery: the till must not mark

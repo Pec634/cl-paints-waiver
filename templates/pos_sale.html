@@ -18,8 +18,9 @@
     {% elif sale.status == 'Ready' %}<p>Open this sale in the CL Paints POS Android app before starting card payment.</p>
       <form method="post" action="{{ url_for('pos_start_payment', sale_id=sale.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button>Prepare SumUp payment</button></form>
     {% else %}
-      {% if payment_uri %}<p><a class="pos-pay-link" href="{{ payment_uri }}">Open SumUp and take £{{ '%.2f'|format(sale.amount) }}</a></p>{% endif %}
-      <p>After returning from SumUp, check the payment below. If cancelled, declined or interrupted, confirm its status in SumUp before creating another sale. This sale stays unpaid until verified.</p>
+      {% if payment_uri %}<p><a class="pos-pay-link" href="{{ payment_uri }}">{% if 'SumUpNative/1' in request.user_agent.string %}Activate card reader and take{% else %}Open SumUp and take{% endif %} £{{ '%.2f'|format(sale.amount) }}</a></p>{% endif %}
+      {% if 'SumUpNative/1' in request.user_agent.string %}<p>The reader opens inside the POS app. On first use, sign in to the configured SumUp merchant and allow Bluetooth / nearby-device permissions to connect your Solo Lite. Reader settings are under More &gt; SumUp card reader.</p>{% endif %}
+      <p>After the reader payment, check the payment below. If cancelled, declined or interrupted, confirm its status in SumUp before creating another sale. This sale stays unpaid until verified.</p>
       <form method="post" action="{{ url_for('pos_verify_payment', sale_id=sale.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button>Check payment with SumUp</button></form>
     {% endif %}
   </section>{% include '_pos_refunds.html' %}<p><a href="{{ url_for('pos_home') }}">Back to till / new sale</a></p>

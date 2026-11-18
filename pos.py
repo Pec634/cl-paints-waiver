@@ -476,6 +476,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             'affiliate-key': os.environ['SUMUP_POS_AFFILIATE_KEY'],
             'app-id': os.getenv('SUMUP_POS_APP_ID', 'com.clpaints.pos.preview'),
             'total': str(sale.amount), 'currency': 'GBP', 'title': 'CL Paints ' + sale.reference,
+            'merchant-code': sale.merchant,
             'foreign-tx-id': sale.reference, 'callback': 'clpaintspos://sumup-callback'})
         return render_template('pos_sale.html', sale=sale, items=json.loads(sale.items_json),
             waiver=db.session.get(Waiver, sale.waiver_id) if sale.waiver_id else None, payment_uri=uri)

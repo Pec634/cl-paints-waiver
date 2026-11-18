@@ -29,6 +29,10 @@ import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.math.BigDecimal;
+import com.sumup.merchant.reader.api.SumUpAPI;
+import com.sumup.merchant.reader.api.SumUpLogin;
+import com.sumup.merchant.reader.api.SumUpPayment;
 
 public class MainActivity extends ComponentActivity {
     private WebView web;
@@ -38,11 +42,21 @@ public class MainActivity extends ComponentActivity {
     private ValueCallback<Uri[]> fileCallback;
     private String retryUrl = PortalPolicy.HOME;
     private boolean failed;
+    private Uri pendingPayment;
+    private String pendingSale;
     private static final int PICK_FILE = 100;
+    private static final int SUMUP_LOGIN = 201;
+    private static final int SUMUP_CHECKOUT = 202;
+    private static final int SUMUP_READER = 203;
     private static final int PINK = Color.rgb(197, 29, 104);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state != null) {
+            String payment = state.getString("pendingPayment");
+            pendingPayment = payment == null ? null : Uri.parse(payment);
+            pendingSale = state.getString("pendingSale");
+        }
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(255, 249, 245));
@@ -104,7 +118,7 @@ public class MainActivity extends ComponentActivity {
         settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " CLPaintsPOSAndroid/0.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " CLPaintsPOSAndroid/0.2 SumUpNative/1");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
@@ -180,6 +194,14 @@ public class MainActivity extends ComponentActivity {
     private void showMenu(View anchor) {
         PopupMenu menu = new PopupMenu(this, anchor);
         menu.getMenu().add("Till / waiver search").setOnMenuItemClickListener(item -> { load(PortalPolicy.HOME); return true; });
+        menu.getMenu().add("SumUp card reader").setOnMenuItemClickListener(item -> {
+            if (SumUpAPI.isLoggedIn()) SumUpAPI.openCardReaderPage(this, SUMUP_READER);
+            else toast("Start a card payment to sign in to SumUp and connect your reader.");
+            return true;
+        });
+        menu.getMenu().add("Sign out of SumUp").setOnMenuItemClickListener(item -> {
+            SumUpAPI.logout(); toast("Signed out of SumUp. Your staff sign-in is unchanged."); return true;
+        });
         menu.getMenu().add("Open in browser").setOnMenuItemClickListener(item -> { external(currentUrl()); return true; });
         menu.show();
     }
@@ -211,23 +233,59 @@ public class MainActivity extends ComponentActivity {
                 || !"GBP".equals(uri.getQueryParameter("currency"))
                 || !BuildConfig.APPLICATION_ID.equals(uri.getQueryParameter("app-id"))
                 || !"clpaintspos://sumup-callback".equals(uri.getQueryParameter("callback"))
-                || reference == null || !reference.matches("POS-[A-Za-z0-9_-]{20,50}")) {
+                || reference == null || !reference.matches("POS-[A-Za-z0-9_-]{20,50}")
+                || !ReaderPayment.validAmount(uri.getQueryParameter("total"))
+                || uri.getQueryParameter("affiliate-key") == null
+                || uri.getQueryParameter("affiliate-key").trim().isEmpty()
+                || uri.getQueryParameter("merchant-code") == null
+                || uri.getQueryParameter("merchant-code").trim().isEmpty()) {
             toast("Payment setup does not match this POS app. Check the SumUp configuration."); return;
         }
+        if (pendingPayment != null) { toast("A reader payment is already being prepared."); return; }
         android.content.SharedPreferences prefs = getSharedPreferences("payments", MODE_PRIVATE);
         if (prefs.getBoolean(reference, false)) {
             toast("This payment was already opened. Check its status with SumUp before taking another payment."); return;
         }
-        String saleUrl = web.getUrl().replaceFirst("/start$", "");
-        // Commit before leaving the app, including when Android later kills this process.
-        if (!prefs.edit().putBoolean(reference, true).putString("lastSale", saleUrl).commit()) {
+        pendingSale = web.getUrl().replaceFirst("/start$", "");
+        pendingPayment = uri;
+        if (!prefs.edit().putString("lastSale", pendingSale).commit()) {
+            pendingPayment = null;
             toast("Could not save the payment reference. Try again."); return;
         }
-        try { startActivity(new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)); }
-        catch (ActivityNotFoundException error) {
-            prefs.edit().remove(reference).apply();
-            toast("Install and sign in to the SumUp app, pair your Solo Lite, then tap the payment link again.");
+        if (!SumUpAPI.isLoggedIn()) {
+            SumUpAPI.openLoginActivity(this, SumUpLogin.builder(uri.getQueryParameter("affiliate-key")).build(), SUMUP_LOGIN);
+        } else startReaderPayment();
+    }
+    private void startReaderPayment() {
+        if (pendingPayment == null) return;
+        Uri uri = pendingPayment;
+        com.sumup.merchant.reader.models.Merchant merchant = SumUpAPI.getCurrentMerchant();
+        if (merchant == null || !uri.getQueryParameter("merchant-code").equals(merchant.getMerchantCode())
+                || merchant.getCurrency() != SumUpPayment.Currency.GBP) {
+            pendingPayment = null;
+            toast("Wrong SumUp merchant or currency. Use More > Sign out of SumUp, then activate the reader and sign in to the configured GBP merchant.");
+            return;
         }
+        String reference = uri.getQueryParameter("foreign-tx-id");
+        android.content.SharedPreferences prefs = getSharedPreferences("payments", MODE_PRIVATE);
+        if (prefs.getBoolean(reference, false)) {
+            pendingPayment = null;
+            toast("This payment was already opened. Check its status with SumUp."); return;
+        }
+        SumUpPayment payment = SumUpPayment.builder()
+            .total(new BigDecimal(uri.getQueryParameter("total")))
+            .currency(SumUpPayment.Currency.GBP)
+            .title(uri.getQueryParameter("title"))
+            .foreignTransactionId(reference)
+            .configureRetryPolicy(2000, 60000, true)
+            .build();
+        // Persist the attempt before invoking checkout. An interruption must never auto-charge again.
+        if (!prefs.edit().putBoolean(reference, true).commit()) {
+            pendingPayment = null;
+            toast("Could not save the payment attempt. No reader payment was started."); return;
+        }
+        pendingPayment = null;
+        SumUpAPI.checkout(this, payment, SUMUP_CHECKOUT);
     }
     private void handlePaymentReturn(Intent intent) {
         Uri uri = intent == null ? null : intent.getData();
@@ -258,6 +316,23 @@ public class MainActivity extends ComponentActivity {
     private void toast(String message) { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); }
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == SUMUP_LOGIN) {
+            if (data != null && data.getIntExtra(SumUpAPI.Response.RESULT_CODE, -1)
+                    == SumUpAPI.Response.ResultCode.SUCCESSFUL && SumUpAPI.isLoggedIn()) startReaderPayment();
+            else {
+                pendingPayment = null;
+                toast("SumUp sign-in was not completed. No reader payment was started. Tap Activate card reader to try sign-in again.");
+            }
+            return;
+        }
+        if (request == SUMUP_CHECKOUT) {
+            pendingPayment = null;
+            String sale = getSharedPreferences("payments", MODE_PRIVATE).getString("lastSale", PortalPolicy.HOME);
+            load(sale);
+            // SDK results are advisory. The authenticated server verifies the exact transaction.
+            toast("Reader payment finished. Tap Check payment with SumUp to confirm the sale before taking another payment.");
+            return;
+        }
         if (request == PICK_FILE && fileCallback != null) {
             Uri[] files = WebChromeClient.FileChooserParams.parseResult(result, data);
             if (files != null) {
@@ -272,7 +347,12 @@ public class MainActivity extends ComponentActivity {
             fileCallback.onReceiveValue(files); fileCallback = null;
         }
     }
-    @Override protected void onSaveInstanceState(Bundle state) { web.saveState(state); super.onSaveInstanceState(state); }
+    @Override protected void onSaveInstanceState(Bundle state) {
+        web.saveState(state);
+        if (pendingPayment != null) state.putString("pendingPayment", pendingPayment.toString());
+        state.putString("pendingSale", pendingSale);
+        super.onSaveInstanceState(state);
+    }
     @Override protected void onPause() { web.onPause(); CookieManager.getInstance().flush(); super.onPause(); }
     @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
     @Override protected void onDestroy() {

@@ -3,7 +3,13 @@ pluginManagement {
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories { google(); mavenCentral() }
+    repositories {
+        google(); mavenCentral()
+        exclusiveContent {
+            forRepository { maven { url 'https://maven.sumup.com/releases' } }
+            filter { includeGroupByRegex 'com\\.sumup.*'; includeGroup 'net.sf.smc' }
+        }
+    }
 }
 rootProject.name = 'CL Paints'
 include ':app'

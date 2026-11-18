@@ -694,12 +694,35 @@ class PosLibraryTest(unittest.TestCase):
             self.assertEqual(response.status_code,200)
             self.assertEqual(sale.status,'Awaiting verification')
             self.assertIn(b'sumupmerchant://pay/1.0?',response.data)
+            self.assertIn(b'merchant-code=MERCHANT',response.data)
             self.assertIn(b'Open SumUp and take',response.data)
             self.assertNotIn(b'private-key',response.data)
             self.assertLessEqual(len(sale.status),self.Sale.__table__.c.status.type.length)
             repeated=self.client.post(f'/admin/pos/sales/{sale.id}/start',data={'csrf_token':'token'})
             self.assertEqual(repeated.status_code,302)
             self.assertEqual(self.Sale.query.count(),1)
+
+    def test_native_reader_preparation_matches_saved_sale(self):
+        from urllib.parse import parse_qs, urlparse
+        from html import unescape
+        import re
+        with patch.dict(os.environ,SUMUP_API_KEY='private-key',SUMUP_MERCHANT_CODE='MERCHANT',SUMUP_POS_AFFILIATE_KEY='affiliate-key'):
+            self.client.post('/admin/pos/sales',data=dict(csrf_token='token',sale_token='n'*24,method='Card',
+                items=json.dumps([dict(name='Painting',quantity=2,price='7.50')])))
+            sale=self.Sale.query.one()
+            response=self.client.post(f'/admin/pos/sales/{sale.id}/start',data={'csrf_token':'token'},
+                headers={'User-Agent':'CLPaintsPOSAndroid/0.2 SumUpNative/1'})
+            self.assertEqual(response.status_code,200)
+            self.assertIn(b'Activate card reader and take',response.data)
+            self.assertNotIn(b'Open SumUp and take',response.data)
+            uri=unescape(re.search(r'href="(sumupmerchant:[^"]+)"',response.get_data(as_text=True)).group(1))
+            parameters=parse_qs(urlparse(uri).query)
+            self.assertEqual(parameters['total'],['15.00'])
+            self.assertEqual(parameters['merchant-code'],[sale.merchant])
+            self.assertEqual(parameters['foreign-tx-id'],[sale.reference])
+            self.assertEqual(parameters['app-id'],['com.clpaints.pos.preview'])
+            self.assertNotIn(b'private-key',response.data)
+            self.assertEqual(sale.status,'Awaiting verification')
 
     def test_postgresql_upgrade_widens_payment_status_column(self):
         from sqlalchemy import inspect
