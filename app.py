@@ -1715,8 +1715,9 @@ def send_booking_request_confirmation(booking):
         f"Job title: {booking.job_title or 'Not provided'}",
         f"Date of birth: {booking.date_of_birth.strftime('%d/%m/%Y') if booking.date_of_birth else 'Not provided'}",
         f"18 or over confirmed: {'Yes' if booking.is_over_18 else 'No'}",
-        f"Ethnicity: {booking.ethnicity}{' / ' + booking.ethnicity_detail if booking.ethnicity_detail else ''}",
-        f"Religion: {booking.religion}",
+        *([f"Ethnicity: {booking.ethnicity}{' / ' + booking.ethnicity_detail if booking.ethnicity_detail else ''}"]
+          if booking.client_type != 'business' else []),
+        *([f"Religion: {booking.religion}"] if booking.client_type != 'business' else []),
         f"Address: {booking.client_address}",
         f"Phone: {booking.phone}",
         f"Email: {booking.email}",
@@ -1930,7 +1931,9 @@ def booking_request():
             ethnicity = request.form.get("ethnicity", "")
             ethnicity_detail = request.form.get("ethnicity_detail", "")
             religion = request.form.get("religion", "")
-            if ethnicity not in {*ETHNICITY_BREAKDOWNS, "Prefer not to say"}:
+            if client_type == "business":
+                ethnicity, ethnicity_detail = "Not provided", ""
+            elif ethnicity not in {*ETHNICITY_BREAKDOWNS, "Prefer not to say"}:
                 raise ValueError("Choose an ethnicity response.")
             if ethnicity in ETHNICITY_BREAKDOWNS and ethnicity_detail not in ETHNICITY_BREAKDOWNS[ethnicity]:
                 raise ValueError("Choose a more specific ethnicity response.")
@@ -1940,7 +1943,9 @@ def booking_request():
                 "Christian", "Muslim", "Hindu", "Sikh", "Buddhist",
                 "Jewish", "Other", "No Religion", "Prefer not to say",
             }
-            if religion not in allowed_religions:
+            if client_type == "business":
+                religion = "Not provided"
+            elif religion not in allowed_religions:
                 raise ValueError("Choose a religion response.")
 
             try:

@@ -93,10 +93,12 @@ def profile_details(form, ethnicities):
     age = today.year - born.year - ((today.month, today.day) < (born.month, born.day)) if born else None
     if age is not None and (age < 18 or age > 120):
         raise ValueError('The responsible client must be aged 18 or over; check your date of birth.')
-    if values['ethnicity'] == 'Prefer not to say':
+    if values['client_type'] == 'business':
+        values.update(ethnicity='', ethnicity_detail='', religion='')
+    elif values['ethnicity'] == 'Prefer not to say':
         values['ethnicity_detail'] = 'Prefer not to say'
     elif values['ethnicity'] not in ethnicities or values['ethnicity_detail'] not in ethnicities[values['ethnicity']]:
         raise ValueError('Choose a matching ethnic group and background, or Prefer not to say.')
-    if values['religion'] not in ('Christian', 'Muslim', 'Hindu', 'Sikh', 'Buddhist', 'Jewish', 'Other', 'No Religion', 'Prefer not to say'):
+    if values['client_type'] == 'individual' and values['religion'] not in ('Christian', 'Muslim', 'Hindu', 'Sikh', 'Buddhist', 'Jewish', 'Other', 'No Religion', 'Prefer not to say'):
         raise ValueError('Choose a religion response, or Prefer not to say.')
     return values

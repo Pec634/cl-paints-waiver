@@ -24,7 +24,7 @@ class OnBehalfTest(unittest.TestCase):
         return dict(csrf_token=self.csrf, admin_authority='yes', request_type='booking', client_type='business',
             business_name='Example Events Ltd', job_title='Manager', first_name='Test', last_name='Client', email=self.email, phone='+447911123456',
             address_property='10', address_street='High Street', address_city='London', address_postcode='SW1A 1AA',
-            address_country='United Kingdom', date_of_birth='', ethnicity='Prefer not to say', religion='Prefer not to say',
+            address_country='United Kingdom', date_of_birth='',
             single_date='yes', payment_preference='Full payment', event_schedule=json.dumps({'events': [dict(
                 date='2099-01-05', start_time='10:00', finish_time='12:00', event_address='Town Hall',
                 event_type='Business event', theme='N/A', pitch_fee_required='no', publicity_type='Private', location_type='Indoors', charge_type='Client')]}))

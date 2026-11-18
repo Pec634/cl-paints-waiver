@@ -228,11 +228,14 @@ class ClientPortalTest(unittest.TestCase):
                 business_name='  Example Events Ltd  ', job_title='Event manager', first_name='Test', last_name='Client', phone='+447911123456',
                 address_property='10', address_street='Abbey Road', address_city='London', address_postcode='NW10 7TR',
                 address_country='United Kingdom', signature='Test Client', date_of_birth='', is_over_18='yes',
-                ethnicity='Prefer not to say', religion='Prefer not to say', single_date='yes', payment_preference='Full payment',
+                single_date='yes', payment_preference='Full payment',
                 liability_acknowledged='yes', terms_accepted='yes', event_schedule=json.dumps({'events': [event]})))
         self.assertEqual(response.status_code, 302)
         booking = main.Booking.query.one()
         self.assertIsNone(booking.date_of_birth)
+        self.assertEqual(booking.ethnicity, 'Not provided')
+        self.assertIsNone(booking.ethnicity_detail)
+        self.assertEqual(booking.religion, 'Not provided')
         self.assertEqual(booking.business_name, 'Example Events Ltd')
 
     def test_profile_and_contact_and_csrf(self):
@@ -313,8 +316,7 @@ class ClientPortalTest(unittest.TestCase):
         data = dict(csrf_token=self.csrf(), first_name='Test', last_name='Client', phone='01234',
             address_property='Suite 53c', address_street='Abbey Road', address_city='London',
             address_postcode='NW10 7TR', address_country='United Kingdom', client_type='business',
-            title='Dr', business_name='Example Events Ltd', job_title='Event organiser', date_of_birth='1990-01-01',
-            ethnicity='Prefer not to say', ethnicity_detail='Prefer not to say', religion='Prefer not to say')
+            title='Dr', business_name='Example Events Ltd', job_title='Event organiser', date_of_birth='1990-01-01')
         self.assertEqual(self.client.post('/client/account', data=dict(data, job_title='')).status_code, 200)
         self.assertEqual(main.ClientBillingAddress.query.count(), 0)
         self.assertEqual(self.client.post('/client/account', data=data).status_code, 302)
@@ -325,7 +327,8 @@ class ClientPortalTest(unittest.TestCase):
         self.assertIn(b'value="business" selected', page)
         self.assertIn(b'value="Dr" selected', page)
         self.assertIn(b'value="yes" required checked', page)
-        self.assertIn(b'data-initial-value="Prefer not to say"', page)
+        self.assertIn(b'id="ethnicityGroup" disabled', page)
+        self.assertIn(b'name="religion" disabled', page)
         self.assertIn(b'value="Example Events Ltd"', self.client.get('/client/account').data)
         self.assertEqual(self.client.post('/client/account', data=dict(data, business_name='Updated Events Ltd')).status_code, 302)
         self.assertIn(b'value="Updated Events Ltd"', self.client.get('/booking').data)

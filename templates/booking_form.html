@@ -128,24 +128,24 @@ Client Booking Request | CL Paints
                         <label><input type="radio" name="is_over_18" value="no" required {% if form_data.get('is_over_18') == 'no' %}checked{% endif %}> No</label>
                     </div>
                 </fieldset>
-                <label class="booking-field">
+                <label class="booking-field" {% if form_data.get('client_type') == 'business' %}hidden{% endif %}>
                     <span>Ethnic group</span>
-                    <select name="ethnicity" id="ethnicityGroup" required>
+                    <select name="ethnicity" id="ethnicityGroup" {% if form_data.get('client_type') == 'business' %}disabled{% else %}required{% endif %}>
                         <option value="">Choose one</option>
                         {% for choice in ['Asian or Asian British', 'Black, Black British, Caribbean or African', 'Mixed or multiple ethnic groups', 'White', 'Other ethnic group', 'Prefer not to say'] %}
                         <option value="{{ choice }}" {% if form_data.get('ethnicity') == choice %}selected{% endif %}>{{ choice }}</option>
                         {% endfor %}
                     </select>
                 </label>
-                <label class="booking-field" id="ethnicityDetailField">
+                <label class="booking-field" id="ethnicityDetailField" {% if form_data.get('client_type') == 'business' %}hidden{% endif %}>
                     <span>Ethnic background</span>
-                    <select name="ethnicity_detail" id="ethnicityDetail" data-initial-value="{{ form_data.get('ethnicity_detail', '') }}" required>
+                    <select name="ethnicity_detail" id="ethnicityDetail" data-initial-value="{{ form_data.get('ethnicity_detail', '') }}" {% if form_data.get('client_type') == 'business' %}disabled{% else %}required{% endif %}>
                         <option value="">Choose an ethnic group first</option>
                     </select>
                 </label>
-                <label class="booking-field">
+                <label class="booking-field" {% if form_data.get('client_type') == 'business' %}hidden{% endif %}>
                     <span>Religion</span>
-                    <select name="religion" required>
+                    <select name="religion" {% if form_data.get('client_type') == 'business' %}disabled{% else %}required{% endif %}>
                         <option value="">Choose one</option>
                         {% for choice in ['Christian', 'Muslim', 'Hindu', 'Sikh', 'Buddhist', 'Jewish', 'Other', 'No Religion', 'Prefer not to say'] %}
                         <option value="{{ choice }}" {% if form_data.get('religion') == choice %}selected{% endif %}>{{ choice }}</option>
@@ -366,6 +366,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const ethnicityGroup = document.getElementById("ethnicityGroup");
     const ethnicityDetailField = document.getElementById("ethnicityDetailField");
     const ethnicityDetail = document.getElementById("ethnicityDetail");
+    const religionInput = form.querySelector('[name="religion"]');
     const singleDateInputs = form.querySelectorAll('[name="single_date"]');
     const dateCountField = document.getElementById("dateCountField");
     const dateCountInput = document.getElementById("eventDateCount");
@@ -410,6 +411,15 @@ document.addEventListener("DOMContentLoaded", () => {
         jobTitleField.hidden = !isBusiness;
         jobTitleInput.required = isBusiness;
         form.querySelector('[name="date_of_birth"]').required = !isBusiness;
+        ethnicityGroup.closest('label').hidden = isBusiness;
+        ethnicityGroup.disabled = isBusiness;
+        ethnicityGroup.required = !isBusiness;
+        ethnicityDetail.disabled = isBusiness;
+        ethnicityDetailField.hidden = isBusiness || ethnicityGroup.value === "Prefer not to say";
+        ethnicityDetail.required = !ethnicityDetailField.hidden;
+        religionInput.closest('label').hidden = isBusiness;
+        religionInput.disabled = isBusiness;
+        religionInput.required = !isBusiness;
     }
 
     businessType.addEventListener("change", syncBusinessType);
@@ -433,8 +443,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        ethnicityDetailField.hidden = false;
-        ethnicityDetail.required = true;
+        ethnicityDetailField.hidden = ethnicityGroup.disabled;
+        ethnicityDetail.required = !ethnicityGroup.disabled;
         (ethnicityBreakdowns[group] || []).forEach((choice) => {
             const option = document.createElement("option");
             option.value = option.textContent = choice;
@@ -742,7 +752,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 `${value('email')} · ${value('phone')}`,
                 ['address_property','address_street','address_city','address_postcode','address_country'].map(value).join(', '),
                 `Date of birth: ${value('date_of_birth')}`,
-                `Ethnicity: ${value('ethnicity')} · ${value('ethnicity_detail')}; Religion: ${value('religion')}`
+                ethnicityGroup.disabled ? '' : `Ethnicity: ${value('ethnicity')} · ${value('ethnicity_detail')}`,
+                religionInput.disabled ? '' : `Religion: ${value('religion')}`
             ], sections[1]);
             reviewSection('Event details', readSchedule().map((day, index) =>
                 `Day ${index+1}: ${day.date}, ${day.start_time}–${day.finish_time} · ${day.event_type} · ${day.event_address} · ${day.publicity_type} · ${day.charge_type}${day.revenue_share_percent ? ' · '+day.revenue_share_percent+'% to organiser' : ''} · Theme: ${day.theme}${day.additional_info ? ' · '+day.additional_info : ''}`), sections[2]);

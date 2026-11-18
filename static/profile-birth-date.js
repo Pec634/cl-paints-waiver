@@ -11,6 +11,11 @@
         businessName.closest('label').hidden = !isBusiness;
         businessName.disabled = !isBusiness;
       }
+      form.querySelectorAll('[name="ethnicity"], [name="ethnicity_detail"], [name="religion"]').forEach(field => {
+        field.closest('label').hidden = isBusiness;
+        field.disabled = isBusiness;
+        field.required = !isBusiness;
+      });
     };
     kind.addEventListener('change', update); update();
   });
