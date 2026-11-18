@@ -13,7 +13,8 @@ from booking_cashup import OPEN_FIELDS, CLOSE_FIELDS, money
 def register(app, db, Cashup, Booking, Entry, schedule, admin_required):
     @app.context_processor
     def invoice_context():
-        if request.endpoint != 'admin_booking_cashup' or not session.get('admin_authenticated'):
+        from staff_permissions import admin_session
+        if request.endpoint != 'admin_booking_cashup' or not admin_session():
             return {}
         booking = db.session.get(Booking, request.view_args['booking_id'])
         return dict(invoice_payment=app.extensions['payment_summary'](booking)) if booking else {}

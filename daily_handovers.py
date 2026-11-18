@@ -6,6 +6,7 @@ import secrets
 from zoneinfo import ZoneInfo
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.exc import IntegrityError
+from staff_permissions import recorded_actor
 
 TEXT_FIELDS = {'manager_name': 200, 'business_today': 4000, 'am_notes': 6000,
                'pm_notes': 6000, 'incidents': 6000, 'follow_up': 4000,
@@ -88,7 +89,7 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
                 values = dict(latest.details, acknowledged_by=name,
                     acknowledged_at=datetime.now(ZoneInfo('Europe/London')).isoformat(timespec='minutes'))
                 row = Handover(handover_date=selected, revision=latest.revision+1, status='Complete',
-                    data_json=json.dumps(values), recorded_by=os.getenv('ADMIN_EMAIL') or 'CL Paints admin')
+                    data_json=json.dumps(values), recorded_by=recorded_actor(os.getenv('ADMIN_EMAIL') or 'CL Paints admin'))
                 db.session.add(row)
                 try:
                     db.session.commit()
@@ -155,7 +156,7 @@ def register(app, db, Handover, Booking, schedule, admin_required, Cashup):
                     values['pos_reconciliation_id'] = matched.id if matched else None
                 row = Handover(handover_date=selected, revision=latest.revision+1 if latest else 1,
                     status='Complete' if action == 'complete' else 'Draft', data_json=json.dumps(values),
-                    recorded_by=os.getenv('ADMIN_EMAIL') or 'CL Paints admin')
+                    recorded_by=recorded_actor(os.getenv('ADMIN_EMAIL') or 'CL Paints admin'))
                 db.session.add(row)
                 db.session.commit()
                 flash('Daily handover saved. This sheet is visible only to admins.', 'success')

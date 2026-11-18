@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from datetime import timezone
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.exc import IntegrityError
+from staff_permissions import recorded_actor
 
 OPEN_FIELDS = [('opening_till', 'Opening till float'), ('opening_safe', 'Opening safe cash')]
 CLOSE_FIELDS = [
@@ -133,7 +134,8 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
 
     @app.context_processor
     def context():
-        if not session.get('admin_authenticated'):
+        from staff_permissions import admin_session
+        if not admin_session():
             return {}
         return dict(booking_cashups=latest_records, cashup_totals=totals,
                     cashup_denominations=DENOMINATIONS, cashup_float_return=float_return)
@@ -321,7 +323,7 @@ def register(app, db, Cashup, Booking, schedule, admin_required):
                 phase = 'Open' if action == 'open' else ('Draft' if action == 'draft' else 'Closed')
                 row = Cashup(booking_id=booking.id, event_index=selected, event_date=date,
                              revision=latest.revision + 1 if latest else 1, phase=phase,
-                             data_json=json.dumps(values), recorded_by=app.config.get('ADMIN_EMAIL') or 'CL Paints admin')
+                             data_json=json.dumps(values), recorded_by=recorded_actor(app.config.get('ADMIN_EMAIL') or 'CL Paints admin'))
                 db.session.add(row)
                 db.session.commit()
                 flash('Cash-up saved. Till takings and organiser transfers do not change the client payment ledger.', 'success')

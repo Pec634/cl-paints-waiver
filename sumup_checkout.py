@@ -149,7 +149,8 @@ def register(app,db,Checkout,Booking,Entry,current_client,admin_required,setting
     @app.post('/bookings/<int:booking_id>/online-payment/<int:checkout_id>/refresh')
     def sumup_payment_refresh(booking_id,checkout_id):
         row=db.get_or_404(Checkout,checkout_id);booking=db.get_or_404(Booking,booking_id)
-        admin=session.get('admin_authenticated') and datetime.utcnow().timestamp()-session.get('admin_last_activity',0)<1800
+        from staff_permissions import admin_session
+        admin=admin_session() and (session.get('pos_staff_id') or datetime.utcnow().timestamp()-session.get('admin_last_activity',0)<1800)
         if row.booking_id!=booking.id or (not admin and not owned(booking)):abort(404)
         check()
         try:flash('Payment verified and recorded.' if verify(row) else 'Payment is not yet marked paid by SumUp.','success')

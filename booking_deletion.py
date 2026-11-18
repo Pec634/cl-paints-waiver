@@ -41,7 +41,8 @@ def register(app, db, Booking, admin_required):
 
     @app.context_processor
     def context():
-        if request.endpoint != 'admin_bookings' or not session.get('admin_authenticated'):
+        from staff_permissions import admin_session
+        if request.endpoint != 'admin_bookings' or not admin_session():
             return {}
         return dict(booking_deletion_blocker=blocker, booking_deletable_statuses=DELETABLE,
                     booking_delete_csrf=session.setdefault('client_csrf', secrets.token_urlsafe(32)))

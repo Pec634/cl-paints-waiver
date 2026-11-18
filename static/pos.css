@@ -197,14 +197,15 @@
   .pos-mobile-basket-ready .pos-waiver-results,.pos-main .pos-mobile-basket-ready .pos-history-list{max-height:none;overflow:visible}
   .pos-main .pos-mobile-basket-ready #pos-checkout{display:contents}
   .pos-mobile-basket-ready .pos-sale-options{display:block;margin-bottom:12px}
-  .pos-mobile-basket-ready .pos-payment-actions{position:sticky;bottom:0;z-index:3;box-sizing:border-box;padding:10px 0;background:white;border-top:1px solid #eedee6}
+  .pos-mobile-payment-dock{flex:0 0 auto;padding:6px 8px;background:white;border-top:1px solid #eedee6}
+  .pos-main .pos-mobile-payment-dock button{flex:1 1 0;min-width:0;min-height:44px;margin:0;padding:8px;font-size:.85rem;font-weight:750}
   .pos-mobile-basket-ready .pos-card-status{font-size:.8rem}
   .pos-mobile-basket-ready .pos-basket-customer button{font-size:.75rem}
   .pos-mobile-basket-ready #pos-clear-waiver:disabled{display:none}
   .pos-mobile-basket-ready .pos-library>p:first-of-type{font-size:.82rem;line-height:1.45;margin:8px 0}
   .pos-main .pos-mobile-basket-ready #pos-basket{max-height:none;overflow:visible;padding-right:0}
 }
-@media print{.pos-mobile-nav,.pos-mobile-customer{display:none!important}.pos-mobile-basket-ready .pos-popup-content,.pos-mobile-basket-ready .pos-till-layout,.pos-mobile-basket-ready .pos-browse{display:block;height:auto;overflow:visible;padding:0}.pos-main .pos-mobile-basket-ready .pos-sale-panel{position:static;width:auto;height:auto;overflow:visible;box-shadow:none}}
+@media print{.pos-mobile-nav,.pos-mobile-customer,.pos-mobile-payment-dock{display:none!important}.pos-mobile-basket-ready .pos-popup-content,.pos-mobile-basket-ready .pos-till-layout,.pos-mobile-basket-ready .pos-browse{display:block;height:auto;overflow:visible;padding:0}.pos-main .pos-mobile-basket-ready .pos-sale-panel{position:static;width:auto;height:auto;overflow:visible;box-shadow:none}}
 .pos-main #pos-card-pay.pos-card-ready{background:#10213f;box-shadow:0 0 0 2px #10213f22;font-weight:800;opacity:1}
 .pos-card-status{flex:1 1 100%;margin:8px 0;font-size:.85rem;line-height:1.5}
 .pos-card-setup{padding:12px;margin-top:12px;border:1px solid #ead39b;border-radius:10px;background:#fff8e8;font-size:.85rem}

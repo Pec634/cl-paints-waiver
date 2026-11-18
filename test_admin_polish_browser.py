@@ -1,4 +1,4 @@
-"""Check scrolling, section navigation and preservation of editable controls in Edge."""
+"""Check scrolling and preservation of editable controls in Edge."""
 import unittest
 from pathlib import Path
 import subprocess
@@ -36,14 +36,16 @@ class AdminPolishBrowserTest(unittest.TestCase):
         markup = ('''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
         <link rel="stylesheet" href="/static/styles.css">
         <link rel="stylesheet" href="/static/admin-workspace.css">
-        <link rel="stylesheet" href="/static/admin-polish.css"></head><body>
+        <link rel="stylesheet" href="/static/admin-polish.css">
+        <link rel="stylesheet" href="/static/admin-navigation.css"></head><body>
         <div class="admin"><aside>Tools</aside><main><header><h1>Management</h1></header>
         <section class="panel"><h2>Records</h2><table><thead><tr><th>Name</th><th>Details</th></tr></thead><tbody>'''
         + rows + '''</tbody></table></section>
         <section class="panel"><h2>Notes</h2><form><textarea name="notes">Saved notes</textarea><button>Save</button></form></section>
         <details class="panel settings-fold"><summary>Settings</summary><div class="settings-fold-body"><h2>Business details</h2><input name="business" value="CL Paints"></div></details>
         <section class="panel"><h2>History</h2><p>All records retained.</p></section></main></div>
-        <script src="/static/admin-polish.js" defer></script></body></html>''').encode()
+        <script src="/static/admin-polish.js" defer></script>
+        <script src="/static/admin-navigation.js" defer></script></body></html>''').encode()
         for width in (1280, 390):
             with self.subTest(width=width):
                 BrowserChecks.browser(self, markup, '''
@@ -53,9 +55,11 @@ class AdminPolishBrowserTest(unittest.TestCase):
                     assert(area.scrollTop > 0, 'table cannot be scrolled');
                     assert(area.tabIndex === 0 && area.getAttribute('aria-label'), 'scroll area is not keyboard accessible');
                     assert(document.querySelectorAll('tbody tr').length === 80, 'records lost');
-                    const menu = document.querySelector('.admin-section-menu select');
-                    menu.selectedIndex = 3; change(menu);
-                    assert(document.querySelector('details').open, 'section navigation failed to reveal settings');
+                    assert(!document.querySelector('.admin-section-menu'), 'section jump field is still visible');
+                    const back = document.querySelector('.admin-back-link');
+                    assert(back && back.getBoundingClientRect().height >= 44, 'Back button has no usable target');
+                    const backStyle = getComputedStyle(back);
+                    assert(backStyle.fontWeight === '800' && backStyle.backgroundColor === 'rgb(16, 33, 63)', 'Back button is missing its bold navy style');
                     assert(document.querySelector('input[name=business]').value === 'CL Paints', 'settings value changed');
                     assert(document.querySelector('textarea').form.querySelector('button'), 'form controls lost');
                     assert(document.documentElement.scrollWidth <= innerWidth, 'workspace overflows viewport');

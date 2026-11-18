@@ -197,7 +197,8 @@ def register(app, db, Read, Booking, Account, Waiver, Message, Request, Change, 
         if error.code == 500:
             db.session.rollback()
         account = current_client() if error.code != 500 and request.path.startswith('/client/') else None
-        admin = request.path.startswith('/admin/') and session.get('admin_authenticated')
+        # Presentation only: staff authorization has already run at the request boundary.
+        admin = request.path.startswith('/admin/') and (session.get('admin_authenticated') or session.get('pos_staff_id'))
         messages = {
             400: ('Please open a fresh form', 'This form may be out of date, or some information could not be accepted. Open the page again before retrying. Your last request may not have been saved.'),
             403: ('This page needs permission', 'Sign in with the account that owns this record, or contact CL Paints for help.'),

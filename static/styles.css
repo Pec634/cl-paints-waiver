@@ -2265,9 +2265,13 @@ label.moodboard-admin-card > div {
 .dashboard-stats a { display: block; min-width: 0; }
 .dashboard-stats article { height: 100%; transition: border-color .15s; }
 .dashboard-stats a:hover article { border-color: var(--pink); }
-.dashboard-stats small { display: block; margin-top: 12px; color: var(--pink); font-weight: 600; }
+.dashboard-stats article span { color: #46536b; }
+.dashboard-stats small { display: block; margin-top: 12px; color: #ad195a; font-weight: 600; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
 .dashboard-priority { margin-bottom: 20px; }
+@media (min-width: 1051px) {
+    .dashboard-grid.dashboard-priority { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+}
 .dashboard-grid .panel { margin: 0; }
 .dashboard-grid h2 { margin-top: 0; font-size: 1.25rem; }
 .dashboard-grid .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
@@ -2281,10 +2285,12 @@ label.moodboard-admin-card > div {
 .dashboard-tag { display: inline-block; background: var(--soft); color: #a51252; padding: 5px 9px; border-radius: 8px; font-size: .8rem; font-weight: 700; }
 .dashboard-tag-amber { background: #fff6de; color: #825600; }
 .dashboard-tag-green { background: #eafaf2; color: #12613e; white-space: nowrap; }
-.dashboard-quick { display: grid; gap: 12px; }
-.dashboard-quick h2, .dashboard-quick p { margin: 0; }
-.dashboard-quick .btn { min-height: 48px; align-items: center; }
-.dashboard-quick small, .dashboard-footnote { color: var(--muted); line-height: 1.5; }
+.dashboard-quick { width: fit-content; max-width: 100%; margin: 0 0 20px; }
+.dashboard-quick summary { width: fit-content; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--navy); font-weight: 800; cursor: pointer; }
+.dashboard-main .dashboard-quick nav { margin: 6px 0 0; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.dashboard-main .dashboard-quick nav a { color: var(--navy); }
+.dashboard-main .dashboard-quick nav a:hover { background: var(--soft); }
+.dashboard-footnote { color: var(--muted); line-height: 1.5; }
 .dashboard-upcoming { grid-column: 1 / -1; }
 .dashboard-calendar { flex: 0 0 80px; text-align: center; padding: 12px 8px; background: var(--bg); border-radius: 12px; }
 .dashboard-calendar strong { display: block; font-size: 1.6rem; }

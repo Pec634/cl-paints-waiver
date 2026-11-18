@@ -65,6 +65,11 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 def admin_required(view_function):
     @wraps(view_function)
     def wrapped_view(*args, **kwargs):
+        if session.get('pos_staff_id'):
+            access=app.extensions.get('pos_access')
+            if not access:abort(403)
+            denied=access.authorize()
+            return denied if denied is not None else view_function(*args, **kwargs)
         if not session.get("admin_authenticated"):
             if request.headers.get('Accept') == 'application/json':
                 return {'error':'Your admin session has ended. Sign in again, then retry.'}, 401
@@ -1409,6 +1414,11 @@ info@clpaints.com
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
+    return app.view_functions['pos_staff_login']()
+
+
+@app.route("/admin/owner-login", methods=["GET", "POST"])
+def admin_owner_login():
     error = 'Your admin session expired after 30 minutes without activity. Please sign in again.' if request.args.get('expired') else None
     token = session.setdefault('admin_login_csrf', secrets.token_urlsafe(32))
     credential = AdminCredential.query.order_by(AdminCredential.id.asc()).first()
@@ -1564,7 +1574,7 @@ def admin_password_reset(token):
             ).update({AdminPasswordReset.used_at: now})
             db.session.commit()
             session.clear()
-            return redirect(url_for("admin_login", reset="success"))
+            return redirect(url_for("admin_owner_login", reset="success"))
 
     return render_template(
         "admin_password_reset.html",
@@ -1770,7 +1780,8 @@ def send_booking_request_confirmation(booking):
 @app.route("/booking", methods=["GET", "POST"])
 def booking_request():
     from booking_edit import version as booking_version
-    on_behalf = request.endpoint == 'admin_booking_on_behalf' and bool(session.get('admin_authenticated'))
+    from staff_permissions import admin_session
+    on_behalf = request.endpoint == 'admin_booking_on_behalf' and admin_session()
     editing_booking = None
     if request.endpoint == 'client_edit_booking':
         account = get_current_client()

@@ -62,14 +62,14 @@ def register(app,db,models,send_email,email_address):
     def admin_verify():
         item=db.session.get(Challenge,session.get('admin_challenge')) if session.get('admin_challenge') else None
         if not item or item.consumed or item.expires_at<=datetime.utcnow() or item.attempts>=5:
-            session.pop('admin_challenge',None);return redirect(url_for('admin_login'))
+            session.pop('admin_challenge',None);return redirect(url_for('admin_owner_login'))
         token=session.setdefault('admin_verify_csrf',secrets.token_urlsafe(32));error=None
         if request.method=='POST':
             if not secrets.compare_digest(token,request.form.get('csrf_token','')):abort(400)
             code=request.form.get('code','').strip()
             claimed=Challenge.query.filter(Challenge.id==item.id,Challenge.consumed.is_(False),Challenge.attempts<5,Challenge.expires_at>datetime.utcnow()).update({'attempts':Challenge.attempts+1},synchronize_session=False)
             db.session.commit()
-            if not claimed:return redirect(url_for('admin_login'))
+            if not claimed:return redirect(url_for('admin_owner_login'))
             if secrets.compare_digest(item.digest,hashlib.sha256((item.id+':'+code).encode()).hexdigest()):
                 claimed=Challenge.query.filter_by(id=item.id,consumed=False).update({'consumed':True},synchronize_session=False);db.session.commit()
                 if claimed:

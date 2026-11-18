@@ -73,7 +73,8 @@ def register(app, db, Document, Invoice, Booking, Account, admin_required, curre
             response.headers['Cache-Control'] = 'private, no-store'
             response.headers['X-Content-Type-Options'] = 'nosniff'
             return response
-        if session.get('admin_authenticated'):
+        from staff_permissions import admin_session
+        if admin_session():
             return admin_required(download)()
         account = current_client()
         if not account or booking.email.strip().casefold() != account.email.strip().casefold():

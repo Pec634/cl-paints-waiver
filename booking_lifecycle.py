@@ -73,6 +73,9 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
 
     def actor():
         if has_request_context():
+            if session.get('pos_staff_id') and request.path.startswith('/admin'):
+                access=app.extensions.get('pos_access')
+                if access and access.allowed(request.endpoint):return access.actor(), 'staff'
             if request.path.startswith('/admin') and session.get('admin_authenticated'):
                 return admin_email or 'CL Paints admin', 'admin'
             account = current_client()

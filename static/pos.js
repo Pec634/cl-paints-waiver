@@ -159,7 +159,9 @@
       button.setAttribute('aria-label', `${button.dataset.productName}, £${button.dataset.productPrice}${count ? `, ${count} in basket` : ''}`);
     });
     document.dispatchEvent(new CustomEvent('pos-basket-updated', {detail:{waiver:waiver?.label || ''}}));
-    get('pos-checkout').querySelectorAll('button').forEach(button => { button.disabled = !items.length || total > 9999999 || button.dataset.unconfigured === 'true'; });
+    for (const control of get('pos-checkout').elements) {
+      if (control.tagName === 'BUTTON') control.disabled = !items.length || total > 9999999 || control.dataset.unconfigured === 'true';
+    }
     const card=get('pos-card-pay');
     if(card){
       card.classList.toggle('pos-card-ready',!card.disabled);
@@ -373,10 +375,20 @@
     const eventField = get('pos-loyalty-event');
     if (eventField) {
       eventField.required = !!document.querySelector('input[name=loyalty_participant_id]:checked');
-      if (!eventField.checkValidity()) { get('pos-sale-options').open = true; eventField.reportValidity(); event.preventDefault(); return; }
+      if (!eventField.checkValidity()) {
+        event.preventDefault();
+        document.dispatchEvent(new Event('pos-basket-open'));
+        get('pos-sale-options').open = true;
+        eventField.reportValidity();
+        return;
+      }
     }
     if (get('pos-receipt-requested').checked && !get('pos-receipt-email').checkValidity()) {
-      get('pos-sale-options').open = true; get('pos-receipt-email').reportValidity(); event.preventDefault(); return;
+      event.preventDefault();
+      document.dispatchEvent(new Event('pos-basket-open'));
+      get('pos-sale-options').open = true;
+      get('pos-receipt-email').reportValidity();
+      return;
     }
     if (event.submitter?.value === 'Cash') {
       updateCash();

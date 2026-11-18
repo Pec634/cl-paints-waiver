@@ -18,6 +18,13 @@ def admin_required(view):
     from flask import session
     @wraps(view)
     def wrapped(*args, **kwargs):
+        if session.get('pos_staff_id'):
+            access=current_app.extensions.get('pos_access')
+            if not access:
+                from flask import abort
+                abort(403)
+            denied=access.authorize()
+            return denied if denied is not None else view(*args, **kwargs)
         if not session.get("admin_authenticated"):
             return redirect(url_for("admin_login"))
         return view(*args, **kwargs)

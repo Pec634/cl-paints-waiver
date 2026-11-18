@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block title %}Staff workspace | CL Paints{% endblock %}
+{% block body %}<link rel="stylesheet" href="{{ url_for('static',filename='staff-permissions.css') }}"><div class="admin">{% include '_admin_sidebar.html' %}<main id="portal-main"><h1>{{ staff_actor }}'s workspace</h1><p>Choose an area your administrator has enabled for you.</p>
+<div class="staff-area-grid">{% for area in areas %}<a class="panel staff-area-card" href="{{ area.url }}"><h2>{{ area.label }}</h2><p>{{ area.description }}</p></a>{% else %}<section class="panel"><h2>No areas assigned</h2><p>Ask your administrator to enable the portal areas you need.</p></section>{% endfor %}</div>
+</main></div>{% endblock %}

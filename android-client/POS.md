@@ -84,11 +84,24 @@ There is no receipt printer integration, offline queue or Play Store release yet
 
 Restart the server after deploying these changes to create the staff, held-basket
 and reconciliation tables and upgrade existing sale/refund/product columns. No
-default staff PINs are created. Sign in as the portal administrator, open
-**Staff** in the till header, and create named cashier/manager accounts. Allocate a PIN to each staff member, including accounts created before PIN sign-in was added. Staff can
-use `/admin/pos/staff/login`; their accounts grant POS access, not wider portal
-administration. Each staff member signs in with their own unique PIN, with no minimum length. PINs are hashed, repeated failed sign-ins are throttled,
-and disabled accounts lose access on their next request.
+default staff PINs are created. Sign in as the portal administrator and open
+**Staff accounts & permissions** in the admin menu (also under Tools > Staff
+in the till). Create a named account, allocate its unique PIN and tick its allowed
+portal areas. Existing accounts are expandable for editing. An enabled account
+with no selected areas can sign in but cannot open portal tools. Till management
+also grants point of sale; other areas are independent. Client profiles include
+linked client history, as stated beside that permission. Owner settings, backups,
+staff management and cross-portal search remain administrator-only.
+
+Staff use `/admin/staff/login` or the existing `/admin/pos/staff/login`. Their
+workspace, sidebar and phone menu show only their assigned areas. Till-only
+cashiers still land directly in the till. Server checks protect GET, POST, JSON
+requests and private attachments; permission edits and disabled accounts take
+effect on the next request. Existing cashier/manager accounts retain only their
+previous till permissions until edited. PINs still have no minimum length, are
+hashed and unique, and repeated failures are throttled. Staff expire after 30
+minutes idle or eight hours signed in. No administrator session is granted by a
+staff PIN. The Android app's Admin tab opens their permitted workspace.
 
 Use **Hold / resume baskets** to save a named basket while serving another customer.
 Items, waiver selection, receipt preference and selected events are retained in

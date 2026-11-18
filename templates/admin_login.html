@@ -12,9 +12,9 @@ Admin Login | CL Paints
         <div class="login-heading">
             <div class="login-logo-wrap"><img class="login-logo" src="{{ url_for('static', filename='cl-paints-logo.jpg') }}" alt="CL Paints — Professional Face Painting" width="156" height="156" fetchpriority="high"></div>
             <small>CL PAINTS MANAGEMENT SYSTEM</small>
-            <h1>Admin Login</h1>
+            <h1>Owner sign-in</h1>
             <p>Enter your administrator password to continue.</p>
-            <p><a href="{{ url_for('pos_staff_login') }}">Staff till sign-in</a></p>
+            <p><a href="{{ url_for('admin_login') }}">Staff PIN sign-in</a></p>
         </div>
 
         {% if error %}

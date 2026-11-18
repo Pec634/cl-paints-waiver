@@ -21,10 +21,12 @@
     history.replaceState({ ...history.state, [stateKey]: trail }, '');
   } catch { /* Navigation still works if browser storage is unavailable. */ }
 
+  const staffWorkspace = document.querySelector('[data-staff-workspace]');
+  if (staffWorkspace) trail=[];
   const back = document.createElement('a');
   back.className = 'btn admin-back-link';
-  back.href = trail.at(-1) || '/admin/bookings';
-  back.textContent = trail.length ? '← Back to previous page' : '← Back to bookings';
+  back.href = staffWorkspace?.getAttribute('href') || trail.at(-1) || '/admin/bookings';
+  back.textContent = staffWorkspace ? '← My workspace' : trail.length ? '← Back to previous page' : '← Back to bookings';
   const navigation = document.createElement('nav');
   navigation.className = 'admin-page-navigation';
   navigation.setAttribute('aria-label', 'Return navigation');

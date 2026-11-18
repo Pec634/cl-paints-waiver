@@ -34,7 +34,8 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
 
     @app.context_processor
     def context():
-        if request.endpoint == 'admin_bookings' and session.get('admin_authenticated'):
+        from staff_permissions import admin_session
+        if request.endpoint == 'admin_bookings' and admin_session():
             return dict(booking_requests=Request.query.filter_by(status='Pending').order_by(Request.created_at).all())
         if request.endpoint == 'client.booking_detail':
             account = current_client()

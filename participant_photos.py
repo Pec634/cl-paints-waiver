@@ -158,7 +158,8 @@ def register(app, db, Photo, Participant, Account, Custodian, current_client, ad
         def response():
             return private(send_file(BytesIO(photo.content), mimetype='image/jpeg', conditional=False,
                                      download_name='participant-photo.jpg', max_age=0))
-        if session.get('admin_authenticated'):
+        from staff_permissions import admin_session
+        if admin_session():
             return admin_required(response)()
         else:
             _, owner = client_person(photo.participant_id)

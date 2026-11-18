@@ -9,6 +9,10 @@
   const waivers=popup.querySelector('.pos-waiver-panel');
   const history=document.getElementById('pos-history');
   const options=document.getElementById('pos-sale-options');
+  const paymentActions=panel.querySelector('.pos-payment-actions');
+  const cardStatus=document.getElementById('pos-card-status');
+  const paymentDock=document.createElement('div');
+  paymentDock.className='pos-mobile-payment-dock';
   waivers.id='pos-waiver-panel';panel.id='pos-basket-panel';
   const nav=document.createElement('nav');
   nav.className='pos-mobile-nav';nav.setAttribute('aria-label','Till views');
@@ -27,7 +31,7 @@
   customer.className='pos-mobile-customer';customer.textContent='Add a waiver / customer';
   customer.addEventListener('click',()=>document.getElementById('pos-change-waiver').click());
   library.insertBefore(customer,library.firstChild);
-  popup.append(nav);
+  popup.append(paymentDock,nav);
   let view=document.getElementById('pos-cash-receipt')?'basket':history.open?'history':document.getElementById('pos-query').value?'waivers':'items';
   let wasMobile=false;
   const scrolls={items:0,waivers:0,history:0};
@@ -35,6 +39,9 @@
     popup.classList.toggle('pos-mobile-basket-ready',mobile.matches);
     popup.dataset.mobileView=view;
     nav.hidden=!mobile.matches;buttons.basket.hidden=!mobile.matches;
+    if(mobile.matches && paymentActions.parentElement!==paymentDock)paymentDock.append(paymentActions);
+    if(!mobile.matches && paymentActions.parentElement===paymentDock)cardStatus.before(paymentActions);
+    paymentDock.hidden=!mobile.matches || (view!=='items' && view!=='basket');
     for(const [name,pane] of Object.entries(panes))pane.classList.toggle('pos-mobile-pane-hidden',mobile.matches && view!==name);
     panel.hidden=mobile.matches && view!=='basket';
     browse.inert=mobile.matches && view==='basket';

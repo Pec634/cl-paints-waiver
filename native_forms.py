@@ -128,7 +128,8 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     def native_form_image(image_id):
         image=db.get_or_404(db._native_form_image,image_id)
         source=url_for('native_form_image',image_id=image.id)
-        admin=session.get('admin_authenticated') and datetime.utcnow().timestamp()-session.get('admin_last_activity',0)<1800
+        from staff_permissions import admin_session
+        admin=admin_session() and (session.get('pos_staff_id') or datetime.utcnow().timestamp()-session.get('admin_last_activity',0)<1800)
         if not admin:
             referenced=False
             for form in Form.query.filter_by(enabled=True).all():
@@ -433,7 +434,8 @@ def register(app,db,models,Account,Booking,current_client,admin_required,send_em
     @app.get('/form-media/<int:media_id>')
     def native_media(media_id):
         media=db.get_or_404(Media,media_id);item=db.session.get(Submission,media.submission_id);account=current_client()
-        if not session.get('admin_authenticated') and (not account or account.id!=item.client_id):abort(404)
+        from staff_permissions import admin_session
+        if not admin_session() and (not account or account.id!=item.client_id):abort(404)
         if session.get('admin_authenticated'):
             last=session.get('admin_last_activity',datetime.utcnow().timestamp())
             if datetime.utcnow().timestamp()-last>1800:abort(403)

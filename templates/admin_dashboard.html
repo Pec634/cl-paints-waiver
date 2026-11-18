@@ -5,11 +5,30 @@
     {% include '_admin_sidebar.html' %}
     <main class="dashboard-main">
         <header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Dashboard</h1><p>Your daily overview, with the next steps ready to hand.</p></div><div class="dashboard-date"><span id="dashboardDate">{{ today.strftime('%A, %d %B %Y') }}</span><time id="dashboardClock" aria-label="Current UK time"></time></div></header>
+        <details class="dashboard-quick">
+            <summary>Quick actions</summary>
+            <nav aria-label="Quick actions">
+                <a href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form &nearr;</a>
+                <a href="{{ url_for('admin_events') }}">Open an event's waiver form</a>
+                <a href="{{ url_for('rewards.create_referral') }}">Create referral code</a>
+                <a href="{{ url_for('admin_clients') }}">Find a client</a>
+                <a href="{{ url_for('creates_shop', return_to=request.full_path.rstrip('?')) }}">Create a headband order</a>
+                <a href="{{ url_for('admin_website_builder') }}">Edit website</a>
+                <a href="{{ url_for('payments_overview') }}">Payments &amp; invoices</a>
+            </nav>
+        </details>
+        <section class="stats dashboard-stats" aria-label="Overview">
+            <a href="{{ url_for('admin_clients') }}"><article><span>Client accounts</span><strong>{{ client_signup_count }}</strong><small>{{ client_signup_month_count }} this month · View clients →</small></article></a>
+            <a href="{{ url_for('admin_bookings') }}"><article><span>Bookings awaiting review</span><strong>{{ pending_count }}</strong><small>Review client requests →</small></article></a>
+            <a href="{{ url_for('admin_events') }}"><article><span>Upcoming events</span><strong>{{ upcoming_event_count }}</strong><small>Open events from today →</small></article></a>
+            <a href="{{ url_for('admin_participants') }}"><article><span>Valid waivers</span><strong>{{ valid_waiver_count }}</strong><small>View participant records →</small></article></a>
+            <a href="{{ url_for('rewards.dashboard', section='earned') }}"><article><span>Rewards available</span><strong>{{ reward_count }}</strong><small>View earned rewards →</small></article></a>
+        </section>
         <nav class="workspace-shortcuts" aria-label="Daily priorities"><a href="{{ url_for('admin_bookings', filter='review') }}"><strong>Review bookings</strong><span>{{ pending_count }} awaiting a decision</span></a><a href="{{ url_for('payments_overview', filter='outstanding') }}"><strong>Payments &amp; balances</strong><span>£{{ '{:,.2f}'.format(confirmed_outstanding) }} outstanding on accepted bookings</span></a><a href="{{ url_for('event_day_dashboard') }}"><strong>Today's events</strong><span>Check-in, waiver kiosk and loyalty tools</span></a><a href="{{ url_for('admin_reports', view='targets') }}"><strong>Company targets</strong><span>Financial-year progress and comparisons</span></a></nav>
-        {% include '_daily_operations.html' %}
         <div class="dashboard-grid dashboard-priority">
-            <section class="panel dashboard-attention dashboard-upcoming">
-                <div class="panel-heading"><div><h2>Needs attention</h2><p>Booking reviews, unread messages, website enquiries, payments due and waivers expiring within 30 days.</p></div><span class="dashboard-count">{{ pending_count + expiring_count + portal_next_steps_total + website_enquiry_new_count + creates_attention_count }}</span></div>
+            {% include '_daily_operations.html' %}
+            <section class="panel dashboard-scroll-panel" tabindex="0" aria-labelledby="dashboard-attention-title">
+                <div class="panel-heading"><div><h2 id="dashboard-attention-title">Needs attention</h2><p>Booking reviews, unread messages, website enquiries, payments due and waivers expiring within 30 days.</p></div><span class="dashboard-count">{{ pending_count + expiring_count + portal_next_steps_total + website_enquiry_new_count + creates_attention_count }}</span></div>
                 {% if website_enquiry_new_count %}<a class="dashboard-item" href="{{ url_for('communications_public_enquiries',state='new') }}"><div><span class="dashboard-tag dashboard-tag-amber">Website enquiries</span><h3>{{ website_enquiry_new_count }} new public messages</h3><p>Read and reply to messages from the Contact us form.</p></div><span aria-hidden="true">&rarr;</span></a>{% endif %}
                 {% for order in creates_attention %}<a class="dashboard-item" href="{{ url_for('creates_order',order_id=order.id) }}"><div><span class="dashboard-tag">CL Creates &middot; {{ order.status }}</span><h3>{{ order.number }} &middot; {{ order.first_name }} {{ order.last_name }}</h3><p>{{ next_order_action(order) }}</p></div><span aria-hidden="true">&rarr;</span></a>{% endfor %}
                 {% if creates_attention_count > 5 %}<p><a href="{{ url_for('creates_admin') }}">View all {{ creates_attention_count }} active CL Creates orders</a></p>{% endif %}
@@ -25,13 +44,17 @@
                 {% if pending_count > 5 or expiring_count > 5 %}<p class="dashboard-footnote">Showing the first five items in each group. Open Bookings or Participants to see all records.</p>{% endif %}
             </section>
         </div>
-        <section class="stats dashboard-stats" aria-label="Overview">
-            <a href="{{ url_for('admin_clients') }}"><article><span>Client accounts</span><strong>{{ client_signup_count }}</strong><small>{{ client_signup_month_count }} this month · View clients →</small></article></a>
-            <a href="{{ url_for('admin_bookings') }}"><article><span>Bookings awaiting review</span><strong>{{ pending_count }}</strong><small>Review client requests →</small></article></a>
-            <a href="{{ url_for('admin_events') }}"><article><span>Upcoming events</span><strong>{{ upcoming_event_count }}</strong><small>Open events from today →</small></article></a>
-            <a href="{{ url_for('admin_participants') }}"><article><span>Valid waivers</span><strong>{{ valid_waiver_count }}</strong><small>View participant records →</small></article></a>
-            <a href="{{ url_for('rewards.dashboard', section='earned') }}"><article><span>Rewards available</span><strong>{{ reward_count }}</strong><small>View earned rewards →</small></article></a>
-        </section>
+        <div class="dashboard-grid dashboard-priority">
+            <section class="panel dashboard-upcoming">
+                <div class="panel-heading"><div><h2>Upcoming bookings</h2><p>The next five accepted booking dates.</p></div><a class="btn" href="{{ url_for('admin_bookings') }}">View all bookings</a></div>
+                {% for item in upcoming_bookings %}
+                <a class="dashboard-item dashboard-booking" href="{{ url_for('admin_bookings') }}#booking-{{ item.booking.id }}">
+                    <div class="dashboard-calendar"><strong>{{ item.date.strftime('%d') }}</strong><span>{{ item.date.strftime('%b %Y') }}</span></div>
+                    <div class="dashboard-booking-info"><h3>{{ item.booking.first_name }} {{ item.booking.last_name }}</h3><p>{{ item.event.event_type }} · {{ item.event.start_time }}–{{ item.event.finish_time }}</p><p>{{ item.event.event_address }}</p></div><span class="dashboard-tag dashboard-tag-green">Accepted</span>
+                </a>
+                {% else %}<div class="dashboard-empty"><h3>No upcoming bookings yet.</h3><p>Accepted bookings will appear here with their dates and venues.</p><a class="btn" href="{{ url_for('admin_bookings') }}">Review bookings</a></div>{% endfor %}
+            </section>
+        </div>
         <div class="dashboard-grid">
             <section class="panel dashboard-upcoming dashboard-tools-panel"><details class="dashboard-tools-folder"><summary><span aria-hidden="true">📁</span> Business tools <span class="dashboard-folder-hint">Tap to open or close</span></summary><div class="panel-heading"><div><h2>Business tools</h2><p>Manage your diary, payments and event tools.</p></div></div><div class="dashboard-tools">
                 <a class="dashboard-tool" href="{{ url_for('admin_calendar') }}"><strong>Availability calendar</strong><span>Check bookings, overlaps and unavailable time.</span></a>
@@ -61,22 +84,6 @@
                 {% for enquiry, client in recent_correspondence %}
                 <a class="dashboard-item" href="{{ url_for('communications_messages', view='enquiries', q=client.email) }}"><div><span class="dashboard-tag">Client enquiry</span><h3>{{ enquiry.subject }}</h3><p>{{ client.first_name }} {{ client.last_name }} · {{ client.email }} · {{ enquiry.created_at.strftime('%d/%m/%Y %H:%M') }}</p><p>{{ enquiry.message|truncate(160, true) }}</p></div><span aria-hidden="true">→</span></a>
                 {% else %}<div class="dashboard-empty"><p>No client correspondence yet. Messages sent through the client portal will appear here.</p></div>{% endfor %}
-            </section>
-            <section class="panel dashboard-quick">
-                <h2>Quick actions</h2><p>Go straight to the tools you use most.</p>
-                <a class="btn primary" href="{{ url_for('booking_request') }}" target="_blank" rel="noopener">Open booking form ↗</a>
-                <a class="btn" href="{{ url_for('admin_events') }}">Open an event's waiver form →</a>
-                <a class="btn" href="{{ url_for('rewards.create_referral') }}">Create referral code →</a>
-                <small>Select the event to open its customer waiver link.</small>
-            </section>
-            <section class="panel dashboard-upcoming">
-                <div class="panel-heading"><div><h2>Upcoming bookings</h2><p>The next five accepted booking dates.</p></div><a class="btn" href="{{ url_for('admin_bookings') }}">View all bookings</a></div>
-                {% for item in upcoming_bookings %}
-                <a class="dashboard-item dashboard-booking" href="{{ url_for('admin_bookings') }}#booking-{{ item.booking.id }}">
-                    <div class="dashboard-calendar"><strong>{{ item.date.strftime('%d') }}</strong><span>{{ item.date.strftime('%b %Y') }}</span></div>
-                    <div class="dashboard-booking-info"><h3>{{ item.booking.first_name }} {{ item.booking.last_name }}</h3><p>{{ item.event.event_type }} · {{ item.event.start_time }}–{{ item.event.finish_time }}</p><p>{{ item.event.event_address }}</p></div><span class="dashboard-tag dashboard-tag-green">Accepted</span>
-                </a>
-                {% else %}<div class="dashboard-empty"><h3>No upcoming bookings yet.</h3><p>Accepted bookings will appear here with their dates and venues.</p><a class="btn" href="{{ url_for('admin_bookings') }}">Review bookings</a></div>{% endfor %}
             </section>
         </div>
     </main>

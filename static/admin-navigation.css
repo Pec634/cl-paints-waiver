@@ -1,2 +1,23 @@
-.admin-page-navigation { margin: 0 0 18px; }
-.admin-page-navigation .admin-back-link { display: inline-flex; align-items: center; min-height: 44px; }
+.admin nav.admin-page-navigation { margin: 0 0 18px; }
+
+.admin-page-navigation .admin-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: 2px solid var(--pink);
+  background: var(--navy);
+  color: #fff;
+  font-weight: 800;
+}
+
+.admin-page-navigation .admin-back-link:hover {
+  background: var(--soft);
+  color: var(--navy);
+}
+
+.admin-page-navigation .admin-back-link:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 3px;
+}

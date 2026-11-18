@@ -81,8 +81,8 @@
           {% else %}<p>No open public events today. This sale will not award loyalty points.</p>{% endif %}
         </fieldset>{% endif %}
         <div class="pos-receipt-option"><label class="pos-receipt-check"><input type="checkbox" id="pos-receipt-requested" name="receipt_requested" value="1" aria-controls="pos-receipt-fields"> Customer wants an email receipt</label><div id="pos-receipt-fields" hidden><label for="pos-receipt-email">Send receipt to</label><input id="pos-receipt-email" name="receipt_email" type="email" maxlength="320" autocomplete="email" placeholder="customer@example.com" disabled><small>Sent automatically after successful payment. Confirm the address with the customer.</small></div></div>
-        </details><div class="pos-payment-actions"><button type="button" id="pos-cash-open" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
-        <button id="pos-card-pay" name="method" value="Card" aria-describedby="pos-card-status" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button></div>
+        </details><div class="pos-payment-actions"><button type="button" id="pos-cash-open" form="pos-checkout" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
+        <button id="pos-card-pay" form="pos-checkout" name="method" value="Card" aria-describedby="pos-card-status" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button></div>
         <p id="pos-card-status" class="pos-card-status" role="status">{{ 'Add an item to enable card payment.' if configured else 'Card payment unavailable: SumUp setup is incomplete on the website server.' }}</p>
         <div id="pos-cash-panel" hidden>
           <label for="pos-cash-tender">Cash received (£)</label><input id="pos-cash-tender" name="cash_tender" type="number" min="0.01" max="999999.99" step="0.01" inputmode="decimal" disabled aria-describedby="pos-cash-change">

@@ -39,10 +39,8 @@
 .admin main [data-admin-scroll] { max-height: 65vh; overflow: auto; scrollbar-gutter: stable; }
 .admin main pre { max-height: 360px; max-width: 100%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .admin .settings-fold-body { max-height: 72vh; overflow: auto; scrollbar-gutter: stable; }
-.admin .dashboard-attention { max-height: 720px; overflow-y: auto; scrollbar-gutter: stable; }
-.admin .admin-section-menu { display: flex; margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: white; }
-.admin .admin-section-menu label { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: .85rem; font-weight: 700; width: 100%; }
-.admin .admin-section-menu select { flex: 1 1 220px; max-width: 520px; padding: 9px 12px; background: #f8faff; border: 1px solid var(--border); color: var(--text); }
+.admin .dashboard-scroll-panel { max-height: min(720px, 65dvh); overflow-y: auto; scrollbar-gutter: stable; }
+.admin .dashboard-scroll-panel:focus-visible { outline: 3px solid var(--pink); outline-offset: 3px; }
 .admin > aside { scrollbar-width: thin; scrollbar-color: #8290a8 #10213f; }
 .admin .admin-favourites > div { max-height: 240px; overflow-y: auto; }
 #admin-quick-actions { max-height: 85vh; overflow-y: auto; }
@@ -54,12 +52,9 @@
   .admin main .settings-grid { grid-template-columns: minmax(0, 1fr); }
   .admin main :is(.table-wrap, .admin-table-scroll) { max-height: 65vh; }
   .admin .settings-fold-body { max-height: none; overflow: visible; }
-  .admin .dashboard-attention { max-height: none; overflow: visible; }
-  .admin .admin-section-menu select { max-width: 100%; width: 100%; }
 }
 @media print {
-  .admin .admin-section-menu { display: none; }
-  .admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap, .settings-fold-body, .dashboard-attention, pre, [data-admin-scroll]) { max-height: none; overflow: visible; }
+  .admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap, .settings-fold-body, .dashboard-scroll-panel, pre, [data-admin-scroll]) { max-height: none; overflow: visible; }
   .admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap) th { position: static; }
   .admin main textarea { max-height: none; }
 }

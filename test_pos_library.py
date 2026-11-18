@@ -325,10 +325,21 @@ class PosLibraryTest(unittest.TestCase):
                 BrowserChecks.browser(self,page.data,'''
                     const card=document.getElementById('pos-card-pay');
                     assert(card.disabled,'empty basket can start card payment');
+                    assert(card.closest('.pos-mobile-payment-dock'),'card button missing from the mobile items screen');
                     document.querySelector('[data-product-id]').click();
                     assert(card.disabled===EXPECTED_DISABLED,'card availability ignores server setup');
                     assert(card.classList.contains('pos-card-ready')===!EXPECTED_DISABLED,'ready card button not highlighted');
                     assert(document.getElementById('pos-card-status').textContent.includes(EXPECTED_DISABLED?'incomplete':'ready'),'card readiness explanation missing');
+                    if (!EXPECTED_DISABLED) {
+                        let method;
+                        const form=document.getElementById('pos-checkout');
+                        form.addEventListener('submit', event=>{
+                            event.preventDefault();
+                            method=new FormData(form,event.submitter).get('method');
+                        },{once:true});
+                        card.click();
+                        assert(method==='Card','mobile card button did not submit the normal checkout');
+                    }
                 '''.replace('EXPECTED_DISABLED','false' if configured else 'true'),width=390)
 
     @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
@@ -350,9 +361,15 @@ class PosLibraryTest(unittest.TestCase):
                     assert(document.getElementById('pos-mobile-basket-total').textContent.includes('7.50'),'pinned total did not update');
                     const marker=document.createElement('div');marker.style.height='1500px';browse.append(marker);
                     const tabTop=toggle.getBoundingClientRect().top;
+                    const cash=document.getElementById('pos-cash-open');
+                    const cashTop=cash.getBoundingClientRect().top;
+                    assert(!cash.disabled && cashTop>library.top && cash.getBoundingClientRect().bottom<=tabTop,'cash is not reachable while adding items');
                     browse.scrollTop=browse.scrollHeight;
                     assert(browse.scrollTop>0 && Math.abs(toggle.getBoundingClientRect().top-tabTop)<1,'basket tab moves when browsing');
-                    toggle.click();
+                    assert(cash.getBoundingClientRect().top===cashTop,'payment button moves when browsing');
+                    cash.click();
+                    assert(document.activeElement===document.getElementById('pos-cash-tender'),'cash button did not open tender directly');
+                    document.getElementById('pos-cash-cancel').click();
                     assert(!panel.hidden && browse.inert && toggle.getAttribute('aria-expanded')==='true','basket view did not open');
                     const rect=panel.getBoundingClientRect();
                     assert(rect.left>=0 && rect.right<=innerWidth && rect.top>=0 && rect.bottom<=innerHeight,'basket extends off screen');

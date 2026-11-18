@@ -225,7 +225,8 @@ def register(app, db, models, Account, Booking, current_client, admin_required, 
     @app.get('/form-files/<int:file_id>')
     def native_field_file(file_id):
         file = db.get_or_404(FieldFile, file_id)
-        admin = session.get('admin_authenticated') and datetime.utcnow().timestamp()-session.get('admin_last_activity',0)<1800
+        from staff_permissions import admin_session
+        admin = admin_session() and (session.get('pos_staff_id') or datetime.utcnow().timestamp()-session.get('admin_last_activity',0)<1800)
         if not admin:
             account = current_client()
             if not account: abort(404)

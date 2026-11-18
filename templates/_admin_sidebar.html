@@ -6,18 +6,27 @@
         <p id="admin-tool-search-status" role="status" aria-live="polite"></p>
     </div>
     <nav id="admin-tool-navigation" aria-label="Admin navigation">
-        <a href="{{ url_for('admin_dashboard') }}" {% if request.endpoint == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
-        <a href="{{ url_for('pos_home') }}" {% if (request.endpoint or '').startswith('pos_') %}class="active" aria-current="page"{% endif %}>Point of sale &amp; waiver search</a>
-        <a href="{{ url_for('creates_admin') }}" {% if (request.endpoint or '').startswith('creates_') %}class="active"{% endif %}>CL Creates</a>
-        {% if (request.endpoint or '').startswith('creates_') %}<a href="{{ url_for('admin_dashboard') }}">&larr; Back to admin portal</a>{% endif %}
-        <hr class="admin-nav-divider">
         {% set current = request.endpoint or '' %}
+        {% if staff_portal %}
+        <a data-staff-workspace href="{{ url_for('staff_portal_home') }}" {% if current == 'staff_portal_home' %}class="active" aria-current="page"{% endif %}>My workspace</a>
+        {% else %}
+        <a href="{{ url_for('admin_dashboard') }}" {% if current == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
+        <a href="{{ url_for('pos_staff_manage') }}" {% if current == 'pos_staff_manage' %}class="active" aria-current="page"{% endif %}>Staff accounts &amp; permissions</a>
+        {% endif %}
+        {% if not staff_portal or staff_can('pos_home') %}
+        <a href="{{ url_for('pos_home') }}" {% if current.startswith('pos_') and current not in ['pos_staff_manage', 'pos_reconcile'] %}class="active" aria-current="page"{% endif %}>Point of sale &amp; waiver search</a>
+        {% endif %}
+        {% if not staff_portal or staff_can('creates_admin') %}
+        <a href="{{ url_for('creates_admin') }}" {% if current.startswith('creates_') %}class="active" aria-current="page"{% endif %}>CL Creates</a>
+        {% endif %}
+        <hr class="admin-nav-divider">
         {% for endpoint, label, active in [
             ('admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages']),
             ('admin_calendar', 'Availability calendar', current == 'admin_calendar'),
             ('forms_offers', 'Booking forms & offers', current == 'forms_offers'),
             ('connecteam_rota', 'Staff rota', current == 'connecteam_rota'),
             ('admin_staff_timesheets', 'Staff clocking & timesheets', current in ['admin_staff_timesheets','admin_staff_timesheet_edit']),
+            ('staff_reports', 'Staff reports', current == 'staff_reports' or current.startswith('staff_report_')),
             ('admin_events', 'Public events & QR codes', current in ['admin_events', 'loyalty.event_admin', 'loyalty.printable', 'admin_event_moodboard_print']),
             ('admin_moodboard', 'Event moodboards', current in ['admin_moodboard', 'admin_event_moodboard']),
             ('event_day_dashboard', 'Event-day tools', current in ['event_day_dashboard','kiosk_setup']),
@@ -37,6 +46,7 @@
             ('admin_photo_library', 'Photo library', current == 'admin_photo_library'),
             ('admin_reports', 'Business reports', current == 'admin_reports'),
             ('admin_cash_movements', 'Cash movements & history', current == 'admin_cash_movements'),
+            ('pos_reconcile', 'Till reconciliation', current == 'pos_reconcile'),
             ('admin_rewards', 'Rewards', current == 'admin_rewards' or current.startswith('rewards.')),
             ('loyalty.check_in', 'Loyalty visits & check-in', current == 'loyalty.check_in'),
             ('payments_overview', 'Payments, deposits & invoices', current in ['payments_overview','admin_payments','admin_booking_invoices']),
@@ -47,14 +57,20 @@
             ('admin_website_builder', 'Website builder', current == 'admin_website_builder'),
             ('backups', 'Backup & recovery', current == 'backups'),
             ('admin_website_report', 'Website report', current == 'admin_website_report')
-        ] %}
-        {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard','admin_calendar','event_day_dashboard','admin_daily_handovers','connecteam_rota','admin_staff_timesheets','forms_offers'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards','loyalty.check_in'] else ('Communications' if endpoint in ['admin_notification_centre','communications_messages','communications_public_enquiries','communications_history','communications_templates','communications_configuration','wedding_followup_settings','marketing_dashboard'] else ('Website & content' if endpoint in ['admin_website_builder','admin_website_stories','admin_photo_library','studio_gallery_admin','admin_website_report'] else ('Finance & reports' if endpoint in ['payments_overview','admin_reports','admin_qr_analytics','admin_cash_movements'] else 'System & settings')))) %}
+        ] if not staff_portal or staff_can(endpoint) %}
+        {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard','admin_calendar','event_day_dashboard','admin_daily_handovers','connecteam_rota','admin_staff_timesheets','staff_reports','forms_offers'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards','loyalty.check_in'] else ('Communications' if endpoint in ['admin_notification_centre','communications_messages','communications_public_enquiries','communications_history','communications_templates','communications_configuration','wedding_followup_settings','marketing_dashboard'] else ('Website & content' if endpoint in ['admin_website_builder','admin_website_stories','admin_photo_library','studio_gallery_admin','admin_website_report'] else ('Finance & reports' if endpoint in ['payments_overview','admin_reports','admin_qr_analytics','admin_cash_movements','pos_reconcile'] else 'System & settings')))) %}
         <span data-nav-group="{{ group }}" hidden></span><a href="{{ url_for(endpoint, view='all') if endpoint == 'communications_messages' else url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
+        {% if not staff_portal %}
         {% for section, label in [('qr-generator','QR code generator'),('business','Business details & contact information'),('booking','Pricing & booking rules'),('travel','Travel charges'),('operations','Availability & travel buffer'),('account','Admin account & password'),('social','Social media & reviews'),('website_giveaway','Website giveaway announcements')] %}
         <span data-nav-group="System &amp; settings" hidden></span><a data-tool-search-only hidden href="{{ url_for('admin_settings', _anchor=section) }}">{{ label }}</a>
         {% endfor %}
+        {% endif %}
         <hr class="admin-nav-divider">
+        {% if staff_portal %}
+        <form method="post" action="{{ url_for('pos_staff_logout') }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button class="btn">Sign out</button></form>
+        {% else %}
         <a href="{{ url_for('admin_logout') }}">Logout</a>
+        {% endif %}
     </nav>
 </aside>

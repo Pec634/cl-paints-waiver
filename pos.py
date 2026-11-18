@@ -119,7 +119,7 @@ def ensure_schema(db):
     if 'pos_staff' in inspect(db.engine).get_table_names():
         staff_columns={column['name'] for column in inspect(db.engine).get_columns('pos_staff')}
         with db.engine.begin() as connection:
-            for name,definition in {'pin_hash':'TEXT','pin_digest':'VARCHAR(64)'}.items():
+            for name,definition in {'pin_hash':'TEXT','pin_digest':'VARCHAR(64)','permissions_json':'TEXT'}.items():
                 if name not in staff_columns:
                     connection.exec_driver_sql(f'ALTER TABLE pos_staff ADD COLUMN {name} {definition}')
             connection.exec_driver_sql('CREATE UNIQUE INDEX IF NOT EXISTS uq_pos_staff_pin_digest ON pos_staff(pin_digest)')

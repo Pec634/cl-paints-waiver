@@ -64,8 +64,9 @@
 .workspace-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 24px; }
 .workspace-shortcuts a { padding: 18px; background: white; border: 1px solid var(--border); border-radius: 14px; }
 .workspace-shortcuts strong, .workspace-shortcuts span { display: block; }
-.dashboard-main .workspace-shortcuts strong { font-weight: 800; }
+.dashboard-main .workspace-shortcuts strong { color: var(--navy); font-weight: 800; }
 .workspace-shortcuts span { color: var(--muted); font-size: .85rem; margin-top: 8px; line-height: 1.45; }
+.dashboard-main .workspace-shortcuts span { color: #46536b; }
 .workspace-shortcuts a:hover { border-color: var(--pink); }
 .qr-record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .qr-record { border: 1px solid var(--border); padding: 20px; border-radius: 14px; }

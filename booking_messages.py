@@ -102,7 +102,8 @@ def register(app, db, Message, Booking, Change, current_client, admin_required):
             return {}
         admin = endpoint in ('admin_dashboard', 'admin_bookings', 'admin_notification_centre')
         account = None if admin else current_client()
-        if (admin and not session.get('admin_authenticated')) or (not admin and not account):
+        from staff_permissions import admin_session
+        if (admin and not admin_session()) or (not admin and not account):
             return {}
         bookings = Booking.query
         if not admin:
