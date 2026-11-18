@@ -21,6 +21,15 @@ records. The existing client app remains a separate application.
 - Repeated taps increase basket quantities. Basket quantities and unit prices can
   be edited for individual sales, and lines can be removed. Custom items remain
   available. Library changes do not alter existing baskets or completed sales.
+- On phones and smaller tablets, the till uses full-width Items, Waivers, History
+  and Basket views with fixed bottom navigation, basket count and total. Linking
+  a waiver returns to Items; searches, the basket and checkout identity survive
+  switching views. Larger screens retain the side-by-side workspace.
+- Basket lines have plus/minus quantity controls and item tiles show the quantity
+  already added. Event, loyalty and email receipt options expand in the basket;
+  their summary shows the current selection. Cash shortcuts set the tender to
+  the exact total, GBP10, GBP20 or GBP50 and calculate change without completing
+  the sale. Staff and day-end links are in the till header's Tools menu.
 - Cash received recording, recent sales, and sale details with an optional waiver link.
 - Cash payment opens inside the basket: enter the tender, check live change, then
   complete the sale. The till retains a confirmation with the change to hand back.

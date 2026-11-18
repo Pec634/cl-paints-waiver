@@ -19,6 +19,9 @@ account or email provider is configured correctly.
 
 1. Check both tablet orientations: the popup fits the screen, the basket is
    accessible, and waiver search updates without losing the current basket.
+   On smaller screens use the bottom Items, Waivers, History and Basket buttons;
+   check the count/total stay visible while scrolling and searching. Repeat with
+   the on-screen keyboard open. Confirm no fields or navigation overflow.
 2. Find an individual waiver, link it and confirm its search folds away. Repeat
    with a collective waiver and choose the actual people being painted.
 3. Use category filters and quick items. Add quantities and remove a line. Verify
@@ -28,6 +31,8 @@ account or email provider is configured correctly.
    and confirm the basket still has the same checkout identity.
 5. Complete a cash sale with more cash tendered than the total. Verify change,
    the saved sale time/staff name, and the optional receipt in the chosen inbox.
+   Check Exact and note-value tender shortcuts, underpayment blocking, quantity
+   plus/minus controls and reopening Event, loyalty & email receipt options.
 
 ## Reader flow (performed by the merchant with an agreed test amount)
 

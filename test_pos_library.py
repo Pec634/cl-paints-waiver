@@ -341,7 +341,10 @@ class PosLibraryTest(unittest.TestCase):
                     const toggle=document.getElementById('pos-mobile-basket-toggle');
                     const panel=document.querySelector('.pos-sale-panel');
                     const browse=document.querySelector('.pos-browse');
-                    assert(!toggle.hidden && panel.hidden,'mobile basket should have a visible pinned tab');
+                    assert(!toggle.hidden && panel.hidden,'mobile basket should have a visible bottom shortcut');
+                    assert(document.getElementById('pos-popup').dataset.mobileView==='items','mobile till should open on items');
+                    const library=document.getElementById('pos-library').getBoundingClientRect();
+                    assert(library.width>=innerWidth-20,'item library leaves space beyond the scrolling gutter');
                     document.querySelector('[data-product-id]').click();
                     assert(document.getElementById('pos-mobile-basket-count').textContent==='1','basket count did not update');
                     assert(document.getElementById('pos-mobile-basket-total').textContent.includes('7.50'),'pinned total did not update');
@@ -350,7 +353,7 @@ class PosLibraryTest(unittest.TestCase):
                     browse.scrollTop=browse.scrollHeight;
                     assert(browse.scrollTop>0 && Math.abs(toggle.getBoundingClientRect().top-tabTop)<1,'basket tab moves when browsing');
                     toggle.click();
-                    assert(!panel.hidden && browse.inert && toggle.getAttribute('aria-expanded')==='true','basket drawer did not open');
+                    assert(!panel.hidden && browse.inert && toggle.getAttribute('aria-expanded')==='true','basket view did not open');
                     const rect=panel.getBoundingClientRect();
                     assert(rect.left>=0 && rect.right<=innerWidth && rect.top>=0 && rect.bottom<=innerHeight,'basket extends off screen');
                     document.querySelector('.pos-custom-item').open=true;
@@ -367,9 +370,65 @@ class PosLibraryTest(unittest.TestCase):
                     assert(cancel.defaultPrevented && panel.hidden && !browse.inert,'Escape should close the basket first');
                     toggle.click();
                     assert(document.getElementById('pos-basket').children.length===8,'reopening basket lost items');
-                    document.getElementById('pos-clear-waiver').click();
+                    document.getElementById('pos-change-waiver').click();
                     assert(panel.hidden && document.activeElement===document.getElementById('pos-query'),'clear waiver did not return to search');
-                    assert(document.documentElement.scrollWidth<=innerWidth,'pinned basket overflows mobile screen');
+                    assert(document.documentElement.scrollWidth<=innerWidth,'mobile till overflows screen');
+                ''',width=width)
+
+    @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
+    def test_mobile_views_quantity_shortcuts_receipts_and_history(self):
+        self.save()
+        markup=self.client.get('/admin/pos').data
+        for width in (320,390,800):
+            with self.subTest(width=width):
+                BrowserChecks.browser(self,markup,'''
+                    const popup=document.getElementById('pos-popup');
+                    const product=document.querySelector('[data-product-id]');
+                    const nav=document.querySelector('.pos-mobile-nav');
+                    const select=name=>nav.querySelector('[data-pos-view="'+name+'"]').click();
+                    const visible=element=>element.getClientRects().length>0;
+                    const form=document.getElementById('pos-checkout');
+                    product.click();product.click();
+                    assert(product.dataset.basketQuantity==='2','tile quantity feedback missing');
+                    select('waivers');
+                    assert(visible(document.getElementById('pos-query')) && !visible(product),'waiver view does not replace items');
+                    document.getElementById('pos-query').value='Customer';
+                    select('history');
+                    assert(document.getElementById('pos-history').open && visible(document.getElementById('pos-sale-query')),'history search is unreachable');
+                    select('basket');
+                    const basket=document.getElementById('pos-basket');
+                    assert(visible(basket) && !visible(product),'basket is not a separate full-width view');
+                    basket.querySelector('[data-quantity-step="1"]').click();
+                    assert(document.getElementById('pos-mobile-basket-count').textContent==='3','quantity plus did not update dock');
+                    assert(product.dataset.basketQuantity==='3','quantity plus did not update tile');
+                    basket.querySelector('[data-quantity-step="-1"]').click();
+                    assert(JSON.parse(document.getElementById('pos-items').value)[0].quantity===2,'quantity minus did not update checkout');
+                    const options=document.getElementById('pos-sale-options');
+                    assert(!options.open,'mobile sale options should start folded');
+                    options.open=true;
+                    document.getElementById('pos-receipt-requested').click();
+                    document.getElementById('pos-receipt-email').value='customer@example.com';
+                    options.open=false;
+                    select('items');select('basket');
+                    assert(new FormData(form).get('receipt_email')==='customer@example.com','navigation lost receipt preference');
+                    document.getElementById('pos-cash-open').click();
+                    document.querySelector('[data-cash-tender="20"]').click();
+                    assert(document.getElementById('pos-cash-tender').value==='20.00','cash shortcut set wrong tender');
+                    assert(document.getElementById('pos-cash-change').textContent.includes('5.00'),'cash shortcut change is wrong');
+                    document.querySelector('[data-cash-tender="10"]').click();
+                    assert(document.getElementById('pos-cash-confirm').disabled,'underpaid shortcut can complete');
+                    document.querySelector('[data-cash-tender="exact"]').click();
+                    assert(!document.getElementById('pos-cash-confirm').disabled && document.getElementById('pos-cash-change').textContent.includes('0.00'),'exact cash shortcut failed');
+                    const token=new FormData(form).get('sale_token');
+                    select('waivers');
+                    assert(document.getElementById('pos-query').value==='Customer','navigation cleared search');
+                    select('items');
+                    assert(new FormData(form).get('sale_token')===token,'navigation replaced sale token');
+                    for(const button of nav.querySelectorAll('button')){
+                        const rect=button.getBoundingClientRect();
+                        assert(rect.height>=48 && rect.left>=0 && rect.right<=innerWidth,'dock target is too small or outside screen');
+                    }
+                    assert(document.documentElement.scrollWidth<=innerWidth,'mobile layout overflows viewport');
                 ''',width=width)
 
     @unittest.skipUnless(EDGE.is_file(),'Edge is not installed')
@@ -912,6 +971,7 @@ class PosLibraryTest(unittest.TestCase):
             window.fetch = (url, options) => new Promise((resolve, reject) => requests.push({url, options, resolve, reject}));
             const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
             document.querySelector('[data-product-id]').click();
+            document.querySelector('[data-pos-view="waivers"]').click();
             const search = document.getElementById('pos-query');
             search.focus(); search.value = 'L'; search.dispatchEvent(new Event('input'));
             await pause(250);
@@ -963,11 +1023,12 @@ class PosLibraryTest(unittest.TestCase):
                 const content = popup.querySelector('.pos-browse');
                 const history = document.getElementById('pos-history');
                 assert(!history.open, 'sale history should start folded');
-                history.querySelector('summary').click();
+                if(innerWidth<900)document.querySelector('[data-pos-view="history"]').click();
+                else history.querySelector('summary').click();
                 assert(history.open, 'sale history dropdown did not open');
                 const historyList = history.querySelector('.pos-history-list');
-                historyList.scrollTop = historyList.scrollHeight;
-                assert(historyList.scrollTop > 0, 'sale history list cannot scroll');
+                if(innerWidth>=900){historyList.scrollTop = historyList.scrollHeight;
+                    assert(historyList.scrollTop > 0, 'sale history list cannot scroll');}
                 const basketPanel = popup.querySelector('.pos-sale-panel');
                 const basketTop = basketPanel.getBoundingClientRect().top;
                 content.scrollTop = content.scrollHeight;
@@ -1030,7 +1091,7 @@ class PosLibraryTest(unittest.TestCase):
             for (const button of links) {
                 fold.open = true; button.click();
                 assert(!fold.open, 'whole waiver link did not fold away');
-                assert(document.activeElement === summary, 'focus remained inside collapsed fields');
+                assert(document.activeElement === document.querySelector('[data-pos-view="items"]'), 'focus remained inside hidden waiver fields');
                 assert(document.getElementById('pos-waiver-id').value === button.dataset.waiverId, 'waiver link lost');
                 assert(!document.getElementById('pos-waiver-selection').hidden, 'linked summary missing');
                 summary.click(); assert(fold.open, 'waiver search cannot reopen');
@@ -1104,7 +1165,7 @@ class PosLibraryTest(unittest.TestCase):
                         assert(Math.abs(waiverRect.top - basketRect.top) < 2, 'basket is not anchored beside the browsing area');
                         assert(libraryRect.right <= basketRect.left, 'basket must sit beside the library');
                     } else {
-                        assert(waiverRect.bottom <= libraryRect.top, 'waiver search must sit above library on phone');
+                        assert(getComputedStyle(document.querySelector('.pos-waiver-panel')).display==='none', 'waiver view should start hidden on phone');
                         assert(!document.getElementById('pos-mobile-basket-toggle').hidden, 'phone basket tab missing');
                         assert(document.querySelector('.pos-sale-panel').hidden, 'phone basket should start tucked away');
                     }

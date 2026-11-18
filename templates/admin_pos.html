@@ -19,8 +19,8 @@
     </section>
     <section class="panel pos-library" id="pos-library"><h2>Item library</h2>
       <p>Tap an item to add it to the basket. Tap again to increase its quantity.</p>
-      <label for="pos-library-search">Find an item</label><input id="pos-library-search" type="search" placeholder="Search your library" autocomplete="off">
-      <div class="pos-library-filters"><label>Category<select id="pos-product-category"><option value="">All categories</option>{% for category in product_categories %}<option>{{ category }}</option>{% endfor %}</select></label><label><input type="checkbox" id="pos-shortcuts-only"> Quick items only</label></div><div class="pos-product-grid" aria-label="Items for sale">
+      <div class="pos-library-toolbar"><label for="pos-library-search">Find an item</label><input id="pos-library-search" type="search" placeholder="Search your library" autocomplete="off">
+      <div class="pos-library-filters"><label>Category<select id="pos-product-category"><option value="">All categories</option>{% for category in product_categories %}<option>{{ category }}</option>{% endfor %}</select></label><label><input type="checkbox" id="pos-shortcuts-only"> Quick items only</label></div></div><div class="pos-product-grid" aria-label="Items for sale">
       {% for product in products %}<button type="button" class="pos-product" data-product-id="{{ product.id }}" data-product-category="{{ product.category }}" data-product-shortcut="{{ 'true' if product.shortcut else 'false' }}" data-product-name="{{ product.name }}" data-product-price="{{ '%.2f'|format(product.price) }}"><strong>{% if product.shortcut %}&#9733; {% endif %}{{ product.name }}</strong><span>£{{ '%.2f'|format(product.price) }}</span></button>{% else %}<p>Add your first item below to start using the till library.</p>{% endfor %}
       </div><p id="pos-library-status" role="status"></p>
       {% if pos_manager %}<details class="pos-library-manager"><summary>Manage items &amp; saved prices</summary>
@@ -61,35 +61,37 @@
     <div class="pos-history-pagination"><span>{{ sales_page.total }} sales · Page {{ sales_page.page }} of {{ sales_page.pages or 1 }}</span>{% if sales_page.has_prev %}<a class="btn" href="{{ url_for('pos_home', sale_q=sale_q, history_waiver=history_waiver, sales_page=sales_page.prev_num, _anchor='pos-history') }}">Previous</a>{% endif %}{% if sales_page.has_next %}<a class="btn" href="{{ url_for('pos_home', sale_q=sale_q, history_waiver=history_waiver, sales_page=sales_page.next_num, _anchor='pos-history') }}">Next</a>{% endif %}</div></div>
   </details>
   </div>
-    <section class="panel pos-sale-panel"><h2>Basket</h2>
-      {% include '_pos_held_baskets.html' %}
+    <section class="panel pos-sale-panel"><div class="pos-basket-heading"><h2>Basket</h2>
+      <button type="button" id="pos-clear-basket" class="pos-secondary" disabled>Clear all</button></div>
       {% if completed_sale %}<div id="pos-cash-receipt" class="pos-cash-receipt" role="status" data-completed-reference="{{ completed_sale.reference }}"><strong>Cash sale #{{ completed_sale.id }} recorded</strong><p>{{ completed_sale.created_at|pos_timestamp }}</p><p>Total £{{ '%.2f'|format(completed_sale.amount) }} · Cash received £{{ '%.2f'|format(completed_sale.cash_tender) if completed_sale.cash_tender is not none else 'not recorded' }}</p>{% if completed_sale.change_due is not none %}<p class="pos-change">Change to give: £{{ '%.2f'|format(completed_sale.change_due) }}</p>{% endif %}<a href="{{ url_for('pos_sale', sale_id=completed_sale.id) }}">View saved sale</a>{% with sale=completed_sale %}{% include '_pos_receipt_status.html' %}{% include '_pos_loyalty_status.html' %}{% endwith %}</div>{% endif %}
-      <button type="button" id="pos-clear-basket" class="pos-secondary" disabled>Clear all</button>
-      <p id="pos-linked">No waiver linked</p><button type="button" id="pos-clear-waiver">Clear waiver</button>
+      <div class="pos-basket-customer"><p id="pos-linked">No waiver linked</p><button type="button" id="pos-change-waiver" class="pos-secondary">Add / change waiver</button><button type="button" id="pos-clear-waiver" class="pos-secondary">Clear waiver</button></div>
+      <ul id="pos-basket" aria-label="Basket"></ul><p id="pos-total" class="pos-total" aria-live="polite">Total £0.00</p><p id="pos-error" role="alert"></p>
+      {% include '_pos_held_baskets.html' %}
       {% if pos_manager %}<details class="pos-custom-item"><summary>Add a custom item</summary><form id="pos-add-item"><label for="pos-item-name">Item or service</label><input id="pos-item-name" maxlength="120" required placeholder="e.g. Face painting">
         <div class="pos-fields"><label>Quantity<input id="pos-item-quantity" type="number" min="1" max="999" step="1" value="1" required></label><label>Unit price (£)<input id="pos-item-price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" required></label></div>
         <button>Add to sale</button>
       </form></details>{% endif %}
-      <ul id="pos-basket" aria-label="Basket"></ul><p id="pos-total" class="pos-total" aria-live="polite">Total £0.00</p><p id="pos-error" role="alert"></p>
       <form method="post" action="{{ url_for('pos_create_sale') }}" id="pos-checkout">
         <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><input type="hidden" name="sale_token" value="{{ sale_token }}">
         <input type="hidden" name="items" id="pos-items"><input type="hidden" name="waiver_id" id="pos-waiver-id"><input type="hidden" name="participant_id" id="pos-participant-id">
+        <details id="pos-sale-options" class="pos-sale-options" open><summary>Event, loyalty &amp; email receipt<small id="pos-options-summary"></small></summary>
         {% if trading_events %}<div class="pos-trading-event"><label for="pos-trading-event">Trading event (for cash-up)</label><select id="pos-trading-event" name="trading_event_id"><option value="">Unallocated / daily till</option>{% for event in trading_events %}<option value="{{ event.id }}" {% if trading_events|length==1 %}selected{% endif %}>{{ event.name }}</option>{% endfor %}</select></div>{% endif %}
         {% if loyalty_enabled %}<fieldset id="pos-loyalty-fields" hidden><legend>Loyalty points</legend><p>Choose the individuals being painted. Each earns one point after payment, once per public event.</p>
           {% if loyalty_events %}<label for="pos-loyalty-event">Public event</label><select id="pos-loyalty-event" name="loyalty_event_id"><option value="">Choose today's event</option>{% for event in loyalty_events %}<option value="{{ event.id }}" {% if loyalty_events|length == 1 %}selected{% endif %}>{{ event.name }}</option>{% endfor %}</select><div id="pos-loyalty-people"></div>
           {% else %}<p>No open public events today. This sale will not award loyalty points.</p>{% endif %}
         </fieldset>{% endif %}
         <div class="pos-receipt-option"><label class="pos-receipt-check"><input type="checkbox" id="pos-receipt-requested" name="receipt_requested" value="1" aria-controls="pos-receipt-fields"> Customer wants an email receipt</label><div id="pos-receipt-fields" hidden><label for="pos-receipt-email">Send receipt to</label><input id="pos-receipt-email" name="receipt_email" type="email" maxlength="320" autocomplete="email" placeholder="customer@example.com" disabled><small>Sent automatically after successful payment. Confirm the address with the customer.</small></div></div>
-        <button type="button" id="pos-cash-open" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
-        <button id="pos-card-pay" name="method" value="Card" aria-describedby="pos-card-status" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button>
+        </details><div class="pos-payment-actions"><button type="button" id="pos-cash-open" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
+        <button id="pos-card-pay" name="method" value="Card" aria-describedby="pos-card-status" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button></div>
         <p id="pos-card-status" class="pos-card-status" role="status">{{ 'Add an item to enable card payment.' if configured else 'Card payment unavailable: SumUp setup is incomplete on the website server.' }}</p>
         <div id="pos-cash-panel" hidden>
           <label for="pos-cash-tender">Cash received (£)</label><input id="pos-cash-tender" name="cash_tender" type="number" min="0.01" max="999999.99" step="0.01" inputmode="decimal" disabled aria-describedby="pos-cash-change">
+          <div class="pos-cash-shortcuts" aria-label="Cash received shortcuts"><button type="button" data-cash-tender="exact">Exact</button><button type="button" data-cash-tender="10">£10</button><button type="button" data-cash-tender="20">£20</button><button type="button" data-cash-tender="50">£50</button></div>
           <p id="pos-cash-change" class="pos-change" role="status">Enter the amount received.</p>
           <button name="method" value="Cash" id="pos-cash-confirm" disabled>Complete cash sale</button><button type="button" id="pos-cash-cancel" class="pos-secondary">Cancel</button>
         </div>
       </form>
-      {% if not configured %}<div class="pos-card-setup"><p>Installing the APK does not configure SumUp. {{ 'Complete the server setup below, then restart the website service.' if pos_manager else 'Ask a manager to complete the SumUp server setup.' }}</p>{% if pos_manager %}<details><summary>Check card setup</summary><ul>{% for setting in card_settings %}<li>{{ setting.label }}: <strong>{{ 'Configured' if setting.present else 'Missing' }}</strong>{% if not setting.present %}<br><code>{{ setting.key }}</code>{% endif %}</li>{% endfor %}</ul><p>Add the missing settings in the website host's private environment settings, then restart or redeploy. No credential values are displayed here.</p></details>{% endif %}</div>{% else %}<p>Solo Lite payments open the SumUp app on Android. Pair your reader and check the signed-in merchant there.</p>{% endif %}
+      {% if not configured %}<div class="pos-card-setup"><p>Installing the APK does not configure SumUp. {{ 'Complete the server setup below, then restart the website service.' if pos_manager else 'Ask a manager to complete the SumUp server setup.' }}</p>{% if pos_manager %}<details><summary>Check card setup</summary><ul>{% for setting in card_settings %}<li>{{ setting.label }}: <strong>{{ 'Configured' if setting.present else 'Missing' }}</strong>{% if not setting.present %}<br><code>{{ setting.key }}</code>{% endif %}</li>{% endfor %}</ul><p>Add the missing settings in the website host's private environment settings, then restart or redeploy. No credential values are displayed here.</p></details>{% endif %}</div>{% else %}<p>{% if 'SumUpNative/1' in request.user_agent.string %}Solo Lite payments use the reader inside this POS app. Reader settings are under More &gt; SumUp card reader.{% else %}Open card sales in the CL Paints POS Android app to use your Solo Lite.{% endif %}</p>{% endif %}
       <noscript>Enable JavaScript to build a sale. Waiver search still works.</noscript>
     </section>
   </div>

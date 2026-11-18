@@ -24,11 +24,21 @@
   const save = () => { try { sessionStorage.setItem(storageKey, JSON.stringify({items,saleToken:get('pos-checkout').elements.sale_token.value})); } catch (_) {} };
   const money = pence => `£${(pence / 100).toFixed(2)}`;
   const parsePrice = value => /^\d+(\.\d{1,2})?$/.test(value) && Number(value) > 0 && Number(value) <= 99999 ? Math.round(Number(value) * 100) : null;
+  function updateSaleOptions() {
+    const selectedEvent = get('pos-trading-event');
+    const recipients = document.querySelectorAll('input[name=loyalty_participant_id]:checked').length;
+    const summary = [selectedEvent?.value ? selectedEvent.selectedOptions[0].textContent : 'Daily till'];
+    if (waiver) summary.push(`${recipients} loyalty recipient${recipients === 1 ? '' : 's'}`);
+    summary.push(get('pos-receipt-requested').checked ? 'Email receipt requested' : 'No email receipt');
+    get('pos-options-summary').textContent = summary.join(' · ');
+  }
   function updateReceipt() {
     const requested = get('pos-receipt-requested').checked;
     get('pos-receipt-fields').hidden = !requested;
     get('pos-receipt-email').disabled = !requested;
     get('pos-receipt-email').required = requested;
+    if (requested) get('pos-sale-options').open = true;
+    updateSaleOptions();
   }
   get('pos-receipt-requested').addEventListener('change', () => {
     updateReceipt();
@@ -38,6 +48,7 @@
     const fields = get('pos-loyalty-fields'), list = get('pos-loyalty-people');
     if (!fields) return;
     fields.hidden = !waiver;
+    if (waiver) get('pos-sale-options').open = true;
     if (!list) return;
     list.replaceChildren();
     people.forEach(person => {
@@ -48,6 +59,7 @@
       label.append(checkbox, document.createTextNode(`${person.textContent} · ${person.dataset.points || 0}/3 points${Number(person.dataset.points) >= 3 ? ' · Free paint ready' : ''}`));
       list.append(label);
     });
+    updateSaleOptions();
   }
   function updateCash() {
     const total = items.reduce((sum, item) => sum + item.quantity * item.pence, 0);
@@ -83,11 +95,14 @@
     items.forEach((item, index) => {
       total += item.quantity * item.pence;
       const row = document.createElement('li');
-      row.append(document.createTextNode(`${item.quantity} × ${item.name} · ${money(item.quantity * item.pence)} `));
+      const heading = document.createElement('div'); heading.className = 'pos-line-heading';
+      const name = document.createElement('strong'); name.textContent = item.name;
+      const lineTotal = document.createElement('span'); lineTotal.textContent = money(item.quantity * item.pence);
+      heading.append(name, lineTotal);
       const remove = document.createElement('button');
       remove.type = 'button'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${item.name}`);
       remove.onclick = () => { items.splice(index, 1); render(); };
-      row.append(remove);
+      heading.append(remove); row.append(heading);
       const fields = document.createElement('div'); fields.className = 'pos-fields';
       const quantityLabel = document.createElement('label'); quantityLabel.textContent = 'Quantity';
       const quantity = document.createElement('input'); quantity.type = 'number'; quantity.min = '1'; quantity.max = '999'; quantity.step = '1'; quantity.value = item.quantity;
@@ -106,7 +121,22 @@
         if (value === null) { price.value = (item.pence / 100).toFixed(2); get('pos-error').textContent = 'Enter a positive price with up to two decimal places.'; return; }
         item.pence = value; get('pos-error').textContent = ''; render();
       });
-      quantityLabel.append(quantity); priceLabel.append(price); fields.append(quantityLabel, priceLabel);
+      const stepper = document.createElement('div'); stepper.className = 'pos-quantity-stepper';
+      const stepButton = (delta, text) => {
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = text;
+        button.dataset.quantityStep = String(delta);
+        button.setAttribute('aria-label', `${delta < 0 ? 'Decrease' : 'Increase'} quantity for ${item.name}`);
+        button.disabled = delta < 0 ? item.quantity <= 1 : item.quantity >= 999;
+        button.onclick = () => {
+          item.quantity += delta; render();
+          const next = get('pos-basket').children[index]?.querySelector(`[data-quantity-step="${delta}"]`);
+          if (next && !next.disabled) next.focus();
+          else get('pos-basket').children[index]?.querySelector('input').focus();
+        };
+        return button;
+      };
+      stepper.append(stepButton(-1, '−'), quantity, stepButton(1, '+'));
+      quantityLabel.append(stepper); priceLabel.append(price); fields.append(quantityLabel, priceLabel);
       row.append(fields); get('pos-basket').append(row);
     });
     get('pos-total').textContent = `Total ${money(total)}`;
@@ -122,6 +152,13 @@
     get('pos-linked').textContent = waiver ? `Linked: ${waiver.label}${waiver.participantName ? ' · ' + waiver.participantName : ''}` : 'No waiver linked';
     get('pos-waiver-selection').textContent = waiver ? `${get('pos-linked').textContent} — open to change` : '';
     get('pos-waiver-selection').hidden = !waiver;
+    get('pos-clear-waiver').disabled = !waiver;
+    document.querySelectorAll('[data-product-id]').forEach(button => {
+      const count = items.filter(item => item.product_id === Number(button.dataset.productId)).reduce((sum,item) => sum + item.quantity, 0);
+      button.dataset.basketQuantity = String(count);
+      button.setAttribute('aria-label', `${button.dataset.productName}, £${button.dataset.productPrice}${count ? `, ${count} in basket` : ''}`);
+    });
+    document.dispatchEvent(new CustomEvent('pos-basket-updated', {detail:{waiver:waiver?.label || ''}}));
     get('pos-checkout').querySelectorAll('button').forEach(button => { button.disabled = !items.length || total > 9999999 || button.dataset.unconfigured === 'true'; });
     const card=get('pos-card-pay');
     if(card){
@@ -132,6 +169,7 @@
     }
     if (!items.length) closeCash();
     updateCash();
+    updateSaleOptions();
     save();
   }
   get('pos-add-item')?.addEventListener('submit', event => {
@@ -177,6 +215,7 @@
     }
     get('pos-waiver-fold').open = false;
     get('pos-waiver-summary').focus();
+    document.dispatchEvent(new Event('pos-waiver-linked'));
   });
   waiverResults.addEventListener('change', event => {
     const select = event.target.closest('.pos-participant');
@@ -227,6 +266,12 @@
   searchInput.addEventListener('input', event => { if (!event.isComposing) queueWaiverSearch(); });
   searchInput.addEventListener('compositionend', () => queueWaiverSearch());
   searchForm.addEventListener('submit', event => { event.preventDefault(); queueWaiverSearch(true); });
+  const showWaivers = () => {
+    get('pos-waiver-fold').open = true;
+    document.dispatchEvent(new Event('pos-waiver-open'));
+    get('pos-query').focus();
+  };
+  get('pos-change-waiver')?.addEventListener('click',showWaivers);
   get('pos-clear-waiver').onclick = () => {
     waiver = null;
     const receiptEmail = get('pos-receipt-email');
@@ -234,9 +279,7 @@
     delete receiptEmail.dataset.prefilled;
     render();
     updateLoyalty();
-    get('pos-waiver-fold').open = true;
-    document.dispatchEvent(new Event('pos-basket-close'));
-    get('pos-query').focus();
+    showWaivers();
   };
   get('pos-clear-basket').onclick = () => {
     items = [];
@@ -253,6 +296,11 @@
     get('pos-cash-tender').focus();
   };
   get('pos-cash-tender').addEventListener('input', updateCash);
+  document.querySelectorAll('[data-cash-tender]').forEach(button => button.addEventListener('click', () => {
+    const total = items.reduce((sum,item) => sum+item.quantity*item.pence,0);
+    get('pos-cash-tender').value = button.dataset.cashTender === 'exact' ? (total/100).toFixed(2) : Number(button.dataset.cashTender).toFixed(2);
+    updateCash();
+  }));
   get('pos-cash-cancel').onclick = () => { closeCash(); get('pos-cash-open').focus(); };
   if (get('pos-hold-basket')) {
     const base = get('pos-hold-basket').dataset.heldUrl;
@@ -317,14 +365,18 @@
       } catch(error) {feedback.textContent=error.message;render();}
     };
   }
+  get('pos-checkout').addEventListener('change', updateSaleOptions);
+  get('pos-checkout').addEventListener('invalid', event => {
+    if (get('pos-sale-options').contains(event.target)) get('pos-sale-options').open = true;
+  }, true);
   get('pos-checkout').addEventListener('submit', event => {
     const eventField = get('pos-loyalty-event');
     if (eventField) {
       eventField.required = !!document.querySelector('input[name=loyalty_participant_id]:checked');
-      if (!eventField.reportValidity()) { event.preventDefault(); return; }
+      if (!eventField.checkValidity()) { get('pos-sale-options').open = true; eventField.reportValidity(); event.preventDefault(); return; }
     }
-    if (get('pos-receipt-requested').checked && !get('pos-receipt-email').reportValidity()) {
-      event.preventDefault(); return;
+    if (get('pos-receipt-requested').checked && !get('pos-receipt-email').checkValidity()) {
+      get('pos-sale-options').open = true; get('pos-receipt-email').reportValidity(); event.preventDefault(); return;
     }
     if (event.submitter?.value === 'Cash') {
       updateCash();
