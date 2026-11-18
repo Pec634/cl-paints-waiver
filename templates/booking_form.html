@@ -91,7 +91,7 @@ Client Booking Request | CL Paints
                         <option value="business" {% if form_data.get('client_type') == 'business' %}selected{% endif %}>Business</option>
                     </select>
                 </label>
-                <label class="booking-field">
+                <label class="booking-field" id="businessNameField" {% if form_data.get('client_type') != 'business' %}hidden{% endif %}>
                     <span>Business name <small>Optional</small></span>
                     <input name="business_name" autocomplete="organization" maxlength="200" value="{{ form_data.get('business_name', '') }}">
                 </label>
@@ -359,6 +359,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!form) return;
 
     const businessType = form.querySelector('[name="client_type"]');
+    const businessNameField = document.getElementById("businessNameField");
+    const businessNameInput = form.querySelector('[name="business_name"]');
     const jobTitleField = document.getElementById("businessJobTitleField");
     const jobTitleInput = form.querySelector('[name="job_title"]');
     const ethnicityGroup = document.getElementById("ethnicityGroup");
@@ -402,6 +404,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function syncBusinessType() {
         const isBusiness = businessType.value === "business";
+        businessNameField.hidden = !isBusiness;
+        businessNameInput.disabled = !isBusiness;
         jobTitleField.hidden = !isBusiness;
         jobTitleInput.required = isBusiness;
         form.querySelector('[name="date_of_birth"]').required = !isBusiness;
@@ -733,7 +737,7 @@ document.addEventListener("DOMContentLoaded", () => {
             reviewSection('Client details', [
                 `${value('title')} ${value('first_name')} ${value('last_name')}`.trim(),
                 `${value('client_type')}${value('job_title') ? ' · '+value('job_title') : ''}`,
-                value('business_name') ? `Business name: ${value('business_name')}` : '',
+                businessType.value === 'business' && value('business_name') ? `Business name: ${value('business_name')}` : '',
                 `${value('email')} · ${value('phone')}`,
                 ['address_property','address_street','address_city','address_postcode','address_country'].map(value).join(', '),
                 `Date of birth: ${value('date_of_birth')}`,

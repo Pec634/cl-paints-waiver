@@ -1,7 +1,7 @@
 <h2>Booking profile</h2><p>Save these details once to prefill the Client Details section of your booking requests. You can choose “Prefer not to say” for ethnicity and religion.</p>
 <label>Client type<select name="client_type" required>{% for value, label in [('individual','Private individual'),('business','Business')] %}<option value="{{ value }}" {% if form_data.get('client_type', 'individual') == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
 <label>Title (optional)<select name="title"><option value="">Select</option>{% for title in ['Mr','Mrs','Miss','Ms','Mx','Dr','Other'] %}<option {% if form_data.get('title') == title %}selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
-<label>Business name (optional)<input name="business_name" autocomplete="organization" maxlength="200" value="{{ form_data.get('business_name', '') }}"></label>
+<label class="profile-business-name" {% if form_data.get('client_type') != 'business' %}hidden{% endif %}>Business name (optional)<input name="business_name" autocomplete="organization" maxlength="200" value="{{ form_data.get('business_name', '') }}"></label>
 <label>Job title (required for business clients)<input name="job_title" maxlength="120" value="{{ form_data.get('job_title', '') }}"></label>
 <label>Date of birth (optional for businesses)<input name="date_of_birth" type="date" value="{{ form_data.get('date_of_birth', '') }}" {% if form_data.get('client_type') != 'business' %}required{% endif %}></label>
 <script src="{{ url_for('static', filename='profile-birth-date.js') }}" defer></script>
