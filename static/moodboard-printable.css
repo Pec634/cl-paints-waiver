@@ -1,0 +1,77 @@
+.moodboard-sheet-preview {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  min-width: 0;
+}
+.moodboard-sheet {
+  box-sizing: border-box;
+  container-type: inline-size;
+  width: 100%;
+  max-width: 760px;
+  aspect-ratio: 210 / 297;
+  display: flex;
+  flex-direction: column;
+  padding: 4%;
+  background: white;
+  color: #172234;
+  text-align: center;
+  box-shadow: 0 3px 18px #0002;
+}
+.moodboard-sheet > header { order: -2; margin-bottom: 2cqw; }
+.moodboard-sheet > header p { font-size: 3cqw; margin: 0; overflow-wrap: anywhere; }
+.moodboard-sheet h2 { font-size: 5cqw; line-height: 1.15; margin: 0; }
+.moodboard-sheet-grid {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: repeat(var(--columns, 1), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr));
+  gap: min(2cqw, 32cqw / var(--rows, 1));
+}
+.moodboard-sheet-grid > p { align-self: center; margin: 0; font-size: 3cqw; }
+.moodboard-sheet figure { margin: 0; min-width: 0; min-height: 0; }
+.moodboard-sheet-grid figure { display: flex; flex-direction: column; position: relative; }
+.moodboard-sheet-grid img { width: 100%; flex: 1; min-height: 0; object-fit: contain; }
+.moodboard-sheet-grid figcaption { font-size: min(2.5cqw, 40cqw / var(--rows, 1)); line-height: 1.15; }
+.moodboard-sheet-codes { display: flex; justify-content: center; gap: 4cqw; padding: 1.5cqw 0; }
+.moodboard-sheet[data-qr-position="top"] .moodboard-sheet-codes { order: -1; }
+.moodboard-sheet-codes figure { width: 23cqw; font-size: 2.5cqw; line-height: 1.2; }
+.moodboard-sheet-codes img { display: block; width: 17cqw; height: 17cqw; margin: auto; }
+.moodboard-sheet [hidden] { display: none; }
+.moodboard-tile-control {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px #8c96a5;
+  cursor: grab;
+}
+.moodboard-tile-control:hover,
+.moodboard-tile-control:focus-visible,
+.moodboard-tile-control[aria-pressed="true"],
+.moodboard-tile-control[data-drop-target] {
+  box-shadow: inset 0 0 0 2px #ad195f;
+}
+.moodboard-tile-control[aria-pressed="true"] { background: #ad195f1a; }
+
+@media print {
+  body:has(.moodboard-sheet-preview) > .client-session-timer { display: none; }
+  .moodboard-sheet-preview { display: block; }
+  .moodboard-tile-control { display: none; }
+  .moodboard-sheet,
+  .moodboard-sheet * { visibility: visible !important; }
+  .moodboard-sheet {
+    width: 210mm;
+    height: 296mm;
+    max-width: none;
+    padding: 10mm;
+    margin: 0;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+  .moodboard-sheet + .moodboard-sheet { break-before: page; }
+}

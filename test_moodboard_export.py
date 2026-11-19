@@ -20,11 +20,15 @@ class MoodboardExportTest(unittest.TestCase):
         self.fixture.tearDown()
 
     def test_export_uses_saved_active_selection_and_group_labels(self):
+        large = main.MoodboardImage(title='Tiger', image_url='https://example.com/tiger.png', design_type='large')
         other = main.MoodboardImage(title='Not selected', image_url='https://example.com/other.png')
         hidden = main.MoodboardImage(title='Inactive', image_url='https://example.com/hidden.png', active=False)
-        main.db.session.add_all([other, hidden])
+        main.db.session.add_all([large, other, hidden])
         main.db.session.flush()
-        main.db.session.add(main.EventMoodboardImage(event_id=self.event.id, image_id=hidden.id))
+        main.db.session.add_all([
+            main.EventMoodboardImage(event_id=self.event.id, image_id=image.id)
+            for image in (large, hidden)
+        ])
         main.db.session.add(main.BusinessSetting(key='moodboard_price_small', value='4.25'))
         main.db.session.commit()
         response = self.client.get(f'/moodboard/event/{self.event.id}/download-data')
@@ -47,7 +51,8 @@ class MoodboardExportTest(unittest.TestCase):
         self.event.status = 'Archived'
         main.db.session.commit()
         self.assertEqual(self.client.get(f'/moodboard/event/{self.event.id}/download-data').status_code, 410)
-        self.fixture.admin()
+        with self.client.session_transaction() as session:
+            session['admin_authenticated'] = True
         self.assertEqual(self.client.get(path).status_code, 200)
 
     def test_empty_groups_are_included(self):

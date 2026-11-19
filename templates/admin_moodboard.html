@@ -38,6 +38,9 @@ Moodboard Library | CL Paints
 
         <section class="panel">
 
+            {% for category, message in get_flashed_messages(with_categories=true) %}
+            <p class="booking-admin-error" role="alert">{{ message }}</p>
+            {% endfor %}
             <div class="panel-heading">
                 <div>
                     <h2>Image Library</h2>

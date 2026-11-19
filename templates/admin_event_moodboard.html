@@ -36,7 +36,7 @@ Event Moodboard | CL Paints
             <div class="paint-actions">
                 <a class="btn" href="{{ url_for('event_moodboard', event_id=event.id) }}" target="_blank" rel="noopener">Preview event moodboard</a>
                 <a class="btn" href="{{ url_for('admin_event_moodboard_qr', event_id=event.id) }}" download="moodboard-event-{{ event.id }}.svg">Download QR code</a>
-                <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Print moodboard sign</a>
+                <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Edit &amp; print A4 moodboard sheets</a>
                 <a class="btn" href="{{ url_for('admin_moodboard_orders', event_id=event.id) }}">Moodboard payments</a>
             </div>
             {% if event.status == 'Archived' %}<p>This event is archived. Its public moodboard link is closed.</p>{% endif %}

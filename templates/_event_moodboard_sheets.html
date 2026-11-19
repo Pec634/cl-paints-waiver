@@ -1,0 +1,78 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='moodboard-printable.css') }}">
+{% set codes = [
+    ('waiver', 'Event waiver', url_for('admin_event_waiver_qr', event_id=event.id)),
+    ('account', 'Sign up / sign in', url_for('admin_event_account_qr', event_id=event.id)),
+    ('moodboard', 'View moodboard', url_for('admin_event_moodboard_qr', event_id=event.id))
+] %}
+<header class="top editor-header">
+    <div><h1>Moodboard sign editor</h1><p>{{ event.name }}</p></div>
+    <div class="paint-actions">
+        <a class="btn" href="{{ url_for('admin_event_moodboard', event_id=event.id) }}">Manage event designs</a>
+        <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id, layout='sign') }}">Standalone QR sign</a>
+    </div>
+</header>
+<div class="editor-layout">
+    <form id="moodboard-sheet-controls" class="editor-controls panel client-form">
+        <h2>A4 moodboard sheets</h2>
+        {% if groups|map(attribute='images')|map('length')|max > 1 %}
+        <p>Drag one design onto another to swap their places, or select the two tiles in order.</p>
+        <p id="moodboard-layout-status" role="status"></p>
+        {% endif %}
+        {% for group in groups %}
+        {% set page = loop.index %}
+        <fieldset>
+            <legend>{{ group.title }}</legend>
+            {% if group.images|length > 1 %}
+            <label>Grid columns<select name="{{ page }}-columns" data-page="{{ page }}">
+                <option value="auto">Automatic</option>
+                {% for count in range(1, [group.images|length, 12]|min + 1) %}
+                <option value="{{ count }}">{{ count }}</option>
+                {% endfor %}
+            </select></label>
+            {% endif %}
+            {% for code, label, url in codes %}
+            <label class="check"><input type="checkbox" name="{{ page }}-{{ code }}" data-page="{{ page }}" data-code="{{ code }}"> {{ label }} QR code</label>
+            {% endfor %}
+            <label>QR position<select name="{{ page }}-position" data-page="{{ page }}">
+                <option value="bottom">Below designs</option><option value="top">Above designs</option>
+            </select></label>
+        </fieldset>
+        {% endfor %}
+        <div class="editor-actions">
+            <button type="button" class="btn" id="save-sign">Save design on this device</button>
+            <button type="button" class="btn" id="reset-sign">Reset design</button>
+            <button type="button" class="btn primary" id="print-sign" disabled>Print / save as PDF</button>
+        </div>
+        <p id="editor-status" role="status">Loading printable images…</p>
+    </form>
+    <section class="moodboard-sheet-preview" aria-label="A4 moodboard previews">
+        {% for group in groups %}
+        <article class="moodboard-sheet" data-sheet="{{ loop.index }}" aria-labelledby="sheet-heading-{{ loop.index }}">
+            <header>
+                <p>{{ event.name }}</p>
+                <h2 id="sheet-heading-{{ loop.index }}">{{ group.title }} &mdash; &pound;{{ group.price }}</h2>
+            </header>
+            <div class="moodboard-sheet-grid" data-count="{{ group.images|length }}">
+                {% for image in group.images %}
+                <figure data-design-id="{{ image.id }}">
+                    <img src="{{ image.url }}" alt="Design {{ image.label }}" draggable="false">
+                    <figcaption>{{ image.label }}</figcaption>
+                    {% if loop.length > 1 %}
+                    <button type="button" class="moodboard-tile-control" draggable="true"
+                        aria-label="Move design {{ image.label }}" aria-pressed="false"></button>
+                    {% endif %}
+                </figure>
+                {% else %}
+                <p>No designs selected for this size.</p>
+                {% endfor %}
+            </div>
+            <div class="moodboard-sheet-codes" hidden>
+                {% for code, label, url in codes %}
+                <figure data-code="{{ code }}" hidden><img src="{{ url }}" alt=""><figcaption>{{ label }}</figcaption></figure>
+                {% endfor %}
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+</div>
+<script src="{{ url_for('static', filename='moodboard-printable.js') }}" defer></script>

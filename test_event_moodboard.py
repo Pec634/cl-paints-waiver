@@ -1,4 +1,8 @@
 import unittest
+from io import BytesIO
+from types import SimpleNamespace
+from unittest.mock import patch
+from PIL import Image
 import test_client_portal as portal_tests
 
 main = portal_tests.main
@@ -57,10 +61,61 @@ class EventMoodboardTest(unittest.TestCase):
         self.assertIn(b'Moodboard sign editor', page.data)
         self.assertIn(b'data-sign-kind="moodboard"', page.data)
         self.assertNotIn(b'gain loyalty points', page.data)
+        self.assertEqual(page.data.count(b'class="moodboard-sheet"'), 2)
+        for code in ('waiver', 'account'):
+            qr_url = f'/admin/events/{self.event.id}/{code}/qr'
+            self.assertEqual(page.data.count(qr_url.encode()), 2)
+            self.assertEqual(self.client.get(qr_url).mimetype, 'image/svg+xml')
+        self.assertIn(b'id="sign-qr"', self.client.get(root + '/print?layout=sign').data)
         events = self.client.get(f'/admin/events?moodboard_event_id={self.event.id}')
         self.assertEqual(events.status_code, 200)
         self.assertIn((root + '/print').encode(), events.data)
         self.assertIn(f'/moodboard/event/{self.event.id}'.encode(), events.data)
+
+    def test_print_sheets_group_only_saved_active_event_designs(self):
+        butterfly = main.MoodboardImage.query.filter_by(title='Butterfly').one()
+        butterfly.design_type = 'large'
+        butterfly.image_url = '/butterfly-print.png'
+        small = main.MoodboardImage(title='Heart', image_url='/heart-print.png', design_type='small')
+        main.db.session.add(small)
+        main.db.session.flush()
+        main.db.session.add(main.EventMoodboardImage(event_id=self.event.id, image_id=small.id))
+        main.db.session.commit()
+        with self.client.session_transaction() as session:
+            session['admin_authenticated'] = True
+        page = self.client.get(f'/admin/events/{self.event.id}/moodboard/print')
+        self.assertEqual(page.status_code, 200)
+        large_sheet, small_sheet = page.data.split(b'data-sheet="2"')
+        self.assertIn(b'src="/butterfly-print.png" alt="Design L - 1"', large_sheet)
+        self.assertIn(b'src="/heart-print.png" alt="Design S - 1"', small_sheet)
+        self.assertNotIn(b'example.com/design.png', page.data)
+
+    def test_upload_without_cloudinary_can_be_printed_and_deleted(self):
+        buffer = BytesIO()
+        Image.new('RGB', (16, 16), 'pink').save(buffer, format='PNG')
+        content = buffer.getvalue()
+        buffer.seek(0)
+        with self.client.session_transaction() as session:
+            session['admin_authenticated'] = True
+        config = SimpleNamespace(cloud_name=None, api_key=None, api_secret=None)
+        with patch.object(main.cloudinary, 'config', return_value=config), patch.object(main.cloudinary.uploader, 'upload') as upload:
+            response = self.client.post('/admin/moodboard/upload', data={
+                'images': [(buffer, 'Test-design.png'), (BytesIO(b'invalid'), 'broken.png')],
+                'design_type': 'small',
+            }, follow_redirects=True)
+        upload.assert_not_called()
+        self.assertIn(b'1 image(s) could not be uploaded', response.data)
+        image = main.MoodboardImage.query.filter_by(title='Test design').one()
+        image_id, image_url = image.id, image.image_url
+        main.db.session.add(main.EventMoodboardImage(event_id=self.event.id, image_id=image_id))
+        main.db.session.commit()
+        printable = self.client.get(f'/admin/events/{self.event.id}/moodboard/print')
+        self.assertIn(image_url.encode(), printable.data)
+        served = main.app.test_client().get(image_url)
+        self.assertEqual((served.mimetype, served.data), ('image/png', content))
+        self.assertEqual(self.client.post(f'/admin/moodboard/{image_id}/delete').status_code, 302)
+        self.assertIsNone(main.db.session.get(main.MoodboardImageFile, image_id))
+        self.assertEqual(self.client.get(image_url).status_code, 404)
 
     def test_editable_prices_and_waiver_labels(self):
         path = '/admin/moodboard/prices'

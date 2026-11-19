@@ -1,11 +1,11 @@
-from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for, abort, flash
+from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for, abort, flash, send_file
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -19,18 +19,15 @@ import resend
 import os
 import cloudinary
 import cloudinary.uploader
+from cloudinary.exceptions import Error as CloudinaryError
 from dotenv import load_dotenv
 from email_validator import EmailNotValidError, validate_email
 from business_settings import DEFAULTS as DEFAULT_BUSINESS_SETTINGS
 
 load_dotenv()
 
-cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
-    secure=True
-)
+cloudinary.reset_config()
+cloudinary.config(secure=True)
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
@@ -485,6 +482,13 @@ class MoodboardImage(db.Model):
         default=datetime.now
     )
 
+class MoodboardImageFile(db.Model):
+    image_id = db.Column(db.Integer, db.ForeignKey("moodboard_image.id"), primary_key=True)
+    token = db.Column(db.String(48), nullable=False, unique=True)
+    content = db.Column(db.LargeBinary, nullable=False)
+    mime = db.Column(db.String(30), nullable=False)
+
+
 class EventMoodboardImage(db.Model):
     __tablename__ = "event_moodboard_image"
 
@@ -869,17 +873,21 @@ def event_moodboard(event_id):
 @app.get('/admin/events/<int:event_id>/waiver/qr')
 @admin_required
 def admin_event_waiver_qr(event_id):
+    db.get_or_404(Event, event_id)
+    return event_printable_qr('waiver_event', f'waiver-event-{event_id}.svg', event_id=event_id)
+
+
+def event_printable_qr(endpoint, filename, **params):
     from io import BytesIO
     from flask import send_file
     import qrcode
     import qrcode.image.svg
-    db.get_or_404(Event, event_id)
     output = BytesIO()
-    qrcode.make(url_for('waiver_event', event_id=event_id, _external=True),
+    qrcode.make(url_for(endpoint, _external=True, **params),
                 image_factory=qrcode.image.svg.SvgPathImage).save(output)
     output.seek(0)
     return send_file(output, mimetype='image/svg+xml',
-                     download_name=f'waiver-event-{event_id}.svg')
+                     download_name=filename)
 
 
 @app.get('/admin/events/<int:event_id>/waiver/print')
@@ -892,29 +900,32 @@ def admin_event_waiver_print(event_id):
 @app.get('/admin/events/<int:event_id>/moodboard/qr')
 @admin_required
 def admin_event_moodboard_qr(event_id):
-    from io import BytesIO
-    from flask import send_file
-    import qrcode
-    import qrcode.image.svg
     db.get_or_404(Event, event_id)
-    output = BytesIO()
-    qrcode.make(url_for('event_moodboard', event_id=event_id, _external=True),
-                image_factory=qrcode.image.svg.SvgPathImage).save(output)
-    output.seek(0)
-    return send_file(output, mimetype='image/svg+xml',
-                     download_name=f'moodboard-event-{event_id}.svg')
+    return event_printable_qr('event_moodboard', f'moodboard-event-{event_id}.svg', event_id=event_id)
+
+
+@app.get('/admin/events/<int:event_id>/account/qr')
+@admin_required
+def admin_event_account_qr(event_id):
+    db.get_or_404(Event, event_id)
+    return event_printable_qr('client.login', 'cl-paints-account.svg')
 
 
 @app.get('/admin/events/<int:event_id>/moodboard/print')
 @admin_required
 def admin_event_moodboard_print(event_id):
     event = db.get_or_404(Event, event_id)
-    return render_template('admin_moodboard_printable.html', event=event)
+    sign_only = request.args.get('layout') == 'sign'
+    groups = []
+    if not sign_only:
+        groups = event_design_groups(EventMoodboardImage, event_id, get_moodboard_prices(), include_ids=True)
+    return render_template('admin_moodboard_printable.html', event=event, sign_only=sign_only, groups=groups)
 
 
 @app.post("/admin/moodboard/upload")
 @admin_required
 def admin_moodboard_upload():
+    from PIL import Image
     files = request.files.getlist("images")
 
     design_type = request.form.get("design_type", "large").strip().lower()
@@ -924,7 +935,9 @@ def admin_moodboard_upload():
 
     allowed_extensions = {"jpg", "jpeg", "png", "webp"}
 
-    uploaded_count = 0
+    config = cloudinary.config()
+    use_cloudinary = bool(config.cloud_name and config.api_key and config.api_secret)
+    skipped = 0
 
     for file in files:
         if not file or not file.filename:
@@ -937,33 +950,57 @@ def admin_moodboard_upload():
         )
 
         if extension not in allowed_extensions:
+            skipped += 1
             continue
-
-        result = cloudinary.uploader.upload(
-            file,
-            folder="cl-paints/moodboard",
-            resource_type="image"
-        )
 
         title = os.path.splitext(file.filename)[0]
         title = title.replace("_", " ").replace("-", " ").strip()
-
         image = MoodboardImage(
-            title=title or "Moodboard Image",
-            image_url=result["secure_url"],
-            storage_id=result["public_id"],
+            title=title[:200] or "Moodboard Image",
             active=True,
             design_type=design_type
-
         )
-
+        if use_cloudinary:
+            try:
+                result = cloudinary.uploader.upload(file, folder="cl-paints/moodboard", resource_type="image")
+            except (CloudinaryError, ValueError):
+                skipped += 1
+                continue
+            image.image_url = result["secure_url"]
+            image.storage_id = result["public_id"]
+        else:
+            content = file.stream.read(10_000_001)
+            if len(content) > 10_000_000:
+                skipped += 1
+                continue
+            try:
+                with Image.open(BytesIO(content), formats=("JPEG", "PNG", "WEBP")) as source:
+                    mime = Image.MIME[source.format]
+                    source.verify()
+            except (OSError, SyntaxError, ValueError, Image.DecompressionBombError):
+                skipped += 1
+                continue
+            token = secrets.token_urlsafe(24)
+            image.image_url = url_for("moodboard_image_file", token=token)
         db.session.add(image)
-        uploaded_count += 1
+        if not use_cloudinary:
+            db.session.flush()
+            db.session.add(MoodboardImageFile(image_id=image.id, token=token, content=content, mime=mime))
 
-    if uploaded_count:
-        db.session.commit()
-
+    db.session.commit()
+    if skipped:
+        flash(f"{skipped} image(s) could not be uploaded. Use valid JPG, PNG or WebP files"
+              + (" and try again." if use_cloudinary else " up to 10 MB."), "error")
     return redirect(url_for("admin_moodboard"))
+
+
+@app.get("/moodboard/images/<token>")
+def moodboard_image_file(token):
+    image = db.one_or_404(db.select(MoodboardImageFile).join(MoodboardImage)
+                          .where(MoodboardImageFile.token == token, MoodboardImage.active.is_(True)))
+    response = send_file(BytesIO(image.content), mimetype=image.mime)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 @app.post("/admin/moodboard/<int:image_id>/rename")
 @admin_required
@@ -1000,12 +1037,18 @@ def admin_moodboard_delete(image_id):
         image_id=image.id
     ).delete()
 
-    # Remove the actual image from Cloudinary
     if image.storage_id:
-        cloudinary.uploader.destroy(
-            image.storage_id,
-            resource_type="image"
-        )
+        try:
+            cloudinary.uploader.destroy(image.storage_id, resource_type="image")
+        except (CloudinaryError, ValueError):
+            db.session.rollback()
+            flash("The image could not be removed from Cloudinary. Check the storage configuration and try again.", "error")
+            return redirect(url_for("admin_moodboard"))
+    else:
+        image_file = db.session.get(MoodboardImageFile, image.id)
+        if image_file:
+            db.session.delete(image_file)
+            db.session.flush()
 
     db.session.delete(image)
     db.session.commit()
@@ -2904,6 +2947,7 @@ def admin_create_event():
         db.session.flush()
         db.session.add(loyalty_models[0](event_id=event.id, token=secrets.token_urlsafe(32)))
         db.session.commit()
+        return redirect(url_for("admin_events", _anchor=f"event-{event.id}"))
 
     return redirect(url_for("admin_events"))
 
@@ -3025,7 +3069,7 @@ register_reports(app, db, Booking, Waiver, Participant, ReportLocation, booking_
 from business_settings import register_settings
 get_business_settings = register_settings(app, db, BusinessSetting, AdminCredential, AdminPasswordReset, admin_required, ADMIN_PASSWORD, ADMIN_EMAIL)
 from moodboard_payments import register as register_moodboard_payments
-from moodboard_export import register as register_moodboard_export
+from moodboard_export import event_design_groups, register as register_moodboard_export
 register_moodboard_export(app, db, Event, EventMoodboardImage, get_moodboard_prices, admin_required)
 register_moodboard_payments(app, db, MoodboardOrder, Event, EventMoodboardImage,
                            get_moodboard_prices, get_business_settings, admin_required, BusinessSetting)
