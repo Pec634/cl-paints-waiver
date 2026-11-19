@@ -2,6 +2,8 @@
   const controls = document.getElementById('moodboard-sheet-controls');
   const status = document.getElementById('editor-status');
   const print = document.getElementById('print-sign');
+  const printPageSize = document.getElementById('print-page-size');
+  const orientation = controls.elements.namedItem('orientation');
   const preview = document.querySelector('.moodboard-sheet-preview');
   const sheets = [...preview.querySelectorAll('[data-sheet]')];
   const layoutStatus = document.getElementById('moodboard-layout-status');
@@ -67,6 +69,9 @@
   }
 
   function update() {
+    const landscape = orientation.value === 'landscape';
+    preview.dataset.orientation = orientation.value;
+    printPageSize.textContent = `@page{size:A4 ${orientation.value};margin:0}`;
     for (const sheet of sheets) {
       const page = sheet.dataset.sheet;
       const codes = sheet.querySelector('.moodboard-sheet-codes');
@@ -77,7 +82,8 @@
       codes.hidden = !codes.querySelector('figure:not([hidden])');
       sheet.dataset.qrPosition = controls.elements.namedItem(`${page}-position`).value;
       const count = Number(grid.dataset.count);
-      const automaticColumns = Math.max(1, Math.round(Math.sqrt(count * (codes.hidden ? 0.72 : 0.86))));
+      const gridRatio = landscape ? (codes.hidden ? 1.6 : 2) : (codes.hidden ? 0.72 : 0.86);
+      const automaticColumns = Math.max(1, Math.round(Math.sqrt(count * gridRatio)));
       const columns = Number(controls.elements.namedItem(`${page}-columns`)?.value) || automaticColumns;
       grid.style.setProperty('--columns', columns);
       grid.style.setProperty('--rows', Math.max(1, Math.ceil(count / columns)));
@@ -102,6 +108,7 @@
 
   try {
     const saved = JSON.parse(localStorage.getItem(key) || '{}');
+    if (saved.orientation === 'landscape') orientation.value = 'landscape';
     for (const field of controls.querySelectorAll('[data-page]')) {
       if (field.type === 'checkbox') field.checked = saved[field.name] === 'on';
       else if ([...field.options].some(option => option.value === saved[field.name])) field.value = saved[field.name];

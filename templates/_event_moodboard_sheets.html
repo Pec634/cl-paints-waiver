@@ -14,6 +14,10 @@
 <div class="editor-layout">
     <form id="moodboard-sheet-controls" class="editor-controls panel client-form">
         <h2>A4 moodboard sheets</h2>
+        <label>Paper orientation<select name="orientation">
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+        </select></label>
         {% if groups|map(attribute='images')|map('length')|max > 1 %}
         <p>Drag one design onto another to swap their places, or select the two tiles in order.</p>
         <p id="moodboard-layout-status" role="status"></p>

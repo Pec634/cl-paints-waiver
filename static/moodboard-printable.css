@@ -38,6 +38,12 @@
 .moodboard-sheet[data-qr-position="top"] .moodboard-sheet-codes { order: -1; }
 .moodboard-sheet-codes figure { width: 23cqw; font-size: 2.5cqw; line-height: 1.2; }
 .moodboard-sheet-codes img { display: block; width: 17cqw; height: 17cqw; margin: auto; }
+.moodboard-sheet-preview[data-orientation="landscape"] .moodboard-sheet {
+  aspect-ratio: 297 / 210;
+  max-width: 1080px;
+}
+.moodboard-sheet-preview[data-orientation="landscape"] .moodboard-sheet h2 { font-size: 3.5cqw; }
+.moodboard-sheet-preview[data-orientation="landscape"] .moodboard-sheet-codes img { width: 12cqw; height: 12cqw; }
 .moodboard-sheet [hidden] { display: none; }
 .moodboard-tile-control {
   position: absolute;
@@ -72,6 +78,11 @@
     margin: 0;
     box-shadow: none;
     break-inside: avoid;
+  }
+  .moodboard-sheet-preview[data-orientation="landscape"] .moodboard-sheet {
+    width: 297mm;
+    height: 209mm;
+    max-width: none;
   }
   .moodboard-sheet + .moodboard-sheet { break-before: page; }
 }
