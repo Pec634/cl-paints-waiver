@@ -9,6 +9,8 @@
     <div class="paint-actions">
         <a class="btn" href="{{ url_for('admin_event_moodboard', event_id=event.id) }}">Manage event designs</a>
         <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id, layout='sign') }}">Standalone QR sign</a>
+        <button type="button" class="btn" id="toggle-print-preview" aria-pressed="false">Clean print preview</button>
+        <button type="button" class="btn primary" id="print-from-preview" disabled hidden>Print / save as PDF</button>
     </div>
 </header>
 <div class="editor-layout">
@@ -18,6 +20,17 @@
             <option value="portrait">Portrait</option>
             <option value="landscape">Landscape</option>
         </select></label>
+        <p id="moodboard-image-size" aria-live="polite"></p>
+        {% if groups|selectattr('images')|list %}
+        <label>Design to adjust<select id="moodboard-crop-design">
+            {% for group in groups %}
+            {% for image in group.images %}
+            <option value="{{ image.id }}">{{ image.label }}</option>
+            {% endfor %}
+            {% endfor %}
+        </select></label>
+        <button type="button" class="btn" id="moodboard-open-crop">Adjust image crop</button>
+        {% endif %}
         {% if groups|map(attribute='images')|map('length')|max > 1 %}
         <p>Drag one design onto another to swap their places, or select the two tiles in order.</p>
         <p id="moodboard-layout-status" role="status"></p>
@@ -43,6 +56,10 @@
         </fieldset>
         {% endfor %}
         <div class="editor-actions">
+            <div class="paint-actions">
+                <button type="button" class="btn" id="moodboard-undo" disabled>Undo</button>
+                <button type="button" class="btn" id="moodboard-redo" disabled>Redo</button>
+            </div>
             <button type="button" class="btn" id="save-sign">Save design on this device</button>
             <button type="button" class="btn" id="reset-sign">Reset design</button>
             <button type="button" class="btn primary" id="print-sign" disabled>Print / save as PDF</button>
@@ -77,6 +94,25 @@
             </div>
         </article>
         {% endfor %}
+        <div class="moodboard-sheet moodboard-size-probe" aria-hidden="true">
+            <div class="moodboard-sheet-grid"><span></span></div>
+        </div>
     </section>
 </div>
+{% if groups|selectattr('images')|list %}
+<dialog id="moodboard-crop-dialog" aria-labelledby="moodboard-crop-heading">
+    <form method="dialog" class="client-form">
+        <h2 id="moodboard-crop-heading">Adjust image crop</h2>
+        <div class="moodboard-crop-preview"><img alt="" draggable="false"></div>
+        <p>Drag the image to reposition it, or use the sliders.</p>
+        <label class="check"><input type="checkbox" name="fit"> Fit whole image</label>
+        <label>Horizontal position <input type="range" name="x" min="0" max="100" value="50"></label>
+        <label>Vertical position <input type="range" name="y" min="0" max="100" value="50"></label>
+        <div class="paint-actions">
+            <button type="button" class="btn" id="moodboard-cancel-crop">Cancel</button>
+            <button type="submit" class="btn primary">Apply crop</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
 <script src="{{ url_for('static', filename='moodboard-printable.js') }}" defer></script>
