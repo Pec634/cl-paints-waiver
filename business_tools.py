@@ -234,8 +234,9 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
                 flash(str(error),'error')
             return redirect(url_for('admin_calendar'))
         import calendar
+        today = datetime.now(ZoneInfo('Europe/London')).date()
         try:
-            month=datetime.strptime(request.args.get('month',datetime.now(ZoneInfo('Europe/London')).strftime('%Y-%m')),'%Y-%m')
+            month=datetime.strptime(request.args.get('month',today.strftime('%Y-%m')),'%Y-%m')
             if not 1900 <= month.year <= 2100: raise ValueError()
         except ValueError: abort(400)
         rows=calendar_rows()
@@ -248,7 +249,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
             weeks.append(cells)
         previous=(month-timedelta(days=1)).strftime('%Y-%m')
         next_month=(month.replace(day=28)+timedelta(days=4)).strftime('%Y-%m')
-        return render_template('admin_calendar.html',rows=rows,client_csrf=csrf(),blocks=Block.query.order_by(Block.starts_at).all(),weeks=weeks,month=month,previous=previous,next_month=next_month)
+        return render_template('admin_calendar.html',rows=rows,client_csrf=csrf(),blocks=Block.query.order_by(Block.starts_at).all(),weeks=weeks,month=month,previous=previous,next_month=next_month,today=today)
     @app.post('/admin/calendar/blocks/<int:block_id>/delete')
     @admin_required
     def delete_availability_block(block_id):

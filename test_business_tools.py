@@ -100,6 +100,25 @@ class BusinessToolsTest(unittest.TestCase):
         self.admin.post(f'/admin/calendar/blocks/{block.id}/delete',data={'csrf_token':'admin-token'})
         self.assertEqual(Block.query.count(),0)
 
+    def test_calendar_today_and_dashboard_countdowns_use_uk_dates(self):
+        import json
+        today = datetime.now(ZoneInfo('Europe/London')).date()
+        yesterday = today - timedelta(days=1)
+        self.booking.status = 'Accepted'
+        self.booking.event_schedule = json.dumps({'events': [
+            {'date': (today + timedelta(days=offset)).isoformat()}
+            for offset in (-1, 0, 1, 7)
+        ]})
+        main.db.session.commit()
+
+        calendar = self.admin.get('/admin/calendar').get_data(as_text=True)
+        self.assertIn(f'datetime="{today.isoformat()}" aria-current="date"', calendar)
+        self.assertRegex(calendar, rf'(?s)class="availability-day(?: outside)? past">\s*<time[^>]+datetime="{yesterday.isoformat()}"')
+        dashboard = self.admin.get('/admin/dashboard').get_data(as_text=True)
+        for label in ('Today', 'In 1 day', 'In 7 days'):
+            self.assertIn(f'class="dashboard-tag dashboard-countdown">{label}</span>', dashboard)
+        self.assertEqual(dashboard.count('class="dashboard-tag dashboard-countdown"'), 3)
+
     def test_calendar_status_titles_date_specific_details_and_admin_access(self):
         import json
         self.booking.status = 'Under Review'

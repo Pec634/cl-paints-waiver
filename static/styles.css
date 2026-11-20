@@ -2298,6 +2298,8 @@ label.moodboard-admin-card > div {
 .dashboard-calendar strong { display: block; font-size: 1.6rem; }
 .dashboard-calendar span { display: block; font-size: .8rem; color: var(--muted); white-space: nowrap; }
 .dashboard-booking-info { flex: 1; }
+.dashboard-booking-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.dashboard-countdown { background: #e8f0ff; color: #21468d; }
 .dashboard-empty { padding: 24px 0; }
 .dashboard-empty h3 { margin-top: 0; }
 @media (max-width: 1050px) { .dashboard-grid { grid-template-columns: minmax(0, 1fr); } .dashboard-upcoming { grid-column: auto; } }

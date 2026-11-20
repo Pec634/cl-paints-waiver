@@ -38,8 +38,8 @@
     <div class="availability-month">
       {% for label in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<strong>{{ label }}</strong>{% endfor %}
       {% for week in weeks %}{% for cell in week %}
-      <div class="availability-day{{ ' outside' if not cell.in_month else '' }}">
-        <strong>{{ cell.date.day }}</strong>
+      <div class="availability-day{{ ' outside' if not cell.in_month else '' }}{{ ' past' if cell.date < today else ' today' if cell.date == today else '' }}">
+        <time class="calendar-day-number" datetime="{{ cell.date.isoformat() }}"{% if cell.date == today %} aria-current="date"{% endif %}>{{ cell.date.day }}</time>
         {% for item in cell["items"] %}
         <a class="calendar-event calendar-event--{{ status_class(item) }}" href="#calendar-detail-{{ rows.index(item) }}" data-calendar-detail="calendar-detail-{{ rows.index(item) }}" aria-haspopup="dialog">
           <span class="calendar-event-time">{{ item.start.strftime('%H:%M') }}–{{ item.end.strftime('%H:%M') }}</span>

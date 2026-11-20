@@ -763,7 +763,8 @@ def admin_dashboard():
             except (KeyError, TypeError, ValueError):
                 continue
             if event_date >= today:
-                upcoming.append({"booking": booking, "event": event, "date": event_date})
+                upcoming.append({"booking": booking, "event": event, "date": event_date,
+                                 "days_until": (event_date - today).days})
     upcoming.sort(key=lambda item: (item["date"], item["event"].get("start_time", "")))
     reward_count = fetch_one("SELECT COUNT(*) AS total FROM referrals WHERE status = 'earned'")["total"]
     correspondence = db.session.query(ClientEnquiry, ClientAccount).join(

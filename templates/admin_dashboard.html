@@ -50,7 +50,15 @@
                 {% for item in upcoming_bookings %}
                 <a class="dashboard-item dashboard-booking" href="{{ url_for('admin_bookings') }}#booking-{{ item.booking.id }}">
                     <div class="dashboard-calendar"><strong>{{ item.date.strftime('%d') }}</strong><span>{{ item.date.strftime('%b %Y') }}</span></div>
-                    <div class="dashboard-booking-info"><h3>{{ item.booking.first_name }} {{ item.booking.last_name }}</h3><p>{{ item.event.event_type }} · {{ item.event.start_time }}–{{ item.event.finish_time }}</p><p>{{ item.event.event_address }}</p></div><span class="dashboard-tag dashboard-tag-green">Accepted</span>
+                    <div class="dashboard-booking-info">
+                        <div class="dashboard-booking-heading">
+                            <h3>{{ item.booking.first_name }} {{ item.booking.last_name }}</h3>
+                            <span class="dashboard-tag dashboard-countdown">{{ 'Today' if item.days_until == 0 else 'In 1 day' if item.days_until == 1 else 'In ' ~ item.days_until ~ ' days' }}</span>
+                        </div>
+                        <p>{{ item.event.event_type }} · {{ item.event.start_time }}–{{ item.event.finish_time }}</p>
+                        <p>{{ item.event.event_address }}</p>
+                    </div>
+                    <span class="dashboard-tag dashboard-tag-green">Accepted</span>
                 </a>
                 {% else %}<div class="dashboard-empty"><h3>No upcoming bookings yet.</h3><p>Accepted bookings will appear here with their dates and venues.</p><a class="btn" href="{{ url_for('admin_bookings') }}">Review bookings</a></div>{% endfor %}
             </section>

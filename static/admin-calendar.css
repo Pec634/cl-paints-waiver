@@ -6,7 +6,12 @@
 .calendar-scroll { overflow-x: auto; }
 .calendar-scroll .availability-month { min-width: 770px; }
 .availability-day.outside { opacity: 1; background: #f3f4f6; }
-.availability-day.outside > strong { color: #767676; }
+.availability-day > .calendar-day-number { display: inline-block; font-weight: 700; }
+.availability-day.outside > .calendar-day-number { color: #767676; }
+.availability-day.past { background: #e5e9ef; }
+.availability-day.past > .calendar-day-number { color: #4b586b; text-decoration: line-through; }
+.availability-day.today { border-color: #325cb0; background: #eef4ff; box-shadow: inset 0 0 0 1px #325cb0; }
+.availability-day.today > .calendar-day-number { padding: 0 6px; border-radius: 6px; background: #325cb0; color: #fff; }
 .availability-day a.calendar-event { display: block; padding: 7px; border-left: 4px solid; margin-top: 8px; text-decoration: none; font-size: .75rem; line-height: 1.45; }
 .availability-day .calendar-event span { display: block; margin: 0; padding: 0; background: transparent; color: inherit; font-size: inherit; }
 .calendar-event-time { font-weight: 700; }
