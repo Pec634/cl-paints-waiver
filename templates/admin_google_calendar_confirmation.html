@@ -1,0 +1,22 @@
+{% extends 'rewards/base.html' %}
+{% block title %}{{ 'Google Calendar connected' if confirmation.connected else 'Google Calendar sync complete' }} | CL Paints{% endblock %}
+{% block content %}
+<section class="panel">
+{% if confirmation.connected %}
+  <h1>Google Calendar connected</h1>
+  <p>CL Paints is connected to <strong>{{ calendar_id }}</strong>. You can now preview changes and run your first sync.</p>
+{% else %}
+  {% set report = confirmation.report %}
+  <h1>Google Calendar sync complete</h1>
+  <p>CL Paints bookings are up to date on <strong>{{ calendar_id }}</strong>.</p>
+  <ul>
+    <li>{{ report.create }} created</li>
+    <li>{{ report.update }} updated</li>
+    <li>{{ report.remove }} removed</li>
+    <li>{{ report.unchanged }} unchanged</li>
+  </ul>
+{% endif %}
+  <a class="btn primary" href="{{ url_for('admin_google_calendar') }}">Back to Google Calendar sync</a>
+  <a class="btn" href="{{ url_for('admin_calendar') }}">Back to availability calendar</a>
+</section>
+{% endblock %}

@@ -277,11 +277,23 @@ def register(app, db, Setting, Booking, schedule, settings, admin_required):
             encrypted = token_cipher().encrypt(json.dumps(saved).encode()).decode()
             db.session.merge(Setting(key=TOKEN_KEY, value=encrypted))
             db.session.commit()
-            flash('Google Calendar connected. Preview changes before your first sync.', 'success')
+            session['google_calendar_confirmation'] = {'connected': True}
+            return redirect(url_for('google_calendar_confirmation'))
         except CalendarError as error:
             db.session.rollback()
             flash(str(error), 'error')
         return redirect(url_for('admin_google_calendar'))
+
+    @app.get('/admin/calendar/google/confirmation')
+    @admin_required
+    def google_calendar_confirmation():
+        confirmation = session.pop('google_calendar_confirmation', None)
+        if confirmation is None:
+            return redirect(url_for('admin_google_calendar'))
+        response = app.make_response(render_template('admin_google_calendar_confirmation.html',
+            confirmation=confirmation, calendar_id=os.getenv('GOOGLE_CALENDAR_ID', '')))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
 
     @app.post('/admin/calendar/google/disconnect')
     @admin_required
@@ -306,6 +318,9 @@ def register(app, db, Setting, Booking, schedule, settings, admin_required):
                 abort(400)
             try:
                 report = sync(apply=request.form['action'] == 'sync')
+                if report['applied']:
+                    session['google_calendar_confirmation'] = {'report': report}
+                    return redirect(url_for('google_calendar_confirmation'), code=303)
             except CalendarError as error:
                 flash(str(error) + ' Retry syncing to reconcile any changes already sent.', 'error')
         try:

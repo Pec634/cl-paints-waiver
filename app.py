@@ -1654,11 +1654,12 @@ def booking_availability_check():
 
     start = datetime.combine(event_date, requested_start.time())
     finish = datetime.combine(event_date, requested_finish.time())
+    unavailable = "Unavailable. Please choose another date or time."
     for row in app.extensions['calendar_rows']():
         if row.get('collection'): continue
         if row['booking'] and row['booking'].status != 'Accepted': continue
         if start < row['occupied_end'] and finish > row['occupied_start']:
-            return jsonify(success=True, available=False, message='Please contact us about this date. We can discuss suitable arrangements.')
+            return jsonify(success=True, available=False, message=unavailable)
 
     for booking in Booking.query.filter_by(status="Accepted").all():
         try:
@@ -1686,13 +1687,13 @@ def booking_availability_check():
                 return jsonify({
                     "success": True,
                     "available": False,
-                    "message": "Please contact us about this date. We can discuss suitable arrangements.",
+                    "message": unavailable,
                 })
 
     return jsonify({
         "success": True,
         "available": True,
-        "message": "Available to enquire. Availability is provisional until CL Paints confirms your booking.",
+        "message": "Available. You can request to book this date and time.",
     })
 
 

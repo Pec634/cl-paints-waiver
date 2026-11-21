@@ -194,6 +194,18 @@ class GoogleCalendarSyncTest(unittest.TestCase):
         with patch.dict(os.environ, GOOGLE_CALENDAR_ID=''):
             self.assertNotEqual(runner.invoke(args=['sync-google-calendar']).exit_code, 0)
 
+    def test_successful_sync_shows_confirmation_and_counts(self):
+        admin = self.fixture.admin
+        path = '/admin/calendar/google'
+        admin.get(path)
+        with admin.session_transaction() as state:
+            csrf = state['google_calendar_csrf']
+        response = admin.post(path, data=dict(csrf_token=csrf, action='sync'), follow_redirects=True)
+        self.assertEqual(response.history[0].status_code, 303)
+        self.assertIn('Google Calendar sync complete', response.text)
+        self.assertIn('1 created', response.text)
+        self.assertEqual(admin.get(response.request.path).location, path)
+
     def begin_connection(self):
         admin = self.fixture.admin
         admin.get('/admin/calendar/google')
@@ -212,6 +224,7 @@ class GoogleCalendarSyncTest(unittest.TestCase):
              patch('google_calendar_sync.api', return_value=dict(accessRole='writer', items=[])) as api:
             response = self.fixture.admin.get('/admin/calendar/google/callback', query_string=dict(state=params['state'][0], code='code'))
         self.assertEqual(response.status_code, 302)
+        self.assertIn('Google Calendar connected', self.fixture.admin.get(response.location).text)
         values = exchange.call_args.args[0]
         self.assertEqual(values['redirect_uri'], params['redirect_uri'][0])
         challenge = base64.urlsafe_b64encode(hashlib.sha256(values['code_verifier'].encode()).digest()).decode().rstrip('=')

@@ -1,6 +1,8 @@
 import unittest
 import json
 import re
+from datetime import datetime
+from unittest.mock import patch
 import test_client_portal as fixtures
 import test_native_form_browser as browsers
 
@@ -16,9 +18,22 @@ class PublicWebsiteTest(unittest.TestCase):
             'date': '2099-01-01', 'start_time': '10:00', 'finish_time': '12:00'})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json['available'])
+        self.assertIn('You can request to book this date and time', response.json['message'])
         response = self.client.post('/api/bookings/availability-check', json={
             'date': '2099-01-01', 'start_time': '12:00', 'finish_time': '10:00'})
         self.assertEqual(response.status_code, 400)
+
+    def test_availability_reports_overlapping_confirmed_booking(self):
+        booking = fixtures.main.Booking(status='Accepted')
+        calendar_row = dict(booking=booking, occupied_start=datetime(2099, 1, 1, 10),
+                            occupied_end=datetime(2099, 1, 1, 12))
+        with patch.dict(fixtures.main.app.extensions, calendar_rows=lambda: [calendar_row]):
+            response = self.client.post('/api/bookings/availability-check', json={
+                'date': '2099-01-01', 'start_time': '09:00', 'finish_time': '11:00'})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json['available'])
+        self.assertEqual(response.json['message'], 'Unavailable. Please choose another date or time.')
+
     def setUp(self):
         self.fixture=fixtures.ClientPortalTest();self.fixture.setUp()
         self.client=fixtures.main.app.test_client()
