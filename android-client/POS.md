@@ -41,7 +41,7 @@ records. The existing client app remains a separate application.
 - Basket lines have plus/minus quantity controls and item tiles show the quantity
   already added. Event, loyalty and email receipt options expand in the basket;
   their summary shows the current selection. Cash shortcuts set the tender to
-  the exact total, GBP10, GBP20 or GBP50 and calculate change without completing
+  the exact total, GBP5, GBP10 or GBP20 and calculate change without completing
   the sale. Staff and day-end links are in the till header's Tools menu.
 - Cash received recording, recent sales, and sale details with an optional waiver link.
 - Cash payment opens inside the basket. Enter the tender, check live change and

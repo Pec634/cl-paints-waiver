@@ -712,6 +712,10 @@ class PosLibraryTest(unittest.TestCase):
                     select('items');select('basket');
                     assert(new FormData(form).get('receipt_email')==='customer@example.com','navigation lost receipt preference');
                     document.getElementById('pos-cash-open').click();
+                    const shortcuts = [...document.querySelectorAll('[data-cash-tender]')];
+                    assert(shortcuts.map(button => button.dataset.cashTender).join(',') === 'exact,5,10,20', 'cash shortcut order is incorrect');
+                    shortcuts[1].click();
+                    assert(document.getElementById('pos-cash-tender').value === '5.00', 'five pound shortcut set the wrong tender');
                     document.querySelector('[data-cash-tender="20"]').click();
                     assert(document.getElementById('pos-cash-tender').value==='20.00','cash shortcut set wrong tender');
                     assert(document.getElementById('pos-cash-change').textContent.includes('5.00'),'cash shortcut change is wrong');
