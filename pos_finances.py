@@ -111,7 +111,8 @@ class PosLedger:
         def record(sale, amount, lines, at, kind, reference, refund_id=None):
             nonlocal cash_before
             field = sale.method.lower() + ('_refunds' if kind == 'Refund' else '_sales')
-            totals[field] += amount
+            if field in totals:
+                totals[field] += amount
             if sale.method == 'Cash' and since and at <= since:
                 cash_before += -amount if kind == 'Refund' else amount
             for item in lines:
@@ -169,7 +170,7 @@ def register_refunds(app, db, Sale, Refund, admin_required, reader_transaction, 
 
     def finish_refund(record,sale):
         if record.status!='Refunded': return
-        if record.loyalty_review_status is None and any(row.get('points',0)>0 for row in sale.loyalty_results):
+        if record.loyalty_review_status is None and any(row.get('points', 0) > 0 or row.get('redeemed') for row in sale.loyalty_results):
             record.loyalty_review_status='Needs review'
         db.session.commit()
         claimed=Refund.query.filter(Refund.id==record.id,Refund.receipt_status=='Requested',Refund.status=='Refunded').update(

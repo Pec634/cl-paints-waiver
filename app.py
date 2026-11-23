@@ -79,7 +79,8 @@ def admin_required(view_function):
             if request.headers.get('Accept') == 'application/json':
                 return {'error':'Your admin session has expired. Sign in again, then retry.'}, 401
             return redirect(url_for('admin_login', expired=1))
-        session['admin_last_activity'] = now
+        if request.endpoint not in ('pos_stock', 'pos_waiver_search', 'admin_participants') or request.headers.get('X-Portal-Refresh') != '1':
+            session['admin_last_activity'] = now
         return view_function(*args, **kwargs)
 
     return wrapped_view

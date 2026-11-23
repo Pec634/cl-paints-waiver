@@ -1,0 +1,3 @@
+{% for value, label in [('', 'Default'), ('#fce7f3', 'Pink'), ('#ffe4e6', 'Red'), ('#ffedd5', 'Orange'), ('#fef3c7', 'Yellow'), ('#dcfce7', 'Green'), ('#dbeafe', 'Blue'), ('#ede9fe', 'Purple')] %}
+  <option value="{{ value }}" {% if product and product.tile_colour == value %}selected{% endif %}>{{ label }}</option>
+{% endfor %}

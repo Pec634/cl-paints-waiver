@@ -152,6 +152,285 @@ class PosLibraryTest(unittest.TestCase):
             counted_cash=str(100+Decimal(summary['cash_sales'])-Decimal(summary['cash_refunds'])),
             sumup_net=str(Decimal(summary['card_sales'])-Decimal(summary['card_refunds'])),notes=''))
 
+    def test_variant_loyalty_sale_redeems_reward_and_decrements_stock_once(self):
+        with self.app.app_context():
+            waiver = self.Waiver(waiver_reference='NEW-WAIVER', responsible_first_name='Jo',
+                responsible_last_name='Paint', responsible_email='jo@example.com',
+                expiry_date=datetime.utcnow() + timedelta(days=30))
+            participant = self.Participant(first_name='Sam', last_name='Paint', waiver=waiver)
+            product = self.Product(name='Face paint', price=Decimal('5.00'),
+                variations_text='Rainbow\nTiger', stock_quantity=2, stock_warning=1, loyalty_reward=True)
+            self.db.session.add_all([participant, product])
+            self.db.session.flush()
+            balance = self.loyalty_models[1](participant_id=participant.id, points=3)
+            self.db.session.add(balance)
+            self.db.session.commit()
+            product_id, waiver_id, person_id = product.id, waiver.id, participant.id
+
+        client = self.client
+        self.assertIn(b'NEW-WAIVER', client.get('/admin/pos/waivers?recent=1').data)
+        form = dict(csrf_token='token', sale_token='variant-cash-reward-001',
+            waiver_id=waiver_id, participant_id=person_id, method='Loyalty', reward_discount='500',
+            items=json.dumps([dict(name='Face paint · Rainbow', quantity=1, price='5.00',
+                product_id=product_id, variation='Rainbow')]))
+        first = client.post('/admin/pos/sales', data=form)
+        with client.session_transaction() as state:
+            messages = state.get('_flashes')
+        self.assertIn('completed=', first.location, messages)
+        second = client.post('/admin/pos/sales', data=form)
+        self.assertEqual(first.location, second.location)
+        with self.app.app_context():
+            sale = self.Sale.query.one()
+            self.assertEqual(sale.amount, Decimal('0.00'))
+            self.assertEqual(sale.method, 'Loyalty')
+            self.assertEqual(json.loads(sale.items_json)[0]['variation'], 'Rainbow')
+            self.assertTrue(sale.loyalty_results[0]['redeemed'])
+            self.assertEqual(self.db.session.get(self.loyalty_models[1], person_id).points, 0)
+            product = self.db.session.get(self.Product, product_id)
+            self.assertEqual(product.stock_quantity, 1)
+            self.assertTrue(product.low_stock)
+            report = self.ledger.summary(datetime.now().date())
+            self.assertEqual(report['gross'], '0.00')
+            self.assertEqual(report['transactions'][0]['method'], 'Loyalty')
+
+    @unittest.skipUnless(EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_coloured_variations_open_from_till_tile(self):
+        response = self.client.post('/admin/pos/library', data={
+            'csrf_token': 'token', 'name': 'Bubble wand', 'price': '1.00',
+            'variations': 'Red\nGreen', 'tile_colour': '#dcfce7',
+            'variation_colours': json.dumps({'Red': '#ffe4e6'}),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.Product.query.one().variation_colours, {'Red': '#ffe4e6'})
+        BrowserChecks.browser(self, self.client.get('/admin/pos').data, '''
+            const tile = document.querySelector('[data-product-id]');
+            tile.click();
+            const picker = document.getElementById('pos-variation-picker');
+            assert(picker.matches(':modal'), 'the tile did not open the variation picker');
+            const [red, green] = picker.querySelectorAll('.pos-variation-tile');
+            assert(red.textContent === 'Red' && getComputedStyle(red).backgroundColor === 'rgb(255, 228, 230)', 'red tile did not use its own colour');
+            assert(getComputedStyle(green).backgroundColor === 'rgb(220, 252, 231)', 'unassigned variation did not inherit the item colour');
+            assert(JSON.parse(document.getElementById('pos-items').value).length === 0, 'item was added before variation selection');
+            red.click();
+            assert(!picker.open && JSON.parse(document.getElementById('pos-items').value)[0].variation === 'Red', 'variation did not enter the basket');
+            document.querySelector('[data-pos-library-open=pos-library-manager]').click();
+            const edit = document.querySelector('.pos-management-actions [data-pos-library-open]');
+            edit.click();
+            const form = document.getElementById(edit.dataset.posLibraryOpen).querySelector('form');
+            const colour = form.querySelector('[data-pos-variation-colours] select');
+            assert(colour.value === '#ffe4e6', 'manager could not see the assigned variation colour');
+            colour.closest('label').nextElementSibling.click();
+            const dialog = document.getElementById('pos-colour-dialog');
+            assert(dialog.matches(':modal'), 'colour picker did not open a pop-up');
+            const palette = document.getElementById('pos-colour-presets');
+            assert(palette.querySelector('[data-colour="#ffe4e6"]').getAttribute('aria-pressed') === 'true', 'saved colour is not marked selected');
+            const wheel = document.getElementById('pos-colour-wheel');
+            const bounds = wheel.getBoundingClientRect();
+            wheel.dispatchEvent(new MouseEvent('click', {bubbles:true, clientX: bounds.left + bounds.width * .6, clientY: bounds.top + bounds.height * .1}));
+            const selected = document.getElementById('pos-colour-hex').value;
+            assert(/^#[0-9a-f]{6}$/.test(selected) && selected !== '#ffe4e6', 'wheel did not preview a new colour');
+            assert(colour.value === '#ffe4e6', 'preview changed the edit before applying');
+            document.getElementById('pos-colour-apply').click();
+            assert(!dialog.open && colour.value === selected, 'chosen colour was not applied');
+            form.requestSubmit();
+            edit.click();
+            assert(form.querySelector('[data-pos-variation-colours] select').value === selected, 'queued variation colour did not survive reopening');
+            form.querySelector('[data-pos-library-close]').click();
+            document.getElementById('pos-library-manager').querySelector('.pos-library-dialog-heading button').click();
+            tile.click();
+            document.getElementById('pos-variation-edit-colours').click();
+            picker.querySelector('.pos-variation-tile').click();
+            assert(dialog.matches(':modal'), 'variation tile did not open the colour wheel in edit mode');
+            palette.querySelector('[data-colour="#dbeafe"]').click();
+            document.getElementById('pos-colour-apply').click();
+            assert(getComputedStyle(picker.querySelector('.pos-variation-tile')).backgroundColor === 'rgb(219, 234, 254)', 'variation pop-up did not preview its new colour');
+            assert(JSON.parse(document.getElementById('pos-items').value).length === 1, 'editing a variation added it to the basket');
+            let saved;
+            window.fetch = async (_, request) => {
+                saved = JSON.parse(request.body.get('changes'));
+                return {ok: true, json: async () => ({colours: saved})};
+            };
+            document.getElementById('pos-variation-save-colours').click();
+            await new Promise(resolve => setTimeout(resolve, 25));
+            assert(saved.Red === '#dbeafe' && Object.keys(saved).length === 1, 'save did not send just the changed colour');
+            assert(document.getElementById('pos-variation-colour-status').textContent === 'Colours saved.', 'save confirmation is missing');
+            document.getElementById('pos-variation-edit-colours').click();
+            assert(getComputedStyle(picker.querySelector('.pos-variation-tile')).backgroundColor === 'rgb(219, 234, 254)', 'saved colour disappeared after editing');
+        ''', 390)
+        product = self.Product.query.one()
+        url = f'/admin/pos/library/{product.id}/variation-colours'
+        result = self.client.post(url, data={'csrf_token': 'token', 'changes': '{"Green":"#dcfce7"}'})
+        self.assertEqual(result.get_json(), {'colours': {'Red': '#ffe4e6', 'Green': '#dcfce7'}})
+        self.db.session.refresh(product)
+        self.assertEqual(product.variation_colours, {'Red': '#ffe4e6', 'Green': '#dcfce7'})
+
+    def test_batch_item_changes_commit_together(self):
+        first = self.Product(name='Bubbles', price=Decimal('2.00'))
+        second = self.Product(name='Face paint', price=Decimal('5.00'))
+        self.db.session.add_all([first, second])
+        self.db.session.commit()
+        url = '/admin/pos/library/batch'
+        edits = [dict(product_id=str(first.id), name='Bubble wand', price='3.00'),
+            dict(product_id=str(second.id), name='Face paint', price='invalid')]
+        response = self.client.post(url, data={'csrf_token': 'token', 'edits': json.dumps(edits)})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Face paint', response.get_json()['error'])
+        self.db.session.refresh(first)
+        self.assertEqual(first.name, 'Bubbles')
+        self.assertEqual(first.price, Decimal('2.00'))
+
+        edits[1]['price'] = '6.50'
+        data = {'csrf_token': 'token', 'edits': json.dumps(edits)}
+        self.as_staff(self.named_staff())
+        self.assertEqual(self.client.post(url, data=data).status_code, 403)
+        self.as_staff(self.named_staff(role='manager', username='batch-manager'))
+        self.assertEqual(self.client.post(url, data=data).status_code, 200)
+        self.db.session.refresh(first)
+        self.db.session.refresh(second)
+        self.assertEqual(first.name, 'Bubble wand')
+        self.assertEqual(first.price, Decimal('3.00'))
+        self.assertEqual(second.price, Decimal('6.50'))
+
+    @unittest.skipUnless(EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_multiple_popups_queue_changes_before_one_save(self):
+        self.save()
+        self.db.session.add(self.Product(name='Wand', price=Decimal('3.00'), category='Extras'))
+        self.db.session.commit()
+        BrowserChecks.browser(self, self.client.get('/admin/pos').data, '''
+            document.querySelector('[data-pos-library-open=pos-library-manager]').click();
+            assert(document.getElementById('pos-library-manager').matches(':modal'), 'saved items did not open as a modal');
+            const editButtons = [...document.querySelectorAll('.pos-management-actions [data-pos-library-open]')];
+            const row = editButtons[0].closest('tr');
+            const batch = document.getElementById('pos-batch-editor');
+            let sent;
+            window.fetch = async (_, request) => {
+                sent = JSON.parse(request.body.get('edits'));
+                return {ok: false, json: async () => ({error: 'Try again'})};
+            };
+            editButtons.forEach((button, index) => {
+                button.click();
+                const editor = document.getElementById(button.dataset.posLibraryOpen).querySelector('form');
+                editor.elements.price.value = String(index + 10);
+                editor.requestSubmit();
+                assert(!editor.closest('dialog').open, 'queue did not close the editor');
+            });
+            assert(!sent, 'queuing submitted a request');
+            assert(batch.textContent.includes('2 items queued'), 'queue count is incorrect');
+            assert(row.querySelector('[data-pos-inline-edit][name=price]').value === '10', 'row did not show popup edit');
+            for (const [name, value] of Object.entries({price:'12', category:'Extras', tile_colour:'#dbeafe'})) {
+                const field = row.querySelector(`[data-pos-inline-edit][name=${name}]`);
+                field.value = value;
+                field.dispatchEvent(new Event('input', {bubbles:true}));
+            }
+            editButtons[0].click();
+            const editor = document.getElementById(editButtons[0].dataset.posLibraryOpen).querySelector('form');
+            assert(editor.elements.price.value === '12' && editor.elements.category.value === 'Extras' &&
+                editor.elements.tile_colour.value === '#dbeafe', 'popup lost the inline edits');
+            editor.elements.price.value = '15';
+            editor.querySelector('[data-pos-library-close]').click();
+            batch.requestSubmit();
+            await new Promise(resolve => setTimeout(resolve, 25));
+            assert(sent.length === 2 && sent[0].price === '12' && sent[0].category === 'Extras' &&
+                sent[0].tile_colour === '#dbeafe' && sent[1].price === '11', 'batch did not contain both queued edits');
+            assert(batch.textContent.includes('Try again'), 'save failure was not shown');
+            assert(!batch.querySelector('button').disabled, 'save failed and could not be retried');
+        ''', 390)
+
+    def test_tile_order_is_shared_and_requires_valid_manager_submission(self):
+        first = self.Product(name='Bubbles', price=Decimal('2.00'))
+        second = self.Product(name='Face paint', price=Decimal('5.00'))
+        self.db.session.add_all([first, second])
+        self.db.session.commit()
+        ids = [second.id, first.id]
+        url = '/admin/pos/library/order'
+        self.assertEqual(self.client.post(url, data={'csrf_token': 'wrong', 'product_id': ids}).status_code, 400)
+        self.assertEqual(self.client.post(url, data={'csrf_token': 'token', 'product_id': ids[:1]}).status_code, 409)
+        self.assertEqual(self.client.post(url, data={'csrf_token': 'token', 'product_id': ids, 'columns': '4'}).status_code, 400)
+        self.assertEqual(self.client.post(url, data={'csrf_token': 'token', 'product_id': [first.id] * 2}).status_code, 400)
+        manager = self.named_staff(role='manager', username='tile-manager')
+        self.as_staff(manager)
+        result = self.client.post(url, data={'csrf_token': 'token', 'product_id': ids, 'columns': '3'})
+        self.assertEqual(result.get_json(), {'product_ids': ids, 'columns': 3})
+        self.db.session.add(self.Product(name='A new item', price=Decimal('1.00')))
+        self.db.session.commit()
+        self.as_staff(self.named_staff())
+        self.assertEqual(self.client.post(url, data={'csrf_token': 'token', 'product_id': ids}).status_code, 403)
+        page = self.client.get('/admin/pos').data
+        self.assertIn(b'class="pos-product-grid" data-columns="3"', page)
+        self.assertLess(page.index(b'data-product-name="Face paint"'), page.index(b'data-product-name="Bubbles"'))
+        self.assertLess(page.index(b'data-product-name="Bubbles"'), page.index(b'data-product-name="A new item"'))
+
+    @unittest.skipUnless(EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_item_editor_and_tile_order_dialogs_on_phone(self):
+        self.save()
+        self.db.session.add(self.Product(name='Wand', price=Decimal('3.00'), tile_colour='#dcfce7'))
+        self.db.session.commit()
+        BrowserChecks.browser(self, self.client.get('/admin/pos').data, '''
+            document.querySelector('[data-pos-library-open=pos-library-manager]').click();
+            assert(document.getElementById('pos-library-manager').matches(':modal'), 'saved items did not open as a modal');
+            document.querySelector('[data-pos-library-open=pos-new-item]').click();
+            const editor = document.getElementById('pos-new-item');
+            assert(editor.matches(':modal'), 'new item editor is not modal');
+            assert(document.activeElement.name === 'name', 'initial focus is not on the item name');
+            assert(editor.getBoundingClientRect().width <= innerWidth, 'editor overflows phone');
+            const price = editor.querySelector('[name=price]');
+            const category = editor.querySelector('[name=category]');
+            assert(price.getBoundingClientRect().top === category.getBoundingClientRect().top, 'price and category are vertically misaligned');
+            assert(price.getBoundingClientRect().height === category.getBoundingClientRect().height, 'price and category have different heights');
+            for (const control of [price, category]) {
+                control.focus();
+                const style = getComputedStyle(control);
+                assert(parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth) <= 0, 'focus outline extends outside the field');
+            }
+            editor.querySelector('[data-pos-library-close]').click();
+            assert(!editor.open, 'cancel did not dismiss the editor');
+            const firstTile = document.querySelector('[data-product-id]');
+            firstTile.click();
+            const colour = document.querySelector('[data-pos-inline-edit][name=tile_colour]');
+            colour.nextElementSibling.click();
+            document.querySelector('#pos-colour-presets [data-colour="#dbeafe"]').click();
+            document.getElementById('pos-colour-apply').click();
+            assert(colour.value === '#dbeafe', 'inline swatch did not select its colour');
+            const opener = document.querySelector('[data-pos-library-open=pos-tile-order]');
+            opener.click();
+            const order = document.getElementById('pos-tile-order');
+            const form = order.querySelector('form');
+            const [firstPreview, secondPreview] = order.querySelectorAll('li');
+            assert(getComputedStyle(firstPreview).backgroundColor === 'rgb(219, 234, 254)', 'queued colour is missing from preview');
+            assert(getComputedStyle(secondPreview).backgroundColor === 'rgb(220, 252, 231)', 'saved colour is missing from preview');
+            order.querySelector('[data-pos-move=down]').click();
+            assert(order.querySelector('[data-pos-drag]').textContent === 'Wand', 'move down failed');
+            order.querySelector('[data-pos-library-close]').click();
+            await new Promise(resolve => setTimeout(resolve, 25));
+            opener.click();
+            assert(order.querySelector('[data-pos-drag]').textContent === 'Face painting', 'cancel kept the unsaved order');
+            const list = order.querySelector('ol');
+            const columns = form.elements.columns;
+            columns.value = '3';
+            change(columns);
+            assert(getComputedStyle(list).gridTemplateColumns.split(' ').length === 3, 'preview does not have three columns');
+            const [source, target] = list.querySelectorAll('[data-pos-drag]');
+            const targetBox = target.getBoundingClientRect();
+            list.setPointerCapture = () => {};
+            source.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, pointerId: 1}));
+            const point = {bubbles: true, pointerId: 1, clientX: targetBox.x + 10, clientY: targetBox.y + 10};
+            list.dispatchEvent(new PointerEvent('pointermove', point));
+            list.dispatchEvent(new PointerEvent('pointerup', point));
+            assert(list.querySelector('[data-pos-drag]').textContent === 'Wand', 'drag failed to move tile');
+            window.fetch = async (_, request) => ({
+                ok: true, json: async () => ({
+                    product_ids: request.body.getAll('product_id').map(Number), columns: Number(request.body.get('columns'))
+                })
+            });
+            form.requestSubmit();
+            await new Promise(resolve => setTimeout(resolve, 25));
+            assert(!order.open, 'save did not dismiss rearrange dialog');
+            assert(document.querySelector('[data-product-id]').dataset.productName === 'Wand', 'saved order did not update tiles');
+            assert(getComputedStyle(firstTile).backgroundColor !== 'rgb(219, 234, 254)', 'saving the layout published the queued colour');
+            assert(getComputedStyle(document.querySelector('.pos-product-grid')).gridTemplateColumns.split(' ').length === 3, 'saved till does not have three columns');
+            assert(document.getElementById('pos-basket').children.length === 1, 'rearranging lost the basket');
+        ''', 390)
+
     def test_named_cashier_permissions_prices_and_sale_attribution(self):
         self.save();product=self.Product.query.one()
         cashier=self.named_staff();self.as_staff(cashier)
@@ -189,14 +468,18 @@ class PosLibraryTest(unittest.TestCase):
         self.assertEqual(self.client.post('/admin/pos/staff/login',data=dict(csrf_token=csrf,pin='1')).status_code,429)
         self.assertNotEqual(row.pin_hash,'1')
 
-    def test_manager_price_override_and_item_categories(self):
+    def test_manager_cannot_change_a_saved_price_at_checkout(self):
         manager=self.named_staff('manager','manager');self.as_staff(manager)
         result=self.client.post('/admin/pos/library',data=dict(csrf_token='token',name='Glitter',price='3.00',category='Extras',shortcut='yes'))
         self.assertEqual(result.status_code,302)
         product=self.Product.query.one();self.assertEqual(product.category,'Extras');self.assertTrue(product.shortcut)
         self.client.post('/admin/pos/sales',data=dict(csrf_token='token',sale_token='v'*24,method='Cash',cash_tender='5.00',
             items=json.dumps([dict(name='Glitter',quantity=1,price='2.00',product_id=product.id)])))
-        self.assertTrue(self.Sale.query.one().price_override)
+        self.assertEqual(self.Sale.query.count(), 0)
+        self.client.post('/admin/pos/sales',data=dict(csrf_token='token',sale_token='v'*24,method='Cash',cash_tender='5.00',
+            items=json.dumps([dict(name='Glitter',quantity=1,price='3.00',product_id=product.id)])))
+        self.assertEqual(self.Sale.query.one().amount, Decimal('3.00'))
+        self.assertFalse(self.Sale.query.one().price_override)
         self.assertEqual(self.Sale.query.one().staff_name,'Named manager')
 
     def test_manager_can_create_reset_and_disable_staff_pins(self):
@@ -436,6 +719,16 @@ class PosLibraryTest(unittest.TestCase):
                     assert(document.getElementById('pos-cash-confirm').disabled,'underpaid shortcut can complete');
                     document.querySelector('[data-cash-tender="exact"]').click();
                     assert(!document.getElementById('pos-cash-confirm').disabled && document.getElementById('pos-cash-change').textContent.includes('0.00'),'exact cash shortcut failed');
+                    const keypad = document.getElementById('pos-cash-keypad');
+                    const tender = document.getElementById('pos-cash-tender');
+                    assert(keypad.getBoundingClientRect().height > 0, 'cash keypad did not appear');
+                    const tap = key => keypad.querySelector(`[data-cash-key="${key}"]`).click();
+                    tap('clear');
+                    assert(!tender.value && document.getElementById('pos-cash-confirm').disabled, 'clear did not reset tender');
+                    for (const key of ['2', '0', '.', '5', '5', '9']) tap(key);
+                    assert(tender.value === '20.55', 'keypad did not preserve decimal amounts');
+                    tap('backspace');
+                    assert(tender.value === '20.5' && document.getElementById('pos-cash-change').textContent.includes('5.50'), 'keypad did not update change');
                     const token=new FormData(form).get('sale_token');
                     select('waivers');
                     assert(document.getElementById('pos-query').value==='Customer','navigation cleared search');
@@ -490,7 +783,7 @@ class PosLibraryTest(unittest.TestCase):
         markup=self.client.get('/admin/pos').data
         BrowserChecks.browser(self,markup,'''
             document.querySelector('[data-product-id]').click();
-            assert(document.querySelectorAll('#pos-basket input')[1].readOnly,'cashier can edit unit price');
+            assert(document.querySelectorAll('#pos-basket input').length === 1, 'cashier can edit unit price');
             assert(!document.querySelector('#pos-add-item'),'cashier can enter custom items');
             assert(document.getElementById('pos-cash-open') && !document.getElementById('pos-cash-open').disabled,'cashier cannot take cash');
         ''',width=1024)
@@ -1186,14 +1479,18 @@ class PosLibraryTest(unittest.TestCase):
                     assert(new FormData(document.getElementById('pos-checkout')).get('receipt_requested') === '1', 'receipt consent missing from sale');
                     receiptOption.click();
                     assert(!new FormData(document.getElementById('pos-checkout')).has('receipt_email'), 'opted-out email still submitted');
-                    document.querySelector('.pos-library-manager').open = true;
+                    document.querySelector('[data-pos-library-open=pos-library-manager]').click();
+                    assert(document.getElementById('pos-library-manager').matches(':modal'), 'saved items did not open as a modal');
                     const editForm = document.querySelector('.pos-management-actions form');
+                    document.querySelector('.pos-management-actions [data-pos-library-open]').click();
+                    assert(editForm.closest('dialog').matches(':modal'), 'edit did not open as a modal');
                     const editData = new FormData(editForm);
-                    assert(editData.get('name') === 'Face painting' && editData.get('price') === '7.50', 'table fields are not associated with save form');
+                    assert(editData.get('name') === 'Face painting' && editData.get('price') === '7.50', 'editor did not load existing values');
+                    editForm.querySelector('[data-pos-library-close]').click();
                     const deleteForm = document.querySelectorAll('.pos-management-actions form')[1];
                     assert(!new FormData(deleteForm).has('price'), 'remove form includes edit fields');
                     assert(document.documentElement.scrollWidth <= innerWidth, 'management table overflows phone');
-                    document.querySelector('.pos-library-manager').open = false;
+                    document.getElementById('pos-library-manager').querySelector('[data-pos-library-close]').click();
                     const libraryRect = document.querySelector('.pos-library').getBoundingClientRect();
                     const basketRect = document.querySelector('.pos-sale-panel').getBoundingClientRect();
                     const waiverRect = document.querySelector('.pos-waiver-panel').getBoundingClientRect();
@@ -1211,26 +1508,26 @@ class PosLibraryTest(unittest.TestCase):
                     const basket = document.getElementById('pos-basket');
                     assert(basket.children.length === 1, 'repeated tap created duplicate lines');
                     assert(basket.querySelector('input').value === '2', 'repeated tap did not increase quantity');
-                    const price = basket.querySelectorAll('input')[1]; price.value = '6.25'; change(price);
-                    assert(document.getElementById('pos-total').textContent.includes('12.50'), 'price adjustment total wrong');
-                    assert(product.dataset.productPrice === '7.50', 'basket adjustment changed saved price');
+                    assert(basket.querySelectorAll('input').length === 1, 'manager can edit unit price');
+                    assert(basket.querySelector('.pos-unit-price').textContent.includes('7.50'), 'unit price is missing');
+                    assert(document.getElementById('pos-total').textContent.includes('15.00'), 'saved price total is incorrect');
                     const quantity = basket.querySelector('input'); quantity.value = '3'; change(quantity);
-                    assert(document.getElementById('pos-total').textContent.includes('18.75'), 'quantity total wrong');
+                    assert(document.getElementById('pos-total').textContent.includes('22.50'), 'quantity total wrong');
                     document.getElementById('pos-cash-open').click();
                     const tender = document.getElementById('pos-cash-tender');
                     assert(!document.getElementById('pos-cash-panel').hidden && document.activeElement === tender, 'cash panel did not open inline');
                     tender.value = '10.00'; tender.dispatchEvent(new Event('input'));
                     assert(document.getElementById('pos-cash-confirm').disabled, 'underpaid cash can complete');
-                    assert(document.getElementById('pos-cash-change').textContent.includes('8.75'), 'shortfall incorrect');
-                    tender.value = '20.00'; tender.dispatchEvent(new Event('input'));
+                    assert(document.getElementById('pos-cash-change').textContent.includes('12.50'), 'shortfall incorrect');
+                    tender.value = '25.00'; tender.dispatchEvent(new Event('input'));
                     assert(!document.getElementById('pos-cash-confirm').disabled, 'valid cash cannot complete');
-                    assert(document.getElementById('pos-cash-change').textContent.includes('1.25'), 'change incorrect');
+                    assert(document.getElementById('pos-cash-change').textContent.includes('2.50'), 'change incorrect');
                     const cashData = new FormData(document.getElementById('pos-checkout'));
-                    assert(cashData.get('cash_tender') === '20.00', 'cash tender missing from checkout');
+                    assert(cashData.get('cash_tender') === '25.00', 'cash tender missing from checkout');
                     document.getElementById('pos-cash-cancel').click();
                     assert(document.getElementById('pos-cash-panel').hidden && tender.disabled, 'cash cancel failed');
                     const items = JSON.parse(document.getElementById('pos-items').value);
-                    assert(items[0].price === '6.25' && items[0].quantity === 3, 'checkout values wrong');
+                    assert(items[0].price === '7.50' && items[0].quantity === 3, 'checkout values wrong');
                     basket.querySelector('button').click();
                     assert(basket.children.length === 0, 'remove failed');
                     assert(document.querySelector('#pos-checkout button').disabled, 'empty checkout enabled');

@@ -67,7 +67,7 @@ for area, names in {
     'notifications': 'admin_notification_centre admin_phone_notifications',
     'photos': 'admin_photo_upload admin_photo_asset admin_photo_library admin_photo_image admin_website_stories',
     'website': 'admin_website_builder admin_website_report',
-    'pos_manager': 'pos_library_save pos_library_delete pos_reconcile pos_refund pos_refund_verify pos_refund_receipt_retry pos_refund_loyalty_review',
+    'pos_manager': 'pos_library_save pos_library_batch pos_library_delete pos_library_order pos_variation_colours_save pos_category_save pos_cash_export pos_reconcile pos_refund pos_refund_verify pos_refund_receipt_retry pos_refund_loyalty_review',
     'bookings': 'admin_bookings admin_manage_booking admin_create_booking_events admin_booking_on_behalf',
     'events': 'admin_events admin_event_from_booking admin_create_event admin_rename_event admin_set_event_status admin_archive_event admin_restore_event admin_delete_event admin_event_waiver_qr admin_event_waiver_print',
     'moodboards': 'admin_moodboard_upload admin_moodboard_rename admin_moodboard_delete admin_moodboard admin_moodboard_prices admin_event_moodboard admin_event_moodboard_save admin_event_moodboard_qr admin_event_moodboard_print',

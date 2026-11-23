@@ -1,0 +1,12 @@
+<div class="pos-product-options">
+  <label>Variations (one per line)<textarea name="variations" rows="3">{{ product.variations_text or '' }}</textarea></label>
+  <input type="hidden" name="variation_colours" value="{{ (product.variation_colours if product else {})|tojson|forceescape }}">
+  <div class="pos-variation-colours" data-pos-variation-colours hidden></div>
+  <label>Tile colour<select name="tile_colour" data-saved-colour="{{ product.tile_colour or '' }}">
+    {% include '_pos_tile_colour_options.html' %}
+  </select></label>
+  {% if product %}<input type="hidden" name="original_stock_quantity" value="{{ product.stock_quantity if product.stock_quantity is not none else '' }}">{% endif %}
+  <label>Stock on hand (blank for unlimited)<input name="stock_quantity" type="number" min="0" max="9999999" value="{{ product.stock_quantity if product and product.stock_quantity is not none else '' }}"></label>
+  <label>Low-stock warning at or below<input name="stock_warning" type="number" min="0" max="9999999" value="{{ product.stock_warning if product and product.stock_warning is not none else '' }}"></label>
+  <label><input type="checkbox" name="loyalty_reward" value="yes" {% if product and product.loyalty_reward %}checked{% endif %}> Eligible for free face paint</label>
+</div>

@@ -78,7 +78,8 @@ class PosAccess:
             if request.is_json or request.headers.get('Accept')=='application/json':
                 return {'error':'Your staff session has ended. Sign in with your PIN again.'},401
             return redirect(url_for('pos_staff_login',expired=1))
-        session['pos_last_activity']=now
+        if request.endpoint not in ('pos_stock', 'pos_waiver_search', 'admin_participants') or request.headers.get('X-Portal-Refresh') != '1':
+            session['pos_last_activity']=now
         session.setdefault('client_csrf',secrets.token_urlsafe(32))
         return None
 

@@ -7,5 +7,5 @@
           <a href="{{ url_for('pos_home', history_waiver=waiver.id, _anchor='pos-history') }}">Sale history</a>
           {% if status == 'Valid' %}<label>Participant (optional)<select class="pos-participant"><option value="">Whole waiver / account</option>{% for person in waiver_people[waiver.id] %}<option value="{{ person.id }}" data-points="{{ loyalty_balances.get(person.id, 0) }}" {% if waiver_people[waiver.id]|length == 1 %}selected{% endif %}>{{ person.first_name }} {{ person.last_name }}</option>{% endfor %}</select></label><button type="button" data-waiver-id="{{ waiver.id }}" data-waiver-email="{{ waiver.responsible_email }}" data-waiver-label="{{ waiver.waiver_reference }} — {{ waiver.responsible_first_name }} {{ waiver.responsible_last_name }}">Link to sale</button>{% endif %}
         </article>
-      {% else %}{% if q %}<p role="status">No matching waivers. Try a different name, email or reference.</p>{% else %}<p>Start typing a name, email or waiver reference.</p>{% endif %}{% endfor %}
+      {% else %}{% if q or recent %}<p role="status">No matching waivers. Try a different name, email or reference.</p>{% else %}<p>Start typing a name, email or waiver reference.</p>{% endif %}{% endfor %}
       {% if matches|length == 30 %}<p>Showing the latest 30 matches. Refine your search for more specific results.</p>{% endif %}

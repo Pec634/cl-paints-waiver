@@ -25,7 +25,7 @@ Participants | CL Paints
         </a>
     </div>
             <!-- WAIVER STATISTICS -->
-    <section class="stats">
+    <section class="stats" id="participantStats">
         <article>
             <span>Valid Waivers</span>
             <strong>{{ valid_count }}</strong>
@@ -72,10 +72,10 @@ Participants | CL Paints
 
         </div>
 
-        {% if event_groups %}
         <div class="participant-folders" id="participantFolders">
+        {% if event_groups %}
             {% for event_id, group in event_groups.items() %}
-            <details class="participant-folder">
+            <details class="participant-folder" data-event="{{ event_id|tojson|forceescape }}">
                 <summary>
                     <span class="participant-folder-title">
                         <strong>{{ group["event"] }}</strong>
@@ -146,10 +146,10 @@ Participants | CL Paints
                 </div>
             </details>
             {% endfor %}
-        </div>
         {% else %}
         <p class="participant-empty">No participants have been recorded yet.</p>
         {% endif %}
+        </div>
     </section>
 
 </main>
@@ -162,8 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const searchType =
         document.getElementById("participantSearchType");
 
-    const folders =
-        document.querySelectorAll(".participant-folder");
+    const container = document.getElementById("participantFolders");
 
     if (!searchInput || !searchType) {
         return;
@@ -176,7 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const selectedType =
             searchType.value;
 
-        folders.forEach((folder) => {
+        container.querySelectorAll(".participant-folder").forEach((folder) => {
             const rows = folder.querySelectorAll(".participant-row");
             let hasVisibleRows = false;
 
@@ -203,6 +202,35 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    let refreshing = false;
+    let lastRecords;
+    async function refreshParticipants() {
+        if (document.hidden || refreshing || container.querySelector('dialog[open]')) return;
+        refreshing = true;
+        try {
+            const response = await fetch(location.href, {cache: 'no-store', headers: {'X-Portal-Refresh': '1'}});
+            if (!response.ok || response.redirected) return;
+            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const incoming = page.getElementById('participantFolders');
+            const stats = page.getElementById('participantStats');
+            if (!incoming || !stats || container.querySelector('dialog[open]')) return;
+            document.getElementById('participantStats').innerHTML = stats.innerHTML;
+            if (incoming.innerHTML === lastRecords || container.contains(document.activeElement)) return;
+            lastRecords = incoming.innerHTML;
+            const open = new Set([...container.querySelectorAll('details[open]')].map(folder => folder.dataset.event));
+            incoming.querySelectorAll('details').forEach(folder => { folder.open = open.has(folder.dataset.event); });
+            container.replaceChildren(...incoming.children);
+            filterParticipants();
+            document.dispatchEvent(new Event('participant-records-refreshed'));
+        } catch (_) {
+            // The next refresh can recover from an interrupted connection.
+        } finally {
+            refreshing = false;
+        }
+    }
+    lastRecords = container.innerHTML;
+    setInterval(refreshParticipants, 3000);
+
     searchInput.addEventListener(
         "input",
         filterParticipants
@@ -216,8 +244,9 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
-document.querySelectorAll(".archive-btn").forEach((button) => {
-    button.addEventListener("click", async () => {
+document.getElementById('participantFolders').addEventListener("click", async event => {
+    const button = event.target.closest('.archive-btn');
+    if (!button) return;
         const waiverId = button.dataset.waiverId;
         const waiverReference = button.dataset.waiverReference;
 
@@ -246,11 +275,11 @@ document.querySelectorAll(".archive-btn").forEach((button) => {
         } catch (error) {
             alert(error.message);
         }
-    });
 });
 
-document.querySelectorAll(".delete-waiver-btn").forEach((button) => {
-    button.addEventListener("click", async () => {
+document.getElementById('participantFolders').addEventListener("click", async event => {
+    const button = event.target.closest('.delete-waiver-btn');
+    if (!button) return;
         const waiverId = button.dataset.waiverId;
         const waiverReference = button.dataset.waiverReference;
 
@@ -280,7 +309,6 @@ document.querySelectorAll(".delete-waiver-btn").forEach((button) => {
         } catch (error) {
             alert(error.message);
         }
-    });
 });
 </script>
 

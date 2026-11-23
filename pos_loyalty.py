@@ -37,13 +37,48 @@ class PosLoyalty:
             raise ValueError('Choose an open public event for today to award loyalty points.')
         return event_id, sorted(ids)
 
+    def claim_reward(self, sale, person_id):
+        changed = self.Balance.query.filter_by(participant_id=person_id, points=3).update(
+            {'points': 0}, synchronize_session=False)
+        if not changed:
+            raise ValueError('This free face paint is no longer available. Check the participant?s balance.')
+        if sale.loyalty_event_id:
+            if self.Visit.query.filter_by(participant_id=person_id, event_id=sale.loyalty_event_id).first():
+                raise ValueError('This participant has already checked in at this loyalty event.')
+            waiver = self.db.session.get(self.Waiver, sale.waiver_id)
+            owner = self.db.session.get(self.Custodian, person_id)
+            email = waiver.responsible_email.strip().lower()
+            account = self.db.session.get(self.Account, owner.client_id) if owner else self.Account.query.filter(
+                func.lower(func.trim(self.Account.email)) == email).first()
+            if not account:
+                account = self.Account(email=email, first_name=waiver.responsible_first_name,
+                    last_name=waiver.responsible_last_name)
+                self.db.session.add(account)
+                self.db.session.flush()
+            self.db.session.add(self.Visit(participant_id=person_id, event_id=sale.loyalty_event_id,
+                client_id=account.id, status='free' if sale.status == 'Paid' else 'pending',
+                confirmed_at=sale.paid_at, pos_sale_id=sale.id))
+
+    def release_reward(self, sale, person_id):
+        self.Visit.query.filter_by(pos_sale_id=sale.id, participant_id=person_id, status='pending').delete()
+        self.Balance.query.filter_by(participant_id=person_id).update({'points': 3}, synchronize_session=False)
+
     def award(self, sale):
         if sale.status != 'Paid' or sale.loyalty_result_json is not None:
             return
         ids = json.loads(sale.loyalty_participants_json or '[]')
-        if not ids or not sale.loyalty_event_id:
-            return
         results = []
+        for item in json.loads(sale.items_json):
+            person_id = item.get('reward_participant_id')
+            if person_id:
+                self.Visit.query.filter_by(pos_sale_id=sale.id, participant_id=person_id, status='pending').update(
+                    {'status': 'free', 'confirmed_at': sale.paid_at})
+                results.append(dict(participant_id=person_id, name=sale.participant_name,
+                    points=0, redeemed=True, message='Free face paint redeemed'))
+        if not sale.loyalty_event_id:
+            ids = []
+        if not ids and not results:
+            return
         for person_id in ids:
             person = self.db.session.get(self.Participant, person_id)
             name = f'{person.first_name} {person.last_name}' if person else f'Member #{person_id}'

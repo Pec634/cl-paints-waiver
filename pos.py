@@ -1,6 +1,8 @@
 """Staff till, consent lookup and independently verified reader payments."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+import csv
+from io import StringIO
 import json
 import os
 import secrets
@@ -9,7 +11,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 from zoneinfo import ZoneInfo
 
-from flask import abort, flash, redirect, render_template, request, session, url_for, jsonify
+from flask import abort, flash, redirect, render_template, request, session, url_for, jsonify, Response
 from sqlalchemy import or_, inspect
 from sqlalchemy.exc import IntegrityError
 from email_validator import validate_email, EmailNotValidError
@@ -55,6 +57,7 @@ def define_model(db):
         refund_version = db.Column(db.Integer, nullable=False, default=0)
         staff_id = db.Column(db.Integer, db.ForeignKey('pos_staff.id'), nullable=True)
         staff_name = db.Column(db.String(255), nullable=True)
+        reserved_stock_json = db.Column(db.Text)
         price_override = db.Column(db.Boolean, nullable=False, default=False)
         refunds = db.relationship('PosRefund', lazy='select', order_by='PosRefund.id')
 
@@ -86,7 +89,7 @@ def ensure_schema(db):
         'receipt_email': 'VARCHAR(320)', 'receipt_status': 'VARCHAR(20)', 'receipt_sent_at': 'TIMESTAMP',
         'loyalty_event_id':'INTEGER REFERENCES event(id)', 'loyalty_participants_json':'TEXT', 'loyalty_result_json':'TEXT',
         'trading_event_id':'INTEGER REFERENCES event(id)', 'booking_id':'INTEGER REFERENCES booking(id)',
-        'event_index':'INTEGER', 'refund_version':'INTEGER NOT NULL DEFAULT 0',
+        'event_index':'INTEGER', 'reserved_stock_json':'TEXT', 'refund_version':'INTEGER NOT NULL DEFAULT 0',
         'staff_id':'INTEGER REFERENCES pos_staff(id)', 'staff_name':'VARCHAR(255)', 'price_override':'BOOLEAN NOT NULL DEFAULT FALSE'}
     with db.engine.begin() as connection:
         for name, definition in additions.items():
@@ -98,7 +101,7 @@ def ensure_schema(db):
             connection.exec_driver_sql('ALTER TABLE loyalty_visit ADD COLUMN pos_sale_id INTEGER REFERENCES pos_sale(id)')
     product_columns = {column['name'] for column in inspect(db.engine).get_columns('pos_product')}
     with db.engine.begin() as connection:
-        for name,definition in {'category':"VARCHAR(60) NOT NULL DEFAULT 'General'",'shortcut':'BOOLEAN NOT NULL DEFAULT FALSE'}.items():
+        for name,definition in {'category':"VARCHAR(60) NOT NULL DEFAULT 'General'",'shortcut':'BOOLEAN NOT NULL DEFAULT FALSE', 'variations_text':'TEXT', 'variation_colours_json':'TEXT', 'tile_colour':'VARCHAR(7)', 'tile_position':'INTEGER', 'stock_quantity':'INTEGER', 'stock_warning':'INTEGER', 'loyalty_reward':'BOOLEAN NOT NULL DEFAULT FALSE'}.items():
             if name not in product_columns:
                 connection.exec_driver_sql(f'ALTER TABLE pos_product ADD COLUMN {name} {definition}')
     if 'pos_refund' in inspect(db.engine).get_table_names():
@@ -143,6 +146,35 @@ def define_product_model(db):
         price = db.Column(db.Numeric(10, 2), nullable=False)
         category = db.Column(db.String(60), nullable=False, default='General')
         shortcut = db.Column(db.Boolean, nullable=False, default=False)
+        variations_text = db.Column(db.Text)
+        variation_colours_json = db.Column(db.Text)
+        tile_colour = db.Column(db.String(7))
+        tile_position = db.Column(db.Integer)
+        stock_quantity = db.Column(db.Integer)
+        stock_warning = db.Column(db.Integer)
+        loyalty_reward = db.Column(db.Boolean, nullable=False, default=False)
+
+        @property
+        def variations(self):
+            return (self.variations_text or '').splitlines()
+
+        @property
+        def variation_colours(self):
+            return json.loads(self.variation_colours_json or '{}')
+
+        @property
+        def low_stock(self):
+            return self.stock_quantity is not None and self.stock_quantity <= (self.stock_warning or 0)
+
+    class PosCategory(db.Model):
+        name = db.Column(db.String(60), primary_key=True)
+
+    class PosTileLayout(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        columns = db.Column(db.Integer, nullable=False)
+
+    PosProduct.Category = PosCategory
+    PosProduct.Layout = PosTileLayout
     return PosProduct
 
 
@@ -188,6 +220,11 @@ def parse_items(raw):
             cleaned.append(dict(name=name, quantity=quantity, price=str(price)))
             if item.get('product_id') is not None:
                 cleaned[-1]['product_id'] = int(str(item['product_id']))
+            if item.get('variation'):
+                variation = item['variation']
+                if not isinstance(variation, str) or len(variation) > 60:
+                    raise ValueError()
+                cleaned[-1]['variation'] = variation
             total += quantity * price
         if total > Decimal('99999.99'):
             raise ValueError()
@@ -246,11 +283,16 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
 
     def waiver_search_context():
         query = request.args.get('q', '').strip()[:150]
-        matches = Waiver.query.filter(Waiver.is_archived.is_(False),
-            matching_waivers(search_pattern(query))).order_by(Waiver.signed_date.desc()).limit(30).all() if query else []
+        recent = request.args.get('recent') == '1'
+        records = Waiver.query.filter(Waiver.is_archived.is_(False), Waiver.status != 'Superseded')
+        if query:
+            records = records.filter(matching_waivers(search_pattern(query)))
+        if recent:
+            records = records.filter(Waiver.signed_date >= datetime.now() - timedelta(hours=24))
+        matches = records.order_by(Waiver.signed_date.desc(), Waiver.id.desc()).limit(30).all() if query or recent else []
         waiver_people = {waiver.id:(loyalty.people(waiver) if loyalty else list(waiver.participants)) for waiver in matches}
         people = [person for records in waiver_people.values() for person in records]
-        return dict(q=query, matches=matches, waiver_people=waiver_people,
+        return dict(q=query, recent=recent, matches=matches, waiver_people=waiver_people,
             loyalty_balances=loyalty.balances(people) if loyalty else {}, waiver_status=waiver_status)
 
     @app.get('/admin/pos/waivers')
@@ -267,7 +309,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             people=loyalty.people(waiver) if loyalty else waiver.participants)
 
     def sale_destination(sale):
-        if sale.method == 'Cash':
+        if sale.method in ('Cash', 'Loyalty'):
             return redirect(url_for('pos_home', completed=sale.id, _anchor='pos-cash-receipt'))
         return redirect(url_for('pos_sale', sale_id=sale.id))
 
@@ -316,46 +358,237 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             history = history.filter_by(waiver_id=history_waiver)
         sales_page = history.order_by(Sale.id.desc()).paginate(page=max(1, request.args.get('sales_page', 1, type=int)), per_page=25, error_out=False)
         completed = db.session.get(Sale, request.args.get('completed', type=int)) if request.args.get('completed', type=int) else None
-        if completed and (completed.method != 'Cash' or completed.status != 'Paid'):
+        if completed and (completed.method not in ('Cash', 'Loyalty') or completed.status != 'Paid'):
             completed = None
         timed_out_id = request.args.get('timed_out', type=int)
         timed_out = db.session.get(Sale, timed_out_id) if timed_out_id else None
         if timed_out and (timed_out.status != 'Awaiting verification' or payment_time_left(timed_out) != 0):
             timed_out = None
+        tile_layout = db.session.get(Product.Layout, 1)
         return render_template('admin_pos.html', **search_context,
+            tile_columns=tile_layout.columns if tile_layout else 2,
             loyalty_events=loyalty.events() if loyalty else [], loyalty_enabled=bool(loyalty),
             trading_events=ledger.events() if ledger else [],
             pending_loyalty_reviews=ledger.Refund.query.filter_by(loyalty_review_status='Needs review').order_by(ledger.Refund.id.desc()).limit(50).all() if ledger else [],
-            products=Product.query.order_by(Product.name, Product.id).all(),
-            product_categories=[row[0] for row in db.session.query(Product.category).distinct().order_by(Product.category).all()],
+            products=Product.query.order_by(Product.tile_position.is_(None), Product.tile_position,
+                Product.name, Product.id).all(),
+            product_categories=sorted({'General'} | {row.name for row in Product.Category.query.all()} |
+                {row[0] for row in db.session.query(Product.category).distinct().all()}, key=str.casefold),
             configured=configured(),card_settings=card_settings(),
-            sale_token=secrets.token_urlsafe(24),
+            library_open=request.args.get('manage') == '1', sale_token=secrets.token_urlsafe(24),
             sales=sales_page.items, sales_page=sales_page, sale_q=sale_query,
             history_waiver=history_waiver, completed_sale=completed, timed_out_sale=timed_out)
+
+    @app.post('/admin/pos/library/order')
+    @admin_required
+    def pos_library_order():
+        check()
+        if access:
+            access.require_manager()
+        raw_ids = request.form.getlist('product_id')
+        ids = request.form.getlist('product_id', type=int)
+        raw_columns = request.form.get('columns')
+        if raw_columns is not None and raw_columns not in ('2', '3'):
+            return jsonify(error='Choose two or three columns.'), 400
+        if len(raw_ids) != len(ids) or len(set(ids)) != len(ids):
+            return jsonify(error='The tile order is invalid.'), 400
+        products = {product.id: product for product in Product.query.order_by(Product.id).with_for_update().all()}
+        if not ids or set(ids) != products.keys():
+            db.session.rollback()
+            return jsonify(error='The library changed. Reopen the till page before rearranging tiles.'), 409
+        for position, identity in enumerate(ids):
+            products[identity].tile_position = position
+        layout = db.session.get(Product.Layout, 1)
+        if raw_columns is not None:
+            if layout is None:
+                layout = Product.Layout(id=1)
+                db.session.add(layout)
+            layout.columns = int(raw_columns)
+        db.session.commit()
+        return jsonify(product_ids=ids, columns=layout.columns if layout else 2)
+
+    @app.get('/admin/pos/stock')
+    @admin_required
+    def pos_stock():
+        return jsonify({product.id: {'available': product.stock_quantity, 'low': product.low_stock}
+            for product in Product.query.filter(Product.stock_quantity.isnot(None)).all()})
+
+    @app.get('/admin/pos/cash-export')
+    @admin_required
+    def pos_cash_export():
+        if access:
+            access.require_manager()
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['CL Paints reference', 'Paid (UK time)', 'Currency', 'Total', 'Tender', 'Change', 'Refunded'])
+        for sale in Sale.query.filter_by(method='Cash', status='Paid').order_by(Sale.id):
+            writer.writerow([sale.reference, format_sale_time(sale.paid_at or sale.created_at),
+                'GBP', sale.amount, sale.cash_tender, sale.change_due, sale.refunded_total])
+        return Response(output.getvalue(), mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename="cl-paints-cash-sales.csv"'})
+
+    @app.post('/admin/pos/library/categories')
+    @admin_required
+    def pos_category_save():
+        check()
+        if access:
+            access.require_manager()
+        name = request.form.get('category', '').strip()
+        if not name or len(name) > 60:
+            flash('Enter a category name of up to 60 characters.', 'error')
+        elif name != 'General' and not db.session.get(Product.Category, name):
+            db.session.add(Product.Category(name=name))
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+        return redirect(url_for('pos_home', manage=1, _anchor='pos-library'))
+
+    def take_stock(items):
+        quantities = {}
+        for item in items:
+            identity = item.get('product_id')
+            if identity:
+                quantities[identity] = quantities.get(identity, 0) + item['quantity']
+        reserved = {}
+        for identity, quantity in sorted(quantities.items()):
+            updated = Product.query.filter(Product.id == identity, Product.stock_quantity >= quantity).update(
+                {Product.stock_quantity: Product.stock_quantity - quantity}, synchronize_session=False)
+            if updated:
+                reserved[identity] = quantity
+            else:
+                available = db.session.query(Product.stock_quantity).filter_by(id=identity).first()
+                if available and available[0] is not None:
+                    raise ValueError('Insufficient stock for an item in this basket. Check the library and adjust the quantity.')
+        return reserved
+
+    def valid_tile_colour(colour):
+        return isinstance(colour, str) and len(colour) == 7 and colour[0] == '#' and all(
+            digit in '0123456789abcdefABCDEF' for digit in colour[1:])
+
+    @app.post('/admin/pos/library/<int:product_id>/variation-colours')
+    @admin_required
+    def pos_variation_colours_save(product_id):
+        check()
+        if access:
+            access.require_manager()
+        try:
+            changes = json.loads(request.form.get('changes', ''))
+        except ValueError:
+            return jsonify(error='Choose valid variation colours.'), 400
+        if not isinstance(changes, dict) or not changes or any(
+                colour is not None and not valid_tile_colour(colour) for colour in changes.values()):
+            return jsonify(error='Choose valid variation colours.'), 400
+        product = Product.query.filter_by(id=product_id).with_for_update().first_or_404()
+        if not changes.keys() <= set(product.variations):
+            db.session.rollback()
+            return jsonify(error='The variations changed. Reopen the till before saving colours.'), 409
+        colours = product.variation_colours
+        for variation, colour in changes.items():
+            if colour is None:
+                colours.pop(variation, None)
+            else:
+                colours[variation] = colour
+        product.variation_colours_json = json.dumps(colours)
+        db.session.commit()
+        return jsonify(colours=colours)
+
+    def update_library_item(product, fields):
+        items, _ = parse_items(json.dumps([dict(name=fields.get('name', ''),
+            quantity=1, price=fields.get('price', ''))]))
+        product.name = items[0]['name']
+        product.price = Decimal(items[0]['price'])
+        category = fields.get('category','General').strip() or 'General'
+        if len(category)>60: raise ValueError('Use a category of up to 60 characters.')
+        product.category = category
+        product.shortcut = fields.get('shortcut')=='yes'
+        if 'variations' in fields:
+            options = list(dict.fromkeys(line.strip() for line in fields['variations'].splitlines() if line.strip()))
+            if len(options) > 50 or any(len(option) > 60 or len(product.name) + len(option) + 3 > 120 for option in options):
+                raise ValueError('Use up to 50 variations with names that fit the 120-character sale line.')
+            product.variations_text = '\n'.join(options)
+            colour = fields.get('tile_colour', '')
+            if colour and not valid_tile_colour(colour):
+                raise ValueError('Choose a valid tile colour.')
+            product.tile_colour = colour or None
+            colours = json.loads(fields['variation_colours']) if 'variation_colours' in fields else product.variation_colours
+            if not isinstance(colours, dict) or any(not valid_tile_colour(value) for value in colours.values()):
+                raise ValueError('Choose a valid colour for each variation.')
+            product.variation_colours_json = json.dumps({name: colours[name] for name in options if name in colours})
+            for field in ('stock_quantity', 'stock_warning'):
+                raw = fields.get(field, '').strip()
+                if raw and (not raw.isascii() or not raw.isdecimal() or len(raw) > 7):
+                    raise ValueError('Stock values must be whole numbers from 0 to 9,999,999.')
+                value = int(raw) if raw else None
+                original = fields.get('original_stock_quantity')
+                if field != 'stock_quantity' or product.id is None or original is None:
+                    setattr(product, field, value)
+                elif raw != original:
+                    if original and (not original.isascii() or not original.isdecimal() or len(original) > 7):
+                        raise ValueError('Reload the library before changing stock.')
+                    updated = Product.query.filter_by(id=product.id,
+                        stock_quantity=int(original) if original else None).update(
+                        {Product.stock_quantity: value}, synchronize_session=False)
+                    if not updated:
+                        raise ValueError('Stock changed while the library was open. Check the latest quantity and try again.')
+                    db.session.expire(product, ['stock_quantity'])
+            if product.stock_quantity is None and product.stock_warning is not None:
+                raise ValueError('Enter stock on hand to use a low-stock warning.')
+            product.loyalty_reward = fields.get('loyalty_reward') == 'yes'
 
     @app.post('/admin/pos/library')
     @admin_required
     def pos_library_save():
         check()
-        if access: access.require_manager()
-        product_id = request.form.get('product_id', '', type=str)
+        if access:
+            access.require_manager()
+        product_id = request.form.get('product_id')
         product = db.get_or_404(Product, product_id) if product_id else Product()
         try:
-            items, _ = parse_items(json.dumps([dict(name=request.form.get('name', ''),
-                quantity=1, price=request.form.get('price', ''))]))
-            product.name = items[0]['name']
-            product.price = Decimal(items[0]['price'])
-            category = request.form.get('category','General').strip() or 'General'
-            if len(category)>60: raise ValueError('Use a category of up to 60 characters.')
-            product.category = category
-            product.shortcut = request.form.get('shortcut')=='yes'
+            update_library_item(product, request.form)
             db.session.add(product)
             db.session.commit()
-            flash('Library item saved. New taps use the updated price; existing basket prices stay as entered.', 'success')
+            flash('Library item saved.', 'success')
         except ValueError as error:
             db.session.rollback()
             flash(str(error), 'error')
-        return redirect(url_for('pos_home', _anchor='pos-library'))
+        return redirect(url_for('pos_home', manage=1, _anchor='pos-library'))
+
+    @app.post('/admin/pos/library/batch')
+    @admin_required
+    def pos_library_batch():
+        check()
+        if access:
+            access.require_manager()
+        try:
+            edits = json.loads(request.form.get('edits', ''))
+            if not isinstance(edits, list) or not edits:
+                raise ValueError()
+            updates = {}
+            for fields in edits:
+                if not isinstance(fields, dict) or not all(isinstance(value, str) for value in fields.values()):
+                    raise ValueError()
+                identity = int(fields.get('product_id', ''))
+                if identity < 1 or identity > 2147483647 or identity in updates:
+                    raise ValueError()
+                updates[identity] = fields
+        except ValueError:
+            return jsonify(error='The item changes are invalid.'), 400
+
+        products = Product.query.filter(Product.id.in_(updates)).order_by(Product.id).with_for_update().all()
+        if len(products) != len(updates):
+            db.session.rollback()
+            return jsonify(error='An edited item has been removed. Discard its changes before saving.'), 409
+        for product in products:
+            name = product.name
+            try:
+                update_library_item(product, updates[product.id])
+            except ValueError as error:
+                db.session.rollback()
+                return jsonify(error=f'{name}: {error}'), 400
+        db.session.commit()
+        flash(f"Changes saved to {len(products)} {'item' if len(products) == 1 else 'items'}.", 'success')
+        return jsonify(location=url_for('pos_home', manage=1, _anchor='pos-library'))
 
     @app.post('/admin/pos/library/<int:product_id>/delete')
     @admin_required
@@ -366,7 +599,7 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         db.session.delete(product)
         db.session.commit()
         flash('Item removed from the library. Existing sales and baskets are unchanged.', 'success')
-        return redirect(url_for('pos_home', _anchor='pos-library'))
+        return redirect(url_for('pos_home', manage=1, _anchor='pos-library'))
 
     @app.post('/admin/pos/sales')
     @admin_required
@@ -382,19 +615,29 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             return sale_destination(existing)
         try:
             items, total = parse_items(request.form.get('items', ''))
-            override = False
-            for item in items:
-                product = db.session.get(Product,item.get('product_id')) if item.get('product_id') else None
-                changed_price = not product or Decimal(item['price']) != product.price or item['name'] != product.name
-                if changed_price and access and not access.manager():
-                    raise ValueError('A manager must enter custom items or approve price changes. Refresh library prices before checkout.')
-                override = override or changed_price
+            original_total = total
+            has_custom_item = False
+            reward_index = None
+            for index, item in enumerate(items):
+                if 'product_id' not in item:
+                    if access and not access.manager():
+                        raise ValueError('A manager must enter custom items.')
+                    has_custom_item = True
+                    continue
+                product = db.session.get(Product, item['product_id'])
+                if not product:
+                    raise ValueError('A basket item was removed from the library. Remove it from the basket to continue.')
+                variation = item.get('variation')
+                if (product.variations or variation) and variation not in product.variations:
+                    raise ValueError('Choose a saved variation for this item.')
+                expected_name = f'{product.name} · {variation}' if variation else product.name
+                if Decimal(item['price']) != product.price or item['name'] != expected_name:
+                    raise ValueError('A basket item differs from its saved details. Remove it and add it again from the library.')
+                if product.loyalty_reward and reward_index is None:
+                    reward_index = index
             method = request.form.get('method')
-            if method not in ('Cash', 'Card'):
+            if method not in ('Cash', 'Card', 'Loyalty'):
                 raise ValueError('Choose cash or card.')
-            if method == 'Card' and not configured():
-                raise ValueError('SumUp reader payments need configuration before use.')
-            tender = parse_tender(request.form.get('cash_tender', ''), total) if method == 'Cash' else None
             receipt_email = None
             if request.form.get('receipt_requested') == '1':
                 try:
@@ -411,6 +654,34 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
             if participant_id and (not participant or participant.id not in {person.id for person in allowed_people}):
                 raise ValueError('Choose a participant belonging to the linked waiver.')
             event_id, loyalty_ids = loyalty.prepare(waiver, request.form) if loyalty else (None, [])
+            reward_person = None
+            if loyalty and reward_index is not None and participant and loyalty.balances([participant]).get(participant.id) == 3:
+                reward_person = participant
+                line = items[reward_index]
+                total -= Decimal(line['price'])
+                reward_line = dict(line, quantity=1, price='0.00', reward_participant_id=participant.id)
+                if line['quantity'] == 1:
+                    items[reward_index] = reward_line
+                else:
+                    line['quantity'] -= 1
+                    items.insert(reward_index, reward_line)
+                loyalty_ids = [identity for identity in loyalty_ids if identity != participant.id]
+                if event_id is None:
+                    selected_event = request.form.get('loyalty_event_id', type=int)
+                    if selected_event in {event.id for event in loyalty.events()}:
+                        event_id = selected_event
+            expected_discount = request.form.get('reward_discount')
+            if expected_discount is not None and expected_discount != str(int((original_total - total) * 100)):
+                raise ValueError('The loyalty discount changed. Link the waiver again and check the total before payment.')
+            if total == 0 and reward_person:
+                method = 'Loyalty'
+            elif method == 'Loyalty':
+                raise ValueError('Choose a payment method for the remaining balance.')
+            if method == 'Card' and not configured():
+                raise ValueError('SumUp reader payments need configuration before use.')
+            tender = parse_tender(request.form.get('cash_tender', ''), total) if method == 'Cash' else None
+            if method != 'Card':
+                take_stock(items)
             trading_id, booking_id, event_index = ledger.prepare(request.form) if ledger else (None, None, None)
             customer_label = f'{waiver.waiver_reference} — {waiver.responsible_first_name} {waiver.responsible_last_name}' if waiver else None
             customer_search = '\n'.join([customer_label, waiver.responsible_email or ''] +
@@ -421,23 +692,26 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
                 loyalty_event_id=event_id, loyalty_participants_json=json.dumps(loyalty_ids),
                 trading_event_id=trading_id, booking_id=booking_id, event_index=event_index,
                 staff_id=session.get('pos_staff_id'), staff_name=access.actor() if access else app.config.get('ADMIN_EMAIL') or 'Portal administrator',
-                price_override=override,
+                price_override=has_custom_item,
                 participant_name=f'{participant.first_name} {participant.last_name}' if participant else None,
                 customer_label=customer_label, customer_search=customer_search,
                 waiver_id=waiver.id if waiver else None, method=method,
-                status='Paid' if method == 'Cash' else 'Ready',
+                status='Ready' if method == 'Card' else 'Paid',
                 merchant=os.getenv('SUMUP_MERCHANT_CODE', '') if method == 'Card' else '',
-                paid_at=datetime.utcnow() if method == 'Cash' else None)
+                paid_at=None if method == 'Card' else datetime.utcnow())
             db.session.add(sale)
             db.session.flush()
             if loyalty:
+                if reward_person and method != 'Card':
+                    loyalty.claim_reward(sale, reward_person.id)
                 loyalty.award(sale)
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
             existing = Sale.query.filter_by(reference=reference).first()
             if not existing:
-                abort(409)
+                flash('Stock or loyalty changed. Review the basket and try again.', 'error')
+                return redirect(url_for('pos_home'))
             send_receipt(existing)
             return sale_destination(existing)
         except ValueError as error:
@@ -483,8 +757,23 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         cutoff = datetime.utcnow() - timedelta(seconds=30)
         changed = Sale.query.filter_by(id=sale.id, method='Card', status='Ready').filter(
             Sale.created_at > cutoff).update({'status': 'Awaiting verification'})
-        db.session.commit()
-        if not changed:
+        if changed:
+            try:
+                items = json.loads(sale.items_json)
+                sale.reserved_stock_json = json.dumps(take_stock(items))
+                for item in items:
+                    if loyalty and item.get('reward_participant_id'):
+                        waiver = db.session.get(Waiver, sale.waiver_id)
+                        if not waiver or waiver_status(waiver) != 'Valid' or item['reward_participant_id'] not in {p.id for p in loyalty.people(waiver)}:
+                            raise ValueError('The participant needs a current linked waiver to redeem their reward.')
+                        loyalty.claim_reward(sale, item['reward_participant_id'])
+                db.session.commit()
+            except (ValueError, IntegrityError) as error:
+                db.session.rollback()
+                flash(str(error) if isinstance(error, ValueError) else 'Stock or loyalty changed. Review the basket and try again.', 'error')
+                return redirect(url_for('pos_home'))
+        else:
+            db.session.rollback()
             if sale.status == 'Ready' and payment_time_left(sale) == 0:
                 return redirect(url_for('pos_home'))
             flash('Check the existing payment with SumUp before taking another payment.', 'error')
@@ -506,17 +795,40 @@ def register(app, db, Sale, Waiver, Participant, admin_required, Product, send_e
         sale = db.get_or_404(Sale, sale_id)
         if sale.method != 'Card' or sale.status == 'Ready':
             abort(409)
-        if sale.status != 'Paid':
+        if sale.status == 'Awaiting verification':
             try:
                 if not os.getenv('SUMUP_API_KEY'):
                     raise ValueError('SumUp verification is not configured.')
                 data = reader_transaction(sale.merchant, sale.reference)
-                if (data.get('status') != 'SUCCESSFUL' or data.get('currency') != 'GBP'
+                status = data.get('status')
+                reserved_stock = json.loads(sale.reserved_stock_json or '{}')
+                reward_ids = [item['reward_participant_id'] for item in json.loads(sale.items_json)
+                    if item.get('reward_participant_id')]
+                can_release = bool(reserved_stock or reward_ids)
+                if (status not in ('SUCCESSFUL', 'FAILED', 'CANCELLED') or data.get('currency') != 'GBP'
                         or data.get('foreign_transaction_id') != sale.reference
                         or Decimal(str(data.get('amount'))) != sale.amount
-                        or not isinstance(data.get('transaction_code'), str)
-                        or not 1 <= len(data['transaction_code']) <= 100):
+                        or (status != 'SUCCESSFUL' and not can_release)
+                        or (status == 'SUCCESSFUL' and (not isinstance(data.get('transaction_code'), str)
+                            or not 1 <= len(data['transaction_code']) <= 100))):
                     raise ValueError('Payment is not confirmed. Check SumUp before taking another payment.')
+                settled = Sale.query.filter_by(id=sale.id, status='Awaiting verification').update(
+                    {'status': 'Paid' if status == 'SUCCESSFUL' else 'Failed'})
+                if not settled:
+                    db.session.rollback()
+                    return redirect(url_for('pos_sale', sale_id=sale_id))
+                if status != 'SUCCESSFUL':
+                    for identity, quantity in reserved_stock.items():
+                        Product.query.filter_by(id=int(identity)).update(
+                            {Product.stock_quantity: Product.stock_quantity + quantity}, synchronize_session=False)
+                    if loyalty:
+                        for person_id in reward_ids:
+                            loyalty.release_reward(sale, person_id)
+                    sale.reserved_stock_json = None
+                    db.session.commit()
+                    flash('SumUp confirmed that payment failed or was cancelled.', 'error')
+                    return redirect(url_for('pos_sale', sale_id=sale_id))
+                sale.reserved_stock_json = None
                 sale.transaction_code = data['transaction_code']
                 sale.status = 'Paid'
                 sale.paid_at = datetime.utcnow()

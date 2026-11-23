@@ -6,47 +6,144 @@
   <header><small>CL PAINTS · STAFF TILL</small><h1>Point of sale</h1><p>Build a sale, check a waiver and take payment.</p></header>
   {% include '_pos_popup_start.html' %}
   {% if timed_out_sale %}<p class="pos-notice" role="status">Card checkout timed out. If the customer paid on the reader, <a href="{{ url_for('pos_sale', sale_id=timed_out_sale.id) }}">check the payment with SumUp</a> before charging again.</p>{% endif %}
-  {% for category, message in get_flashed_messages(with_categories=true) %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}
+  {% set messages = get_flashed_messages() %}
+  {% if not (pos_manager and library_open) %}{% for message in messages %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}{% endif %}
   <div class="pos-till-layout"><div class="pos-browse">
   <div class="pos-columns">
     <section class="panel pos-waiver-panel"><details id="pos-waiver-fold" open><summary id="pos-waiver-summary"><h2>Waiver search</h2><span id="pos-waiver-selection" hidden></span></summary>
       <form method="get" id="pos-search" data-search-url="{{ url_for('pos_waiver_search') }}"><label for="pos-query">Adult or participant name, email or waiver reference</label>
         <div class="pos-search-row"><input id="pos-query" name="q" type="search" value="{{ q }}" minlength="1" maxlength="150" placeholder="Search existing waivers" autocomplete="off" aria-controls="pos-waiver-results"><button>Search</button></div>
+        <label><input type="checkbox" id="pos-recent-waivers" name="recent" value="1" {% if recent %}checked{% endif %}> Newly completed (last 24 hours)</label>
       </form>
       <p>Search checks existing consent; linking a waiver does not renew it.</p>
       <p id="pos-waiver-search-status" role="status"></p><div id="pos-waiver-results" class="pos-waiver-results" aria-live="polite">
       {% include '_pos_waiver_results.html' %}
       </div></details>
     </section>
-    <section class="panel pos-library" id="pos-library"><h2>Item library</h2>
+    <section class="panel pos-library" id="pos-library" data-stock-url="{{ url_for('pos_stock') }}"><h2>Item library</h2>
       <p>Tap an item to add it to the basket. Tap again to increase its quantity.</p>
       <div class="pos-library-toolbar"><label for="pos-library-search">Find an item</label><input id="pos-library-search" type="search" placeholder="Search your library" autocomplete="off">
-      <div class="pos-library-filters"><label>Category<select id="pos-product-category"><option value="">All categories</option>{% for category in product_categories %}<option>{{ category }}</option>{% endfor %}</select></label><label><input type="checkbox" id="pos-shortcuts-only"> Quick items only</label></div></div><div class="pos-product-grid" aria-label="Items for sale">
-      {% for product in products %}<button type="button" class="pos-product" data-product-id="{{ product.id }}" data-product-category="{{ product.category }}" data-product-shortcut="{{ 'true' if product.shortcut else 'false' }}" data-product-name="{{ product.name }}" data-product-price="{{ '%.2f'|format(product.price) }}"><strong>{% if product.shortcut %}&#9733; {% endif %}{{ product.name }}</strong><span>£{{ '%.2f'|format(product.price) }}</span></button>{% else %}<p>Add your first item below to start using the till library.</p>{% endfor %}
+      <div class="pos-library-filters"><label>Category<select id="pos-product-category"><option value="">All categories</option>{% for category in product_categories %}<option>{{ category }}</option>{% endfor %}</select></label><label><input type="checkbox" id="pos-shortcuts-only"> Quick items only</label></div></div><div class="pos-product-grid" data-columns="{{ tile_columns }}" aria-label="Items for sale">
+      {% for product in products %}<div class="pos-product-entry"{% if product.tile_colour %} style="--pos-tile-colour:{{ product.tile_colour }}"{% endif %}>
+      <button type="button" class="pos-product" {% if product.stock_quantity == 0 %}disabled{% endif %} {% if product.variations %}aria-haspopup="dialog" data-variations="{{ product.variations|tojson|forceescape }}" data-variation-colours="{{ product.variation_colours|tojson|forceescape }}"{% if pos_manager %} data-variation-save-url="{{ url_for('pos_variation_colours_save', product_id=product.id) }}"{% endif %}{% endif %} data-loyalty-reward="{{ 'true' if product.loyalty_reward else 'false' }}" data-product-id="{{ product.id }}" data-product-category="{{ product.category }}" data-product-shortcut="{{ 'true' if product.shortcut else 'false' }}" data-product-name="{{ product.name }}" data-product-price="{{ '%.2f'|format(product.price) }}"><strong>{% if product.shortcut %}&#9733; {% endif %}{{ product.name }}</strong><span>£{{ '%.2f'|format(product.price) }}</span>{% if product.low_stock %}<span class="pos-stock-warning">{{ 'Out of stock' if product.stock_quantity == 0 else 'Low stock · ' ~ product.stock_quantity ~ ' left' }}</span>{% endif %}</button></div>{% else %}<p>Add your first item below to start using the till library.</p>{% endfor %}
       </div><p id="pos-library-status" role="status"></p>
-      {% if pos_manager %}<details class="pos-library-manager"><summary>Manage items &amp; saved prices</summary>
-        <form method="post" action="{{ url_for('pos_library_save') }}" class="pos-library-form"><h3>Add a library item</h3>
+      <dialog id="pos-variation-picker" class="pos-library-dialog" aria-labelledby="pos-variation-title">
+        <header class="pos-library-dialog-heading">
+          <h3 id="pos-variation-title"></h3>
+          <button type="button" class="pos-secondary" data-pos-library-close>Cancel</button>
+        </header>
+        {% if pos_manager %}<div class="pos-library-actions">
+          <button type="button" class="pos-secondary" id="pos-variation-edit-colours" aria-pressed="false">Edit colours</button>
+          <button type="button" id="pos-variation-save-colours" hidden disabled>Save colours</button>
+        </div><p id="pos-variation-colour-status" role="status" hidden></p>{% endif %}
+        <div class="pos-variation-grid" id="pos-variation-grid"></div>
+      </dialog>
+      {% if pos_manager %}
+        <dialog id="pos-colour-dialog" class="pos-library-dialog" aria-labelledby="pos-colour-title">
+          <h3 id="pos-colour-title">Tile colour</h3>
+          <div class="pos-colour-wheel" id="pos-colour-wheel" aria-hidden="true"></div>
+          <div class="pos-colour-palette" id="pos-colour-presets" role="group" aria-label="Preset colours"></div>
+          <label class="pos-colour-value"><span id="pos-colour-sample" aria-hidden="true"></span> Hex colour
+            <input id="pos-colour-hex" type="text" maxlength="7" placeholder="#ffffff" autocomplete="off" spellcheck="false" pattern="#[0-9a-fA-F]{6}">
+          </label>
+          <div class="pos-library-actions">
+            <button type="button" class="pos-secondary" data-pos-library-close>Cancel</button>
+            <button type="button" id="pos-colour-apply">Use colour</button>
+          </div>
+        </dialog>
+      <button type="button" class="pos-secondary" data-pos-library-open="pos-library-manager" aria-haspopup="dialog">Manage items &amp; saved prices</button>
+      <dialog id="pos-library-manager" class="pos-library-dialog pos-library-manager" aria-labelledby="pos-library-manager-title" {% if library_open %}data-pos-open-on-load{% endif %}>
+        <header class="pos-library-dialog-heading">
+          <h3 id="pos-library-manager-title">Manage items &amp; saved prices</h3>
+          <button type="button" class="pos-secondary" data-pos-library-close>Close</button>
+        </header>
+        {% if library_open %}{% for message in messages %}<p role="alert" class="pos-notice">{{ message }}</p>{% endfor %}{% endif %}
+        <form method="post" action="{{ url_for('pos_category_save') }}" class="pos-library-form">
           <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}">
-          <label>Item name<input name="name" maxlength="120" required></label><label>Unit price (£)<input name="price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" required></label><label>Category<input name="category" maxlength="60" value="General"></label><label><input type="checkbox" name="shortcut" value="yes"> Quick item</label><button>Save new item</button>
+          <label>New category<input name="category" maxlength="60" required></label><button>Add category</button>
         </form>
-        <p>Saved prices apply to future additions. Change a basket price for a one-off discount or adjustment.</p>
-        <div class="table-wrap pos-library-edit-list" tabindex="0" role="region" aria-label="Manage library items">
-          <table class="pos-management-table"><thead><tr><th scope="col">Item</th><th scope="col">Price (£)</th><th scope="col">Category</th><th scope="col">Quick</th><th scope="col">Actions</th></tr></thead><tbody>
-          {% for product in products %}<tr>
-            <td><input form="pos-edit-{{ product.id }}" name="name" value="{{ product.name }}" maxlength="120" required aria-label="Item name for {{ product.name }}"></td>
-            <td><input form="pos-edit-{{ product.id }}" name="price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="{{ '%.2f'|format(product.price) }}" required aria-label="Unit price for {{ product.name }}"></td>
-            <td><input form="pos-edit-{{ product.id }}" name="category" value="{{ product.category }}" maxlength="60" aria-label="Category for {{ product.name }}"></td><td><input form="pos-edit-{{ product.id }}" name="shortcut" type="checkbox" value="yes" {% if product.shortcut %}checked{% endif %} aria-label="Quick item {{ product.name }}"></td><td><div class="pos-management-actions"><form id="pos-edit-{{ product.id }}" method="post" action="{{ url_for('pos_library_save') }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><input type="hidden" name="product_id" value="{{ product.id }}"><button aria-label="Save {{ product.name }}">Save</button></form>
-              <form method="post" action="{{ url_for('pos_library_delete', product_id=product.id) }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button class="pos-secondary" aria-label="Remove {{ product.name }} from library">Remove</button></form></div></td>
-          </tr>{% else %}<tr><td colspan="5">No saved items yet.</td></tr>{% endfor %}
-          </tbody></table>
+        <div class="pos-library-actions">
+          <button type="button" data-pos-library-open="pos-new-item">Add item</button>
+          {% if products %}<button type="button" class="pos-secondary" data-pos-library-open="pos-tile-order">Rearrange tiles</button>{% endif %}
         </div>
-      </details>{% endif %}
+        <p id="pos-order-saved" role="status"></p>
+        {% if products %}
+          <form id="pos-batch-editor" method="post" action="{{ url_for('pos_library_batch') }}">
+            <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}">
+            <div class="pos-library-actions">
+              <button type="submit" disabled>Save all changes</button>
+            </div>
+            <p id="pos-batch-status" role="status">No item changes queued.</p>
+          </form>
+        {% endif %}
+        {% with product=none, dialog_id='pos-new-item' %}{% include '_pos_item_editor.html' %}{% endwith %}
+        {% if products %}
+          <dialog id="pos-tile-order" class="pos-library-dialog" aria-labelledby="pos-tile-order-title">
+            <h3 id="pos-tile-order-title">Rearrange till tiles</h3>
+            <p>Drag tiles into place, or use the move buttons.</p>
+            <form method="post" action="{{ url_for('pos_library_order') }}" id="pos-tile-order-form">
+              <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}">
+              <label for="pos-tile-columns">Grid columns</label>
+              <select id="pos-tile-columns" name="columns">
+                <option value="2" {% if tile_columns == 2 %}selected{% endif %}>2 columns</option>
+                <option value="3" {% if tile_columns == 3 %}selected{% endif %}>3 columns</option>
+              </select>
+              <ol class="pos-tile-order-list" data-columns="{{ tile_columns }}">
+                {% for product in products %}
+                  <li{% if product.tile_colour %} style="--pos-tile-colour:{{ product.tile_colour }}"{% endif %}>
+                    <input type="hidden" name="product_id" value="{{ product.id }}">
+                    <div class="pos-tile-grip" data-pos-drag>{{ product.name }}</div>
+                    <div class="pos-tile-move-buttons">
+                    <button type="button" class="pos-secondary" data-pos-move="up" aria-label="Move {{ product.name }} earlier" {% if loop.first %}disabled{% endif %}>Earlier</button>
+                    <button type="button" class="pos-secondary" data-pos-move="down" aria-label="Move {{ product.name }} later" {% if loop.last %}disabled{% endif %}>Later</button>
+                    </div>
+                  </li>
+                {% endfor %}
+              </ol>
+              <p id="pos-order-feedback" role="status"></p>
+              <div class="pos-library-actions">
+                <button type="button" class="pos-secondary" data-pos-library-close>Cancel</button>
+                <button type="submit">Save tile order</button>
+              </div>
+            </form>
+          </dialog>
+        {% endif %}
+        <div class="table-wrap pos-library-edit-list" tabindex="0" role="region" aria-label="Manage library items">
+          <table class="pos-management-table">
+            <thead><tr><th scope="col">Item</th><th scope="col">Price (&pound;)</th><th scope="col">Category</th><th scope="col">Tile colour</th><th scope="col">Actions</th></tr></thead>
+            <tbody>
+              {% for product in products %}
+                <tr data-pos-managed-item="{{ product.id }}">
+                  <td>{{ product.name }}{% if product.low_stock %} &middot; Low stock{% endif %} <span data-pos-edit-pending hidden>· Edit queued</span></td>
+                  <td><input data-pos-inline-edit name="price" aria-label="Price for {{ product.name }}" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="{{ '%.2f'|format(product.price) }}" required></td>
+                  <td><select data-pos-inline-edit name="category" aria-label="Category for {{ product.name }}">
+                    {% for category in product_categories %}<option {% if category == product.category %}selected{% endif %}>{{ category }}</option>{% endfor %}
+                  </select></td>
+                  <td><select data-pos-inline-edit name="tile_colour" data-saved-colour="{{ product.tile_colour or '' }}" aria-label="Tile colour for {{ product.name }}">
+                    {% include '_pos_tile_colour_options.html' %}
+                  </select></td>
+                  <td><div class="pos-management-actions">
+                    {% set dialog_id = 'pos-edit-item-' ~ product.id %}
+                    <button type="button" class="pos-secondary" data-pos-library-open="{{ dialog_id }}" aria-label="Edit {{ product.name }}">Edit</button>
+                    {% include '_pos_item_editor.html' %}
+                    <form method="post" action="{{ url_for('pos_library_delete', product_id=product.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}">
+                      <button class="pos-secondary" aria-label="Remove {{ product.name }} from library">Remove</button>
+                    </form>
+                  </div></td>
+                </tr>
+              {% else %}<tr><td colspan="5">No saved items yet.</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </dialog>{% endif %}
     </section>
   </div>
   <details class="panel pos-history-folder" id="pos-history" {% if sale_q or history_waiver or sales_page.page > 1 %}open{% endif %}>
     <summary><h2>Sale history</h2><span>{{ sales_page.total }} sales &middot; Open to search and view{% if pos_manager and pending_loyalty_reviews %} &middot; {{ pending_loyalty_reviews|length }} loyalty reviews{% endif %}</span></summary>
     {% if pos_manager and pending_loyalty_reviews %}<div class="pos-review-queue"><strong>Refund loyalty reviews awaiting a manager</strong>{% for refund in pending_loyalty_reviews %}<p><a href="{{ url_for('pos_sale',sale_id=refund.sale_id,_anchor='refund-' ~ refund.id) }}">Refund #{{ refund.id }} &middot; Sale #{{ refund.sale_id }} &middot; &pound;{{ '%.2f'|format(refund.amount) }}</a></p>{% endfor %}</div>{% endif %}
     <div class="pos-history-content"><p>Completed sales and refunds. Search sale number, transaction reference, waiver reference, account email, adult or participant name.</p>
+    {% if pos_manager %}<a href="{{ url_for('pos_cash_export') }}">Export cash sales CSV</a>{% endif %}
     <form method="get" action="{{ url_for('pos_home', _anchor='pos-history') }}" class="pos-history-search"><label for="pos-sale-query">Find a sale</label><div class="pos-search-row"><input id="pos-sale-query" name="sale_q" type="search" value="{{ sale_q }}" maxlength="150"><button>Search sales</button></div>{% if history_waiver %}<input type="hidden" name="history_waiver" value="{{ history_waiver }}"><p>Showing sales for waiver #{{ history_waiver }}.</p>{% endif %}<a href="{{ url_for('pos_home', _anchor='pos-history') }}">Show all sales</a></form>
     <ul class="pos-history-list" tabindex="0" aria-label="Sale history records">
       {% for sale in sales %}<li>
@@ -65,7 +162,7 @@
   </div>
     <section class="panel pos-sale-panel"><div class="pos-basket-heading"><h2>Basket</h2>
       <button type="button" id="pos-clear-basket" class="pos-secondary" disabled>Clear all</button></div>
-      {% if completed_sale %}<div id="pos-cash-receipt" class="pos-cash-receipt" role="status" data-completed-reference="{{ completed_sale.reference }}"><strong>Cash sale #{{ completed_sale.id }} recorded</strong><p>{{ completed_sale.created_at|pos_timestamp }}</p><p>Total £{{ '%.2f'|format(completed_sale.amount) }} · Cash received £{{ '%.2f'|format(completed_sale.cash_tender) if completed_sale.cash_tender is not none else 'not recorded' }}</p>{% if completed_sale.change_due is not none %}<p class="pos-change">Change to give: £{{ '%.2f'|format(completed_sale.change_due) }}</p>{% endif %}<a href="{{ url_for('pos_sale', sale_id=completed_sale.id) }}">View saved sale</a>{% with sale=completed_sale %}{% include '_pos_receipt_status.html' %}{% include '_pos_loyalty_status.html' %}{% endwith %}</div>{% endif %}
+      {% if completed_sale %}<div id="pos-cash-receipt" class="pos-cash-receipt" role="status" data-completed-reference="{{ completed_sale.reference }}"><strong>{{ 'Cash sale' if completed_sale.method == 'Cash' else 'Loyalty sale' }} #{{ completed_sale.id }} recorded</strong><p>{{ completed_sale.created_at|pos_timestamp }}</p><p>Total &pound;{{ '%.2f'|format(completed_sale.amount) }}{% if completed_sale.cash_tender is not none %} · Cash received &pound;{{ '%.2f'|format(completed_sale.cash_tender) }}{% endif %}</p>{% if completed_sale.change_due is not none %}<p class="pos-change">Change to give: &pound;{{ '%.2f'|format(completed_sale.change_due) }}</p>{% endif %}<a href="{{ url_for('pos_home') }}" id="pos-next-sale" class="btn">Next sale</a> <a href="{{ url_for('pos_sale', sale_id=completed_sale.id) }}">View saved sale</a>{% with sale=completed_sale %}{% include '_pos_receipt_status.html' %}{% include '_pos_loyalty_status.html' %}{% endwith %}</div>{% endif %}
       <div class="pos-basket-customer"><p id="pos-linked">No waiver linked</p><button type="button" id="pos-change-waiver" class="pos-secondary">Add / change waiver</button><button type="button" id="pos-clear-waiver" class="pos-secondary">Clear waiver</button></div>
       <ul id="pos-basket" aria-label="Basket"></ul><p id="pos-total" class="pos-total" aria-live="polite">Total £0.00</p><p id="pos-error" role="alert"></p>
       {% include '_pos_held_baskets.html' %}
@@ -75,7 +172,7 @@
       </form></details>{% endif %}
       <form method="post" action="{{ url_for('pos_create_sale') }}" id="pos-checkout">
         <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><input type="hidden" name="sale_token" value="{{ sale_token }}">
-        <input type="hidden" name="items" id="pos-items"><input type="hidden" name="waiver_id" id="pos-waiver-id"><input type="hidden" name="participant_id" id="pos-participant-id">
+        <input type="hidden" id="pos-reward-discount" name="reward_discount" value="0"><input type="hidden" name="items" id="pos-items"><input type="hidden" name="waiver_id" id="pos-waiver-id"><input type="hidden" name="participant_id" id="pos-participant-id">
         <details id="pos-sale-options" class="pos-sale-options" open><summary>Event, loyalty &amp; email receipt<small id="pos-options-summary"></small></summary>
         {% if trading_events %}<div class="pos-trading-event"><label for="pos-trading-event">Trading event (for cash-up)</label><select id="pos-trading-event" name="trading_event_id"><option value="">Unallocated / daily till</option>{% for event in trading_events %}<option value="{{ event.id }}" {% if trading_events|length==1 %}selected{% endif %}>{{ event.name }}</option>{% endfor %}</select></div>{% endif %}
         {% if loyalty_enabled %}<fieldset id="pos-loyalty-fields" hidden><legend>Loyalty points</legend><p>Choose the individuals being painted. Each earns one point after payment, once per public event.</p>
@@ -83,14 +180,24 @@
           {% else %}<p>No open public events today. This sale will not award loyalty points.</p>{% endif %}
         </fieldset>{% endif %}
         <div class="pos-receipt-option"><label class="pos-receipt-check"><input type="checkbox" id="pos-receipt-requested" name="receipt_requested" value="1" aria-controls="pos-receipt-fields"> Customer wants an email receipt</label><div id="pos-receipt-fields" hidden><label for="pos-receipt-email">Send receipt to</label><input id="pos-receipt-email" name="receipt_email" type="email" maxlength="320" autocomplete="email" placeholder="customer@example.com" disabled><small>Sent automatically after successful payment. Confirm the address with the customer.</small></div></div>
-        </details><div class="pos-payment-actions"><button type="button" id="pos-cash-open" form="pos-checkout" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
+        </details><p id="pos-reward-summary" role="status" hidden></p><div class="pos-payment-actions"><button id="pos-reward-complete" name="method" value="Loyalty" formnovalidate hidden>Complete free face paint</button><button type="button" id="pos-cash-open" form="pos-checkout" aria-expanded="false" aria-controls="pos-cash-panel" disabled>Cash payment</button>
         <button id="pos-card-pay" form="pos-checkout" name="method" value="Card" aria-describedby="pos-card-status" formnovalidate {% if not configured %}data-unconfigured="true"{% endif %} disabled>Pay with Solo Lite</button></div>
         <p id="pos-card-status" class="pos-card-status" role="status">{{ 'Add an item to enable card payment.' if configured else 'Card payment unavailable: SumUp setup is incomplete on the website server.' }}</p>
         <div id="pos-cash-panel" hidden>
-          <label for="pos-cash-tender">Cash received (£)</label><input id="pos-cash-tender" name="cash_tender" type="number" min="0.01" max="999999.99" step="0.01" inputmode="decimal" disabled aria-describedby="pos-cash-change">
-          <div class="pos-cash-shortcuts" aria-label="Cash received shortcuts"><button type="button" data-cash-tender="exact">Exact</button><button type="button" data-cash-tender="10">£10</button><button type="button" data-cash-tender="20">£20</button><button type="button" data-cash-tender="50">£50</button></div>
+          <label for="pos-cash-tender">Cash received (£)</label><input id="pos-cash-tender" name="cash_tender" type="text" inputmode="none" autocomplete="off" disabled aria-describedby="pos-cash-change">
           <p id="pos-cash-change" class="pos-change" role="status">Enter the amount received.</p>
-          <button name="method" value="Cash" id="pos-cash-confirm" disabled>Complete cash sale</button><button type="button" id="pos-cash-cancel" class="pos-secondary">Cancel</button>
+          <div class="pos-cash-keypad" id="pos-cash-keypad" role="group" aria-label="Cash keypad">
+            {% for digit in '789456123' %}<button type="button" data-cash-key="{{ digit }}">{{ digit }}</button>{% endfor %}
+            <button type="button" data-cash-key="." aria-label="Decimal point">.</button>
+            <button type="button" data-cash-key="0">0</button>
+            <button type="button" data-cash-key="backspace" aria-label="Backspace">⌫</button>
+            <button type="button" data-cash-key="clear">Clear</button>
+          </div>
+          <div class="pos-cash-shortcuts" aria-label="Cash received shortcuts"><button type="button" data-cash-tender="exact">Exact</button><button type="button" data-cash-tender="10">£10</button><button type="button" data-cash-tender="20">£20</button><button type="button" data-cash-tender="50">£50</button></div>
+          <div class="pos-cash-footer">
+            <button name="method" value="Cash" id="pos-cash-confirm" disabled>Complete cash sale</button>
+            <button type="button" id="pos-cash-cancel" class="pos-secondary">Cancel</button>
+          </div>
         </div>
       </form>
       {% if not configured %}<div class="pos-card-setup"><p>Installing the APK does not configure SumUp. {{ 'Complete the server setup below, then restart the website service.' if pos_manager else 'Ask a manager to complete the SumUp server setup.' }}</p>{% if pos_manager %}<details><summary>Check card setup</summary><ul>{% for setting in card_settings %}<li>{{ setting.label }}: <strong>{{ 'Configured' if setting.present else 'Missing' }}</strong>{% if not setting.present %}<br><code>{{ setting.key }}</code>{% endif %}</li>{% endfor %}</ul><p>Add the missing settings in the website host's private environment settings, then restart or redeploy. No credential values are displayed here.</p></details>{% endif %}</div>{% else %}<p>{% if 'SumUpNative/1' in request.user_agent.string %}Solo Lite payments use the reader inside this POS app. Reader settings are under More &gt; SumUp card reader.{% else %}Open card sales in the CL Paints POS Android app to use your Solo Lite.{% endif %}</p>{% endif %}

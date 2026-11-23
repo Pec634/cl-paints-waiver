@@ -1,0 +1,21 @@
+<dialog id="{{ dialog_id }}" class="pos-library-dialog" aria-labelledby="{{ dialog_id }}-title">
+  <h3 id="{{ dialog_id }}-title">{{ 'Edit ' ~ product.name if product else 'Add a library item' }}</h3>
+  <form method="post" action="{{ url_for('pos_library_save') }}" class="pos-item-editor" {% if product %}data-pos-queue-edit{% endif %}>
+    <input type="hidden" name="csrf_token" value="{{ session.client_csrf }}">
+    {% if product %}<input type="hidden" name="product_id" value="{{ product.id }}">{% endif %}
+    <label>Item name<input name="name" maxlength="120" value="{{ product.name if product else '' }}" required></label>
+    <div class="pos-editor-fields">
+      <label>Unit price (&pound;)<input name="price" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="{{ '%.2f'|format(product.price) if product else '' }}" required></label>
+      <label>Category<select name="category">
+        {% for category in product_categories %}<option {% if category == (product.category if product else 'General') %}selected{% endif %}>{{ category }}</option>{% endfor %}
+      </select></label>
+    </div>
+    {% include '_pos_product_options.html' %}
+    <label><input type="checkbox" name="shortcut" value="yes" {% if product and product.shortcut %}checked{% endif %}> Quick item</label>
+    <div class="pos-library-actions">
+      <button type="button" class="pos-secondary" data-pos-library-close>Cancel</button>
+      {% if product %}<button type="button" class="pos-secondary" data-pos-discard-edit hidden>Discard queued edit</button>{% endif %}
+      <button type="submit">{{ 'Queue changes' if product else 'Save new item' }}</button>
+    </div>
+  </form>
+</dialog>

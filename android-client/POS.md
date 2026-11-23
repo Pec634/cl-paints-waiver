@@ -9,18 +9,31 @@ records. The existing client app remains a separate application.
 ## Included
 
 - Named cashier and manager sign-ins, with the existing portal administrator kept
-  as a management route. Staff enter only their allocated PIN, not a username or password. Cashiers sell library items; managers can override prices,
+  as a management route. Staff enter only their allocated PIN, not a username or password. Cashiers sell library items. Managers can
   manage items, refund payments and close day-end reconciliations. Each new sale
-  retains the staff name and any custom-item or price-override flag.
+  retains the staff name and flags custom items.
 - Search existing waivers by adult name, participant name, email or waiver reference.
   Results show participants, event, expiry and status. Archived waivers are excluded;
   expired or otherwise invalid waivers cannot be linked to a sale. Linking consent
   does not record attendance, award points, or extend consent.
 - A shared item library with saved GBP unit prices, search and tap-to-add tiles.
-  Use **Manage items & saved prices** to add, rename, reprice or remove items.
-- Repeated taps increase basket quantities. Basket quantities and unit prices can
-  be edited for individual sales, and lines can be removed. Custom items remain
-  available. Library changes do not alter existing baskets or completed sales.
+  Open **Manage items & saved prices** to see the saved-item list and
+  create categories. Use **Add item** or **Edit** to open the item editor.
+  Assign a category, enter variations one per line and choose a tile colour
+  for the item and its variations. On the till, tap an item with variations
+  and then choose its variation in the pop-up.
+  Edit price, category and tile colour directly in the saved-item list.
+  Use **Edit** and **Queue changes** for other fields, then select
+  **Save all changes** to publish the queued edits together.
+  Use **Rearrange tiles** to drag items into place and choose two or three
+  columns. **Save tile order** shares the layout across tills. New items
+  appear after the saved order.
+  Optional stock on hand is shared across an item's variations. The tile shows
+  a warning at or below the configured threshold until stock is replenished.
+- Repeated taps increase basket quantities. Edit quantities or remove basket
+  lines as needed. Unit prices are read-only. Managers enter a custom item's
+  price when adding it. If a saved item's details change during a sale, remove
+  that line and add the item again from the library before checkout.
 - On phones and smaller tablets, the till uses full-width Items, Waivers, History
   and Basket views with fixed bottom navigation, basket count and total. Linking
   a waiver returns to Items; searches, the basket and checkout identity survive
@@ -31,8 +44,11 @@ records. The existing client app remains a separate application.
   the exact total, GBP10, GBP20 or GBP50 and calculate change without completing
   the sale. Staff and day-end links are in the till header's Tools menu.
 - Cash received recording, recent sales, and sale details with an optional waiver link.
-- Cash payment opens inside the basket: enter the tender, check live change, then
-  complete the sale. The till retains a confirmation with the change to hand back.
+- Cash payment opens inside the basket. Enter the tender, check live change and
+  complete the sale. The confirmation shows change for 30 seconds or until
+  **Next sale**. Managers can export CL Paints cash sales from History as CSV.
+  SumUp's public sales API provides read access, so cash sales recorded in the
+  CL Paints till are available in the CL Paints history and cash export.
 - Optional email receipts: select **Customer wants an email receipt**, confirm the
   email address, and complete payment. Linked waiver emails are prefilled without
   opting the customer in. Cash receipts send when recorded; card receipts send
@@ -44,7 +60,10 @@ records. The existing client app remains a separate application.
   Individual waivers select their sole member automatically. Cash completion or
   verified card payment records the point in the existing loyalty visit ledger;
   QR check-ins and other sales cannot award a second point at that event. Balances
-  remain capped at three; free paints still use the existing redemption flow.
+  remain capped at three. Mark the face-paint item **Eligible for free face paint**
+  in the library. Link the participant on the waiver and add the item to the basket
+  to automatically discount one eligible paint at three points. A fully discounted
+  basket is recorded as a loyalty sale.
   Till and event loyalty logs link the award back to the sale. A member without
   a portal account is linked to an account under the waiver's responsible email.
 - Searchable, paginated sale history stores items, unit prices, total, tender/change,
@@ -55,8 +74,11 @@ records. The existing client app remains a separate application.
 - Direct Solo Lite reader payments inside the Android POS, persistent pending sales
   and server verification. The separate SumUp app is not required by this APK.
 
-The app needs an internet connection. Till sales remain separate from booking
-payments, invoices and stock. Confirmed sales and refunds now feed daily handovers
+The app needs an internet connection. Use the **Newly completed** filter to
+see POS waivers from the last 24 hours. Results update while the search is open.
+The Participants page updates its list and counts in place.
+Till sales remain separate from booking payments and invoices.
+Confirmed sales and refunds now feed daily handovers
 and cash balances. Choose the trading event at checkout to allocate transactions
 to its booking cash-up. Enter only additional non-POS takings in the manual fields;
 the linked POS figures are included automatically. Unallocated sales still appear
