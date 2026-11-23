@@ -406,9 +406,12 @@ class PosLibraryTest(unittest.TestCase):
             assert(order.querySelector('[data-pos-drag]').textContent === 'Face painting', 'cancel kept the unsaved order');
             const list = order.querySelector('ol');
             const columns = form.elements.columns;
+            const previewFontSize = parseFloat(getComputedStyle(list.querySelector('[data-pos-drag]')).fontSize);
+            const tillFontSize = parseFloat(getComputedStyle(firstTile.querySelector('strong')).fontSize);
             columns.value = '3';
             change(columns);
             assert(getComputedStyle(list).gridTemplateColumns.split(' ').length === 3, 'preview does not have three columns');
+            assert(parseFloat(getComputedStyle(list.querySelector('[data-pos-drag]')).fontSize) < previewFontSize, 'preview wording did not adapt to narrower tiles');
             const [source, target] = list.querySelectorAll('[data-pos-drag]');
             const targetBox = target.getBoundingClientRect();
             list.setPointerCapture = () => {};
@@ -428,6 +431,7 @@ class PosLibraryTest(unittest.TestCase):
             assert(document.querySelector('[data-product-id]').dataset.productName === 'Wand', 'saved order did not update tiles');
             assert(getComputedStyle(firstTile).backgroundColor !== 'rgb(219, 234, 254)', 'saving the layout published the queued colour');
             assert(getComputedStyle(document.querySelector('.pos-product-grid')).gridTemplateColumns.split(' ').length === 3, 'saved till does not have three columns');
+            assert(parseFloat(getComputedStyle(firstTile.querySelector('strong')).fontSize) < tillFontSize, 'till wording did not adapt to narrower tiles');
             assert(document.getElementById('pos-basket').children.length === 1, 'rearranging lost the basket');
         ''', 390)
 
