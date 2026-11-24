@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block title %}Equipment checklist | CL Paints{% endblock %}
+{% macro token() %}<input type="hidden" name="csrf_token" value="{{ csrf }}">{% endmacro %}
+{% block body %}
+<div class="admin">
+  {% include '_admin_sidebar.html' %}
+  <main id="portal-main" class="equipment-main">
+    <header class="top"><div><h1>Equipment checklist</h1><p>Build a packing list for each type of event using your equipment library.</p></div></header>
+    <p><a class="btn" href="{{ url_for('equipment_history', category=category.id if category else none) }}">View checklist history</a></p>
+    {% for category_type, message in get_flashed_messages(with_categories=true) %}
+    <p class="{{ 'booking-admin-error' if category_type == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>
+    {% endfor %}
+    <div class="equipment-management">
+    <section class="panel">
+      <h2>Event categories</h2>
+      {% if categories %}
+      <form class="client-form" method="get" action="{{ url_for('admin_equipment') }}">
+        {% if booking_id %}<input type="hidden" name="booking" value="{{ booking_id }}">{% endif %}
+        <label>Event category<select name="category">
+          {% for option in categories %}<option value="{{ option.id }}"{% if option.id == category.id %} selected{% endif %}>{{ option.name }}</option>{% endfor %}
+        </select></label>
+        <button class="btn" type="submit">Open category</button>
+      </form>
+      {% endif %}
+      <details{% if not categories %} open{% endif %}>
+      <summary>Add event category</summary>
+      <form class="client-form" method="post" action="{{ url_for('save_equipment_category') }}">
+        {{ token() }}
+        <label>New event category<input name="name" maxlength="100" required></label>
+        <button class="btn" type="submit">Add category</button>
+      </form>
+      </details>
+      {% if category %}
+      <details>
+        <summary>Rename category</summary>
+        <form class="client-form" method="post" action="{{ url_for('save_equipment_category', category_id=category.id) }}">
+          {{ token() }}
+          <label>Category name<input name="name" value="{{ category.name }}" maxlength="100" required></label>
+          <button class="btn" type="submit">Save category name</button>
+        </form>
+      </details>
+      <details>
+        <summary>Delete category</summary>
+        <p>Deleting {{ category.name }} also removes its saved packing list. Equipment and photos stay in the library.</p>
+        <form method="post" action="{{ url_for('delete_equipment_category', category_id=category.id) }}">
+          {{ token() }}
+          <button class="btn" type="submit">Delete {{ category.name }}</button>
+        </form>
+      </details>
+      {% endif %}
+    </section>
+    <div class="equipment-workspace">
+    {% if category %}
+    <section class="panel">
+      <h2>{{ category.name }} packing list</h2>
+      {% if booking_options %}
+      <form class="client-form" method="get" action="{{ url_for('admin_equipment') }}">
+        <input type="hidden" name="category" value="{{ category.id }}">
+        <label>Checklist for<select name="booking">
+          <option value="">Category defaults</option>
+          {% for id, label in booking_options %}<option value="{{ id }}"{% if id == booking_id %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select></label>
+        <button class="btn" type="submit">Load checklist</button>
+      </form>
+      {% endif %}
+      {% if booking_id %}<p>This check applies to the selected booking. Category defaults stay available for future bookings.</p>{% endif %}
+      {% if needed_ids %}
+      <ul class="equipment-packing-list">
+        {% for item in items if item.id in needed_ids %}<li>{{ item.name }}</li>{% endfor %}
+      </ul>
+      {% else %}
+      <p>No equipment selected for this category yet.</p>
+      {% endif %}
+      {% if items and checker %}
+      <form class="client-form" method="post" data-equipment-checklist action="{{ url_for('save_equipment_checklist', category_id=category.id) }}">
+        {{ token() }}
+        {% if booking_id %}<input type="hidden" name="booking" value="{{ booking_id }}">{% endif %}
+        <label>Checked by
+          <select name="checked_by" required>
+            <option value="{{ checker.id }}" selected>{{ checker.name }}</option>
+          </select>
+        </label>
+        <fieldset>
+          <legend>Choose what you need</legend>
+          <div class="equipment-check-controls" data-check-controls hidden>
+            <output aria-live="polite" data-needed-count></output>
+            <label><input type="checkbox" data-needed-only> Show needed only</label>
+          </div>
+          <div class="equipment-item-grid">
+            {% for item in items %}
+            <label class="equipment-option" data-equipment-option>
+              {% if item.has_image %}<img src="{{ url_for('equipment_item_image', item_id=item.id) }}" alt="" loading="lazy">{% endif %}
+              <span><input type="checkbox" name="needed" value="{{ item.id }}"{% if item.id in needed_ids %} checked{% endif %}> {{ item.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <button class="btn primary" type="submit">{{ 'Save booking check' if booking_id else 'Save checklist' }}</button>
+      </form>
+      {% elif items %}
+      <p>Sign in with a staff PIN and Equipment checklist permission to record a check.</p>
+      {% else %}
+      <p>Add equipment to the library to start this list.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+    <section class="panel">
+      <h2>Equipment library</h2>
+      <details{% if not items %} open{% endif %}>
+      <summary>Add equipment item</summary>
+      <form class="client-form" method="post" enctype="multipart/form-data" action="{{ url_for('save_equipment_item') }}">
+        {{ token() }}
+        {% if category %}<input type="hidden" name="category" value="{{ category.id }}">{% endif %}
+        <label>New equipment item<input name="name" maxlength="100" required></label>
+        <label>Item photo (optional)<input type="file" name="image" accept="image/jpeg,image/png,image/webp"><small>JPG, PNG or WebP up to 10 MB.</small></label>
+        <button class="btn" type="submit">Add item</button>
+      </form>
+      </details>
+      {% if items %}
+      <details>
+        <summary>Edit equipment items</summary>
+        <div class="equipment-item-grid">
+          {% for item in items %}
+          <form class="client-form equipment-option" method="post" enctype="multipart/form-data" action="{{ url_for('save_equipment_item', item_id=item.id) }}">
+            {{ token() }}
+            {% if category %}<input type="hidden" name="category" value="{{ category.id }}">{% endif %}
+            {% if item.has_image %}<img src="{{ url_for('equipment_item_image', item_id=item.id) }}" alt="" loading="lazy">{% endif %}
+            <label>Item name<input name="name" value="{{ item.name }}" maxlength="100" required></label>
+            <label>{{ 'Replace photo' if item.has_image else 'Add photo' }}<input type="file" name="image" accept="image/jpeg,image/png,image/webp"></label>
+            {% if item.has_image %}<label><input type="checkbox" name="remove_image" value="1"> Remove current photo</label>{% endif %}
+            <button class="btn" type="submit">Save item</button>
+          </form>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+    </section>
+    </div>
+    </div>
+  </main>
+</div>
+<script src="{{ url_for('static', filename='equipment-checklist.js') }}" defer></script>
+{% endblock %}

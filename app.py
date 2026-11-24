@@ -582,6 +582,8 @@ native_form_models = define_native_form_models(db)
 from wedding_followups import define_model as define_wedding_followup_model
 WeddingFollowup = define_wedding_followup_model(db)
 from photo_library import define_models as define_photo_library_models, ensure_schema as ensure_photo_library_schema
+from equipment_checklist import define_models as define_equipment_models
+equipment_models = define_equipment_models(db)
 photo_library_models = define_photo_library_models(db)
 from website_reports import define_models as define_website_report_models
 website_report_model = define_website_report_models(db)
@@ -3243,6 +3245,8 @@ from qr_analytics import register as register_qr_analytics
 register_qr_analytics(app, db, qr_models, admin_required)
 from report_targets import register as register_report_targets
 register_report_targets(app, db, BusinessSetting, Booking, Waiver, tool_models[1], qr_models[1], admin_required)
+from equipment_checklist import register as register_equipment
+register_equipment(app, db, equipment_models, admin_required, Booking)
 
 from enquiry_automation import register as register_enquiry_automation
 register_enquiry_automation(app, db, website_enquiry_models[1], tool_models[3], notification_models[1], get_business_settings, lambda *args: send_client_email(*args))

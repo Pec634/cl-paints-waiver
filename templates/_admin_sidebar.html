@@ -11,54 +11,52 @@
         <a data-staff-workspace href="{{ url_for('staff_portal_home') }}" {% if current == 'staff_portal_home' %}class="active" aria-current="page"{% endif %}>My workspace</a>
         {% else %}
         <a href="{{ url_for('admin_dashboard') }}" {% if current == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}>Dashboard</a>
-        <a href="{{ url_for('pos_staff_manage') }}" {% if current == 'pos_staff_manage' %}class="active" aria-current="page"{% endif %}>Staff accounts &amp; permissions</a>
         {% endif %}
         {% if not staff_portal or staff_can('pos_home') %}
         <a href="{{ url_for('pos_home') }}" {% if current.startswith('pos_') and current not in ['pos_staff_manage', 'pos_reconcile'] %}class="active" aria-current="page"{% endif %}>Point of sale &amp; waiver search</a>
         {% endif %}
-        {% if not staff_portal or staff_can('creates_admin') %}
-        <a href="{{ url_for('creates_admin') }}" {% if current.startswith('creates_') %}class="active" aria-current="page"{% endif %}>CL Creates</a>
-        {% endif %}
         <hr class="admin-nav-divider">
-        {% for endpoint, label, active in [
-            ('admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages']),
-            ('admin_calendar', 'Availability calendar', current == 'admin_calendar'),
-            ('forms_offers', 'Booking forms & offers', current == 'forms_offers'),
-            ('connecteam_rota', 'Staff rota', current == 'connecteam_rota'),
-            ('admin_staff_timesheets', 'Staff clocking & timesheets', current in ['admin_staff_timesheets','admin_staff_timesheet_edit']),
-            ('staff_reports', 'Staff reports', current == 'staff_reports' or current.startswith('staff_report_')),
-            ('admin_events', 'Public events & QR codes', current in ['admin_events', 'loyalty.event_admin', 'loyalty.printable', 'admin_event_moodboard_print']),
-            ('admin_moodboard', 'Event moodboards', current in ['admin_moodboard', 'admin_event_moodboard']),
-            ('event_day_dashboard', 'Event-day tools', current in ['event_day_dashboard','kiosk_setup']),
-            ('admin_daily_handovers', 'Daily handovers & cash-up', current in ['admin_daily_handovers', 'admin_booking_cashup']),
-            ('admin_clients', 'Clients', current in ['admin_clients','admin_client_profile']),
-            ('admin_website_stories', 'Event stories', current == 'admin_website_stories'),
-            ('admin_record_imports', 'Imports', current in ['admin_record_imports', 'admin_record_import_review']),
-            ('admin_notification_centre', 'Activity & notifications', current == 'admin_notification_centre'),
-            ('communications_messages', 'Chat history', current == 'communications_messages'),
-            ('communications_public_enquiries', 'Website enquiries', current in ['communications_public_enquiries','communications_public_enquiry']),
-            ('communications_history', 'Email history', current in ['communications_history','email_history']),
-            ('communications_templates', 'Email templates & layout', current in ['communications_templates','email_preview'] or (current == 'admin_settings' and request.args.get('tab')=='email')),
-            ('communications_configuration', 'Email configuration & automatic emails', current == 'communications_configuration'),
-            ('wedding_followup_settings', 'Wedding follow-up', current == 'wedding_followup_settings'),
-            ('marketing_dashboard', 'Email campaigns', current in ['marketing_dashboard','marketing_campaign','marketing_email_preview']),
-            ('admin_participants', 'Participants', current in ['admin_participants', 'admin_waivers', 'admin_archived_waivers', 'admin_waiver_detail']),
-            ('admin_photo_library', 'Photo library', current == 'admin_photo_library'),
-            ('admin_reports', 'Business reports', current == 'admin_reports'),
-            ('admin_cash_movements', 'Cash movements & history', current == 'admin_cash_movements'),
-            ('pos_reconcile', 'Till reconciliation', current == 'pos_reconcile'),
-            ('admin_rewards', 'Rewards', current == 'admin_rewards' or current.startswith('rewards.')),
-            ('loyalty.check_in', 'Loyalty visits & check-in', current == 'loyalty.check_in'),
-            ('payments_overview', 'Payments, deposits & invoices', current in ['payments_overview','admin_payments','admin_booking_invoices']),
-            ('admin_qr_analytics', 'QR analytics', current == 'admin_qr_analytics'),
-            ('admin_settings', 'Settings', current == 'admin_settings' and request.args.get('tab')!='email'),
-            ('admin_booking_terms', 'Booking terms & conditions', current == 'admin_booking_terms'),
-            ('studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin'),
-            ('admin_website_builder', 'Website builder', current == 'admin_website_builder'),
-            ('backups', 'Backup & recovery', current == 'backups'),
-            ('admin_website_report', 'Website report', current == 'admin_website_report')
+        {% for group, endpoint, label, active in [
+            ('Bookings & calendar', 'admin_bookings', 'Bookings', current in ['admin_bookings', 'admin_booking_request', 'admin_booking_activity', 'admin_booking_messages']),
+            ('Bookings & calendar', 'admin_calendar', 'Availability calendar', current == 'admin_calendar'),
+            ('Bookings & calendar', 'forms_offers', 'Booking forms & offers', current == 'forms_offers'),
+            ('Bookings & calendar', 'admin_booking_terms', 'Booking terms & conditions', current == 'admin_booking_terms'),
+            ('Event operations', 'admin_events', 'Public events & QR codes', current in ['admin_events', 'loyalty.event_admin', 'loyalty.printable', 'admin_event_moodboard_print']),
+            ('Event operations', 'admin_moodboard', 'Event moodboards', current in ['admin_moodboard', 'admin_event_moodboard']),
+            ('Event operations', 'event_day_dashboard', 'Event-day tools', current in ['event_day_dashboard','kiosk_setup']),
+            ('Event operations', 'admin_equipment', 'Equipment checklist', current in ['admin_equipment', 'equipment_history']),
+            ('Event operations', 'admin_daily_handovers', 'Daily handovers & cash-up', current in ['admin_daily_handovers', 'admin_booking_cashup']),
+            ('Staff & permissions', 'connecteam_rota', 'Staff rota', current == 'connecteam_rota'),
+            ('Staff & permissions', 'admin_staff_timesheets', 'Staff clocking & timesheets', current in ['admin_staff_timesheets','admin_staff_timesheet_edit']),
+            ('Staff & permissions', 'staff_reports', 'Staff reports', current == 'staff_reports' or current.startswith('staff_report_')),
+            ('Staff & permissions', 'pos_staff_manage', 'Staff accounts & permissions', current == 'pos_staff_manage'),
+            ('Clients & rewards', 'admin_clients', 'Clients', current in ['admin_clients','admin_client_profile']),
+            ('Clients & rewards', 'admin_participants', 'Participants', current in ['admin_participants', 'admin_waivers', 'admin_archived_waivers', 'admin_waiver_detail']),
+            ('Clients & rewards', 'admin_rewards', 'Rewards', current == 'admin_rewards' or current.startswith('rewards.')),
+            ('Clients & rewards', 'loyalty.check_in', 'Loyalty visits & check-in', current == 'loyalty.check_in'),
+            ('Messages & enquiries', 'admin_notification_centre', 'Activity & notifications', current == 'admin_notification_centre'),
+            ('Messages & enquiries', 'communications_messages', 'Chat history', current == 'communications_messages'),
+            ('Messages & enquiries', 'communications_public_enquiries', 'Website enquiries', current in ['communications_public_enquiries','communications_public_enquiry']),
+            ('Messages & enquiries', 'communications_history', 'Email history', current in ['communications_history','email_history']),
+            ('Messages & enquiries', 'communications_templates', 'Email templates & layout', current in ['communications_templates','email_preview'] or (current == 'admin_settings' and request.args.get('tab')=='email')),
+            ('Messages & enquiries', 'communications_configuration', 'Email configuration & automatic emails', current == 'communications_configuration'),
+            ('Messages & enquiries', 'wedding_followup_settings', 'Wedding follow-up', current == 'wedding_followup_settings'),
+            ('Website & marketing', 'admin_website_builder', 'Website builder', current == 'admin_website_builder'),
+            ('Website & marketing', 'admin_website_stories', 'Event stories', current == 'admin_website_stories'),
+            ('Website & marketing', 'admin_photo_library', 'Photo library', current == 'admin_photo_library'),
+            ('Website & marketing', 'studio_gallery_admin', 'Studio gallery moderation', current == 'studio_gallery_admin'),
+            ('Website & marketing', 'marketing_dashboard', 'Email campaigns', current in ['marketing_dashboard','marketing_campaign','marketing_email_preview']),
+            ('Sales & finance', 'creates_admin', 'CL Creates', current.startswith('creates_')),
+            ('Sales & finance', 'payments_overview', 'Payments, deposits & invoices', current in ['payments_overview','admin_payments','admin_booking_invoices']),
+            ('Sales & finance', 'admin_cash_movements', 'Cash movements & history', current == 'admin_cash_movements'),
+            ('Sales & finance', 'pos_reconcile', 'Till reconciliation', current == 'pos_reconcile'),
+            ('Reports & analytics', 'admin_reports', 'Business reports', current == 'admin_reports'),
+            ('Reports & analytics', 'admin_website_report', 'Website report', current == 'admin_website_report'),
+            ('Reports & analytics', 'admin_qr_analytics', 'QR analytics', current == 'admin_qr_analytics'),
+            ('System & settings', 'admin_settings', 'Settings', current == 'admin_settings' and request.args.get('tab')!='email'),
+            ('System & settings', 'admin_record_imports', 'Imports', current in ['admin_record_imports', 'admin_record_import_review']),
+            ('System & settings', 'backups', 'Backup & recovery', current == 'backups'),
         ] if not staff_portal or staff_can(endpoint) %}
-        {% set group = 'Bookings & events' if endpoint in ['admin_bookings','admin_events','admin_moodboard','admin_calendar','event_day_dashboard','admin_daily_handovers','connecteam_rota','admin_staff_timesheets','staff_reports','forms_offers'] else ('Clients & rewards' if endpoint in ['admin_clients','admin_participants','admin_rewards','loyalty.check_in'] else ('Communications' if endpoint in ['admin_notification_centre','communications_messages','communications_public_enquiries','communications_history','communications_templates','communications_configuration','wedding_followup_settings','marketing_dashboard'] else ('Website & content' if endpoint in ['admin_website_builder','admin_website_stories','admin_photo_library','studio_gallery_admin','admin_website_report'] else ('Finance & reports' if endpoint in ['payments_overview','admin_reports','admin_qr_analytics','admin_cash_movements','pos_reconcile'] else 'System & settings')))) %}
         <span data-nav-group="{{ group }}" hidden></span><a href="{{ url_for(endpoint, view='all') if endpoint == 'communications_messages' else url_for(endpoint) }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
         {% if not staff_portal %}

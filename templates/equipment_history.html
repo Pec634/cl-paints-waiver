@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Checklist history | CL Paints{% endblock %}
+{% block body %}
+<div class="admin">
+  {% include '_admin_sidebar.html' %}
+  <main id="portal-main" class="equipment-main">
+    <header class="top">
+      <h1>Checklist history</h1>
+      <a class="btn" href="{{ url_for('admin_equipment', category=category_id) }}">Back to equipment checklist</a>
+    </header>
+    <section class="panel">
+      <p>Each checklist save records who checked it and what they selected. Times are shown in UK local time.</p>
+      <form class="client-form" method="get" action="{{ url_for('equipment_history') }}">
+        {% if category_id %}<input type="hidden" name="category" value="{{ category_id }}">{% endif %}
+        <div class="equipment-history-filters">
+          <label>Event category<select name="event_category">
+            <option value="">All categories</option>
+            {% for name in category_names %}<option{% if name == filters.event_category %} selected{% endif %}>{{ name }}</option>{% endfor %}
+          </select></label>
+          <label>Staff member<select name="staff">
+            <option value="">All staff</option>
+            {% for name in staff_names %}<option{% if name == filters.staff %} selected{% endif %}>{{ name }}</option>{% endfor %}
+          </select></label>
+          <label>From date<input type="date" name="from_date" value="{{ filters.from_date }}"></label>
+          <label>To date<input type="date" name="to_date" value="{{ filters.to_date }}"></label>
+        </div>
+        <div><button class="btn primary" type="submit">Apply filters</button> <a class="btn" href="{{ url_for('equipment_history', category=category_id) }}">Clear filters</a></div>
+      </form>
+      {% for entry in history.items %}
+      {% set checked_at = entry.local_time %}
+      <details>
+        <summary>{{ entry.category_name }} · {{ entry.recorded_by }} · <time datetime="{{ checked_at.isoformat() }}">{{ checked_at.strftime('%d %b %Y, %H:%M %Z') }}</time></summary>
+        {% if entry.id in event_labels %}<p><strong>Booking</strong> {{ event_labels[entry.id] }}</p>{% endif %}
+        <p><strong>Needed</strong> {{ entry.needed|join(', ') or 'None' }}</p>
+        <p><strong>Not needed</strong> {{ entry.not_needed|join(', ') or 'None' }}</p>
+      </details>
+      {% else %}
+      <p>No checks found for these filters.</p>
+      {% endfor %}
+      {% if history.pages > 1 %}
+      <div class="actions">
+        {% if history.has_prev %}<a class="btn" href="{{ url_for('equipment_history', category=category_id, page=history.prev_num, **filters) }}">Newer checks</a>{% endif %}
+        {% if history.has_next %}<a class="btn" href="{{ url_for('equipment_history', category=category_id, page=history.next_num, **filters) }}">Older checks</a>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+  </main>
+</div>
+{% endblock %}

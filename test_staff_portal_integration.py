@@ -68,7 +68,7 @@ class StaffPortalIntegrationTest(unittest.TestCase):
         nav=re.search(r'<aside>.*?<nav[^>]*>(.*?)</nav>',response.get_data(as_text=True),re.S)
         self.assertIsNotNone(nav)
         self.assertEqual(re.findall(r'<a[^>]*>(.*?)</a>',nav.group(1)),['My workspace','Bookings'])
-        self.assertIn('data-nav-group="Bookings &amp; events"', nav.group(1))
+        self.assertIn('data-nav-group="Bookings &amp; calendar"', nav.group(1))
         self.assertNotIn(b'portal-admin-toolbar',response.data)
 
     def test_email_template_grant_cannot_change_owner_account(self):
@@ -119,12 +119,22 @@ class StaffPortalIntegrationTest(unittest.TestCase):
             const form=document.querySelector('form:has(input[name=permissions_version])');
             assert(form,'permission editor missing');
             const choices=[...form.querySelectorAll('input[name=permissions]')];
-            assert(choices.length===30,'portal areas missing from editor');
+            assert(choices.length===31,'portal areas missing from editor');
+            assert(choices.some(field=>field.value==='equipment'),'equipment permission missing');
             choices.forEach(field=>{field.checked=field.value==='bookings';});
             form.querySelector('input[name=pin]').value='0';
             const data=new FormData(form);
             assert(data.getAll('permissions').join(',')==='bookings','form grants unchecked areas');
             assert(data.get('pin')==='0','single digit PIN is not accepted');
+            const folders = [...document.querySelectorAll('#admin-tool-navigation .admin-navigation-group')];
+            const folderFor = text => folders.find(folder => folder.querySelector('summary').textContent === text);
+            assert(folders.length === 9, 'expected nine organised sections');
+            const titles = folders.map(folder => folder.querySelector('summary').textContent);
+            assert(titles.join('|') === [...titles].sort((a, b) => a.localeCompare(b, 'en-GB')).join('|'),
+              'navigation sections are not alphabetical');
+            assert(folderFor('Staff & permissions').open, 'current staff section is closed');
+            assert(folderFor('Event operations').querySelector('a[href="/admin/equipment"]'), 'equipment is outside events');
+            assert(folderFor('Reports & analytics').querySelector('a[href="/admin/reports"]'), 'reports are outside analytics');
             assert(document.documentElement.scrollWidth<=innerWidth,'permission editor overflows phone');
         ''',width=390)
         self.grants('bookings')
@@ -136,7 +146,7 @@ class StaffPortalIntegrationTest(unittest.TestCase):
             const nav=document.querySelector('#admin-tool-navigation');
             const groups=[...nav.querySelectorAll('.admin-navigation-group')];
             assert(groups.length===1,'unassigned groups appear in staff menu');
-            assert(groups[0].querySelector('summary').textContent==='Bookings & events','staff group differs from owner menu');
+            assert(groups[0].querySelector('summary').textContent==='Bookings & calendar','staff group differs from owner menu');
             assert([...groups[0].querySelectorAll('a')].map(link=>link.textContent).join(',')==='Bookings','wrong staff areas displayed');
             assert(!document.getElementById('portal-admin-toolbar'),'owner quick actions exposed');
             assert(document.documentElement.scrollWidth<=innerWidth,'staff workspace overflows phone');

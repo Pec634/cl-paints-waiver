@@ -73,11 +73,16 @@ def register(app, db, Setting, Booking, Waiver, PaymentEntry, Scan, admin_requir
         for key, (label, money) in METRICS.items():
             target = Decimal(saved[key]) if key in saved else None
             change = round(float((current[key] - previous[key]) / previous[key] * 100), 1) if previous[key] > 0 else None
+            pace = progress(current[key], target, elapsed, length)
+            comparison = [item['values'][key] for item in reversed(history)]
+            comparison.extend((previous[key], current[key], pace['expected'], target))
             metrics.append(dict(key=key, label=label, money=money, current=current[key], previous=previous[key],
                                 change=change, target=target, history=[item['values'][key] for item in history],
-                                **progress(current[key], target, elapsed, length)))
+                                comparison=comparison, **pace))
+        comparison_labels = [f"{item['label']} full year" for item in reversed(history)]
+        comparison_labels.extend(('Last year to same date', 'Current year to date', 'Expected by today', 'Annual target'))
         return dict(today=today, start=start, finish=finish, previous_start=previous_start, previous_end=previous_end,
-                    history=history, metrics=metrics, elapsed=elapsed, length=length,
+                    history=history, metrics=metrics, elapsed=elapsed, length=length, comparison_labels=comparison_labels,
                     csrf=session.setdefault('report_targets_csrf', secrets.token_urlsafe(32)))
 
     app.extensions['report_targets_data'] = data

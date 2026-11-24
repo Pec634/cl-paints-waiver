@@ -31,12 +31,9 @@
                 .sort((first, second) => alphabetical.compare(first.textContent.trim(), second.textContent.trim()))
                 .forEach(link => group.append(link));
         });
-        const groupOrder = ['Bookings & events','Clients & rewards','Communications','CL Creates','Website & content','Finance & reports','System & settings'];
-        // Keep new sections visible even when they are not in the preferred order yet.
-        for (const title of new Set([...groupOrder, ...groups.keys()])) {
-            const group = groups.get(title);
-            if (group) markers[0].before(group);
-        }
+        [...groups.entries()]
+            .sort(([first], [second]) => alphabetical.compare(first, second))
+            .forEach(([, group]) => markers[0].before(group));
         markers.forEach(marker => marker.remove());
         if (toolSearch) {
             toolSearch.closest('.admin-tool-search').hidden = false;

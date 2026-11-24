@@ -9,9 +9,25 @@ from flask import template_rendered
 import app as main
 import rewards
 import reports
+from test_admin_polish_browser import BrowserChecks, EDGE
 
 
 class ReportsTest(unittest.TestCase):
+    @unittest.skipUnless(EDGE.is_file(), 'Microsoft Edge is not installed')
+    def test_targets_share_one_line_chart(self):
+        _, page = self.data()
+        BrowserChecks.browser(self, page.data, '''
+            document.querySelector('[data-report-tab="targets"]').click();
+            const container = document.querySelector('#report-target-line');
+            assert(!container.hidden && container.querySelectorAll('svg').length === 1, 'expected one chart');
+            assert(container.querySelectorAll('polyline').length === 7, 'expected one line for each metric');
+            const toggle = container.querySelector('input[type="checkbox"]');
+            toggle.click();
+            assert(container.querySelector('g').getAttribute('display') === 'none', 'line toggle did not hide series');
+            assert(document.querySelector('[aria-label="Exact report figures and targets"] tbody').rows.length === 7,
+                'exact figures table is missing metrics');
+        ''', 900)
+
     def setUp(self):
         self.context = main.app.app_context()
         self.context.push()
@@ -109,6 +125,11 @@ class ReportsTest(unittest.TestCase):
             self.assertEqual(value['target'], Decimal('300'))
             self.assertEqual(value['percent'], 66.7)
             self.assertEqual(value['status'], 'On track')
+            chart = dict(zip(saved['targets']['comparison_labels'], value['comparison'], strict=True))
+            self.assertEqual(chart['Current year to date'], Decimal('200'))
+            self.assertEqual(chart['Annual target'], Decimal('300'))
+            self.assertEqual(chart['Expected by today'], value['expected'])
+            self.assertEqual(sum(label.endswith(' full year') for label in chart), 3)
             self.assertEqual(self.client.post('/admin/reports/targets', data={'year': '2026'}).status_code, 400)
             self.client.post('/admin/reports/targets', data={
                 'csrf_token': targets['csrf'], 'year': '2026', 'booking_count': '1.5'})

@@ -36,6 +36,7 @@ class EventDayTest(unittest.TestCase):
         main.db.session.add(event); main.db.session.commit()
         page = self.admin.get('/admin/event-day')
         self.assertIn(b'Private party', page.data)
+        self.assertIn(f'/admin/equipment?booking={booking.id}'.encode(), page.data)
         private_card = page.data.split(b'Private party')[1].split(b'</article>')[0]
         self.assertNotIn(b'waiver', private_card)
         booking.status='Cancelled'; main.db.session.commit()

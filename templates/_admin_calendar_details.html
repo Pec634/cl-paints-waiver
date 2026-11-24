@@ -1,0 +1,19 @@
+{% macro status_class(row) -%}{% if row.get('collection') %}review{% elif not row.booking %}unavailable{% elif row.booking.status == 'Accepted' %}accepted{% else %}review{% endif %}{%- endmacro %}
+{% macro event_title(row) -%}
+{{ row.booking.first_name }} {{ row.booking.last_name }} · {{ row.event.get('event_type') or row.booking.event_type }}{% if row.event.get('theme') or row.booking.theme %} — {{ row.event.get('theme') or row.booking.theme }}{% endif %}
+{%- endmacro %}
+{% macro details(row) %}
+{% if row.get('collection') %}
+<p class="calendar-status calendar-status--review">CL Creates collection game</p><h3>{{ row.label }}</h3><p>{{ row.start.strftime('%d/%m/%Y %H:%M') }} UK time. This is a collection option, not a face-painting booking or availability block.</p><a class="btn" href="{{ url_for('creates_collection') }}">Manage home-game collection</a>
+{% elif row.booking %}
+{% set booking = row.booking %}
+<p class="calendar-status calendar-status--{{ status_class(row) }}">{{ booking.status }}</p>
+<h3>{{ event_title(row) }}</h3>
+<p>{{ row.start.strftime('%A %d %B %Y %H:%M') }}–{{ row.end.strftime('%H:%M') }} (UK time)</p><p>Setup / travel buffer: {{ row.occupied_start.strftime('%d/%m/%Y %H:%M') }}–{{ row.occupied_end.strftime('%d/%m/%Y %H:%M') }}</p>{% with row=admin_booking_detail_row(booking) %}{% include '_admin_booking_details.html' %}{% endwith %}
+{% else %}
+<p class="calendar-status calendar-status--unavailable">Unavailable</p>
+<h3>{{ row.label }}</h3>
+<p>{{ row.start.strftime('%d/%m/%Y %H:%M') }}–{{ row.end.strftime('%d/%m/%Y %H:%M') }} (UK time)</p>
+{% endif %}
+{% if row.conflicts %}<p class="booking-admin-error">Possible overlap: {{ row.conflicts|join(', ') }}</p>{% endif %}
+{% endmacro %}

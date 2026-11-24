@@ -5,15 +5,71 @@ import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
+import json
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 import test_loyalty as loyalty_tests
 from restore_database import validate, restore
+from test_admin_polish_browser import BrowserChecks, EDGE
 
 main=loyalty_tests.main
 Plan, Entry, Block, Workflow, Reminder, Correction=main.tool_models
 
 class BusinessToolsTest(unittest.TestCase):
+    def test_calendar_today_shortcut(self):
+        today = datetime.now(ZoneInfo('Europe/London')).date()
+        other_month = self.admin.get('/admin/calendar?month=2099-01')
+        self.assertIn(f'/admin/calendar?month={today:%Y-%m}#calendar-today'.encode(), other_month.data)
+        current = self.admin.get(f'/admin/calendar?month={today:%Y-%m}')
+        self.assertEqual(current.data.count(b'id="calendar-today"'), 1)
+        if EDGE.is_file():
+            BrowserChecks.browser(self, current.data, '''
+                document.querySelector('[data-calendar-today]').click();
+                const today = document.querySelector('#calendar-today');
+                assert(document.activeElement === today, 'the Today button did not focus the date');
+                assert(today.querySelector('time').getAttribute('aria-current') === 'date', 'wrong date selected');
+                const controls = document.querySelector('.calendar-month-controls');
+                assert(controls.children.length === 3, 'month controls are not grouped');
+                assert(controls.children[1].matches('[data-calendar-today].primary'), 'Today is not the centre action');
+                assert(document.querySelector('.calendar-page-tools').children.length === 3, 'calendar tools are not grouped');
+            ''', 1200)
+
+    def test_calendar_month_fragment_keeps_events_and_access_rules(self):
+        main.db.session.add(Block(starts_at=datetime(2099, 2, 8, 9), ends_at=datetime(2099, 2, 8, 12),
+                                  reason='February equipment setup'))
+        main.db.session.commit()
+        path = '/admin/calendar?month=2099-02&fragment=month'
+        fragment = self.admin.get(path)
+        self.assertEqual(fragment.status_code, 200)
+        self.assertIn(b'data-calendar-month="2099-02"', fragment.data)
+        self.assertIn(b'February equipment setup', fragment.data)
+        self.assertIn(b'id="calendar-detail-2099-02-0"', fragment.data)
+        self.assertNotIn(b'Block unavailable time', fragment.data)
+        self.assertEqual(self.client.get(path).status_code, 302)
+        if EDGE.is_file():
+            january = self.admin.get('/admin/calendar?month=2099-01').get_data(as_text=True)
+            payload = json.dumps(fragment.get_data(as_text=True)).replace('<', '\\u003c')
+            mock = f'<script>window.fetch = async url => url.searchParams.get("month") === "2099-02" ? new Response({payload}) : new Response("", {{status: 404}});</script>'
+            markup = january.replace('</head>', mock + '</head>').encode()
+            BrowserChecks.browser(self, markup, '''
+                const calendar = document.querySelector('[data-calendar-stream]');
+                calendar.scrollTop = calendar.scrollHeight;
+                for (let attempt = 0; attempt < 20 && !calendar.querySelector('[data-calendar-month="2099-02"]'); attempt++) {
+                    await new Promise(resolve => setTimeout(resolve, 40));
+                }
+                const month = calendar.querySelector('[data-calendar-month="2099-02"]');
+                assert(month, 'scrolling did not append February');
+                assert(calendar.querySelector('[data-calendar-month="2099-01"]'), 'January disappeared');
+                const schedule = document.querySelector('.calendar-schedule-panel');
+                assert(!schedule.open, 'schedule is expanded by default');
+                schedule.querySelector('summary').click();
+                assert(schedule.open, 'schedule did not expand');
+                schedule.querySelector('summary').click();
+                month.querySelector('[data-calendar-detail]').click();
+                const dialog = document.querySelector('#calendar-event-dialog');
+                assert(dialog.open && dialog.textContent.includes('February equipment setup'), 'new month details did not open');
+            ''', 1200)
+
     def setUp(self):
         self.fixture=loyalty_tests.LoyaltyTest()
         self.fixture.setUp()

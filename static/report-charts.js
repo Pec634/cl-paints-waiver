@@ -36,6 +36,64 @@
     if (text !== undefined) element.textContent = text;
     return element;
   }
+  const targetContainer = document.getElementById('report-target-line');
+  if (targetContainer) {
+    const {labels, metrics} = JSON.parse(document.getElementById('report-target-line-data').textContent);
+    const hasNegative = metrics.some(metric => metric.comparison.some(value => Number(value) < 0));
+    const min = hasNegative ? -100 : 0;
+    const x = index => 96 + index * 112;
+    const y = percent => 224 - (percent - min) / (100 - min) * 202;
+    const chart = svgElement('svg', {viewBox: '0 0 840 280', role: 'img',
+      'aria-label': 'Financial-year figures and targets on a shared percentage scale. Exact figures follow in the table.'});
+    const legend = document.createElement('div');
+    legend.className = 'report-target-legend';
+    for (let percent = min; percent <= 100; percent += 50) {
+      chart.append(svgElement('line', {x1: 54, x2: 814, y1: y(percent), y2: y(percent),
+        stroke: percent === 0 ? '#667189' : '#e1e6ef'}));
+      chart.append(svgElement('text', {x: 47, y: y(percent) + 4, 'text-anchor': 'end', 'font-size': 13}, `${percent}%`));
+    }
+    labels.forEach((label, index) => {
+      const words = label.split(' ');
+      const text = svgElement('text', {x: x(index), y: 246, 'text-anchor': 'middle', 'font-size': 13});
+      text.append(svgElement('tspan', {x: x(index)}, words.slice(0, 2).join(' ')),
+        svgElement('tspan', {x: x(index), dy: 16}, words.slice(2).join(' ')));
+      chart.append(text);
+    });
+    metrics.forEach((metric, index) => {
+      const colour = colours[index];
+      const scale = Math.max(...metric.comparison.map(value => Math.abs(Number(value)))) || 1;
+      const points = metric.comparison.flatMap((value, column) => value === null ? [] :
+        [{x: x(column), y: y(Number(value) / scale * 100), value, label: labels[column]}]);
+      const series = svgElement('g', {stroke: colour, fill: colour});
+      series.append(svgElement('polyline', {points: points.map(point => `${point.x},${point.y}`).join(' '),
+        fill: 'none', 'stroke-width': 2.5}));
+      const formatter = new Intl.NumberFormat('en-GB', metric.money ?
+        {style: 'currency', currency: 'GBP'} : {maximumFractionDigits: 0});
+      points.forEach(point => {
+        const dot = svgElement('circle', {cx: point.x, cy: point.y, r: 4, stroke: '#fff'});
+        dot.append(svgElement('title', {}, `${metric.label} · ${point.label}: ${formatter.format(Number(point.value))}`));
+        series.append(dot);
+      });
+      chart.append(series);
+      const option = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = true;
+      checkbox.style.accentColor = colour;
+      checkbox.addEventListener('change', () => series.setAttribute('display', checkbox.checked ? 'inline' : 'none'));
+      const swatch = document.createElement('span');
+      swatch.className = 'report-chart-swatch';
+      swatch.style.backgroundColor = colour;
+      swatch.setAttribute('aria-hidden', 'true');
+      option.append(checkbox, swatch, document.createTextNode(metric.label));
+      legend.append(option);
+    });
+    const scroll = document.createElement('div');
+    scroll.className = 'report-target-line-scroll';
+    scroll.append(chart);
+    targetContainer.append(legend, scroll);
+    targetContainer.hidden = false;
+  }
   document.querySelectorAll('[data-pie-chart]').forEach(container => {
     const rows = data[container.dataset.pieChart].filter(row => row.value > 0);
     const total = rows.reduce((sum, row) => sum + row.value, 0);

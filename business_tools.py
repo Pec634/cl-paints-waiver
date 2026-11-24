@@ -247,9 +247,15 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
                 start=datetime.combine(date,datetime.min.time())
                 cells.append(dict(date=date,in_month=date.month==month.month,items=[row for row in rows if row['start']<start+timedelta(days=1) and row['end']>start]))
             weeks.append(cells)
-        previous=(month-timedelta(days=1)).strftime('%Y-%m')
-        next_month=(month.replace(day=28)+timedelta(days=4)).strftime('%Y-%m')
-        return render_template('admin_calendar.html',rows=rows,client_csrf=csrf(),blocks=Block.query.order_by(Block.starts_at).all(),weeks=weeks,month=month,previous=previous,next_month=next_month,today=today)
+        previous=(month-timedelta(days=1)).strftime('%Y-%m') if month.strftime('%Y-%m') != '1900-01' else None
+        next_month=(month.replace(day=28)+timedelta(days=4)).strftime('%Y-%m') if month.strftime('%Y-%m') != '2100-12' else None
+        fragment = request.args.get('fragment') == 'month'
+        context = dict(rows=rows, weeks=weeks, month=month, previous=previous, next_month=next_month, today=today)
+        if fragment:
+            visible = {id(row) for week in weeks for cell in week if cell['in_month'] for row in cell['items']}
+            context['rows'] = [row for row in rows if id(row) in visible]
+            return render_template('_admin_calendar_month.html', fragment=True, **context)
+        return render_template('admin_calendar.html',client_csrf=csrf(),blocks=Block.query.order_by(Block.starts_at).all(),**context)
     @app.post('/admin/calendar/blocks/<int:block_id>/delete')
     @admin_required
     def delete_availability_block(block_id):
