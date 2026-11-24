@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 from unittest.mock import patch
 import test_business_tools as fixtures
+from test_admin_polish_browser import BrowserChecks, EDGE
 
 main = fixtures.main
 
@@ -33,6 +34,74 @@ class BookingEditTest(unittest.TestCase):
         row['events'] = json.loads(row['events'])
         return {'rows': [row], 'version': config['version']}, {'X-Import-Token': config['token']}
 
+    def test_admin_edits_through_prefilled_booking_form(self):
+        page = self.admin.get(self.path)
+        self.assertIn(b'class="booking-form"', page.data)
+        self.assertNotIn(b'Test address', page.data)
+        self.assertNotIn(self.booking.email.encode(), page.data)
+        self.assertNotIn(b'name="signature"', page.data)
+        if EDGE.is_file():
+            BrowserChecks.browser(self, page.data, '''
+                const form = document.querySelector('.booking-form');
+                for (const selector of ['.booking-availability-check', '.booking-saved-pricing']) {
+                    const panel = form.querySelector(selector);
+                    assert(parseFloat(getComputedStyle(panel).paddingInlineStart) >= 18, 'panel content touches the edge');
+                }
+                assert(!form.querySelector('[name="first_name"], [name="email"]'), 'client details appear in the editor');
+                assert(!new FormData(form).has('client_address'), 'client address should not be submitted');
+                assert(form.querySelector('[data-event-field="date"]').value === '2099-01-01', 'date was not prefilled');
+                assert(form.querySelector('[data-event-field="event_address"]').value === 'Test venue', 'venue was not prefilled');
+                window.fetch = async (url, options) => {
+                    const schedule = JSON.parse(options.body.get('event_schedule'));
+                    assert(options.body.get('action') === 'quote' && schedule.events[0].travel_miles === '30',
+                        'mileage was not sent for a quote');
+                    assert(options.body.get('payment_preference') === '50% deposit', 'deposit option was not quoted');
+                    return Response.json({quote: {event_total: '100.00', total: '120.00', travel: '20.00', outstanding: '120.00', deposit: '60.00',
+                        days: [{travel: '20.00'}], notes: []}});
+                };
+                const miles = form.querySelector('[data-event-field="travel_miles"]');
+                form.elements.payment_preference.value = '50% deposit';
+                miles.value = '30';
+                miles.dispatchEvent(new Event('input', {bubbles: true}));
+                await new Promise(resolve => setTimeout(resolve, 550));
+                assert(form.querySelector('[data-day-travel-estimate]').textContent.includes('£20.00'), 'day travel did not update');
+                assert(form.querySelector('#booking-travel-estimate').textContent.includes('£20.00'), 'travel total did not update');
+                assert(form.querySelector('#adminTravelCharge').textContent === '£20.00', 'payment travel did not update');
+                assert(form.querySelector('#adminBookingTotal').textContent === '£120.00', 'payment total did not update');
+                assert(form.querySelector('#adminOutstandingBalance').textContent === '£120.00', 'outstanding balance did not update');
+                assert(!form.querySelector('#depositEstimateRow').hidden && form.querySelector('#depositEstimateAmount').textContent === '£60.00',
+                    'deposit did not include travel');
+                assert(form.checkValidity(), 'saved booking should be ready to review');
+                form.querySelector('.booking-submit').click();
+                assert(document.querySelector('#bookingReviewDialog').open, 'review dialog did not open');
+                assert(!document.querySelector('#bookingReviewContent').textContent.includes('Client details'),
+                    'client details appear in the review dialog');
+                const schedule = JSON.parse(form.elements.event_schedule.value);
+                assert(schedule.events[0].start_time === '10:00', 'form did not serialize the saved time');
+            ''', 1100)
+        data, headers = self.payload()
+        row = data['rows'][0]
+        events = row.pop('events')
+        events[0]['theme'] = 'Space'
+        row.update(csrf_token=headers['X-Import-Token'], booking_version=data['version'],
+                   event_schedule=json.dumps({'events': events}), client_address='Forged address',
+                   email='forged@example.com')
+        original_email = self.booking.email
+        events[0]['travel_miles'] = '30'
+        quote = self.admin.post(self.path, data=dict(row, action='quote', payment_preference='50% deposit',
+            event_schedule=json.dumps({'events': events})))
+        self.assertEqual(quote.json['quote']['travel'], '20.00')
+        self.assertEqual(quote.json['quote']['deposit'], '60.00')
+        with patch.object(main, 'send_client_email', return_value=True):
+            self.assertEqual(self.admin.post(self.path, data=row).status_code, 302)
+        self.assertEqual(self.booking.theme, 'Space')
+        self.assertEqual(self.booking.signature, 'Test')
+        self.assertEqual(self.booking.client_address, 'Test address')
+        self.assertEqual(self.booking.email, original_email)
+        stale = self.admin.post(self.path, data=row)
+        self.assertEqual(stale.status_code, 409)
+        self.assertIn(f'name="booking_version" value="{data["version"]}"'.encode(), stale.data)
+
     def test_edits_update_portal_notifications_and_audit_and_preserve_consent(self):
         data, headers = self.payload()
         original_signature = self.booking.signature
@@ -43,20 +112,21 @@ class BookingEditTest(unittest.TestCase):
         with patch.object(main, 'send_client_email', return_value=True):
             response = self.admin.post(self.path, headers=headers, json=data)
         self.assertEqual(response.status_code, 200, response.json)
-        self.assertEqual(self.booking.first_name, 'Changed')
+        self.assertEqual(self.booking.first_name, 'Test')
+        self.assertEqual(self.booking.phone, '+447911123456')
         self.assertEqual(self.booking.status, 'Under Review')
         self.assertEqual(self.booking.signature, original_signature)
         self.assertEqual(self.booking.terms_accepted_at, original_terms)
         Change, Notice = main.notification_models
         change = Change.query.filter_by(booking_id=self.booking.id).one()
-        self.assertIn('First name', change.changes)
-        self.assertIn('Phone', change.changes)
+        self.assertNotIn('First name', change.changes)
+        self.assertNotIn('Phone', change.changes)
         self.assertIn('Event 1: Theme', change.changes)
         self.assertNotIn('PRIVATE ADMIN NOTE', change.changes_json)
         self.assertEqual(Notice.query.filter_by(kind='booking').count(), 1)
         page = self.fixture.client.get(f'/client/bookings/{self.booking.id}')
         self.assertEqual(page.status_code, 200)
-        self.assertIn(b'Changed', page.data)
+        self.assertIn(b'New theme', page.data)
         self.assertNotIn(b'PRIVATE ADMIN NOTE', page.data)
         self.assertEqual(main.booking_lifecycle_models[0].query.filter_by(change_id=change.id).count(), 1)
 
@@ -81,9 +151,39 @@ class BookingEditTest(unittest.TestCase):
         self.assertEqual(self.admin.post(self.path, headers=headers, json=stale).status_code, 409)
         data['rows'][0]['events'][0]['finish_time'] = '00:00'
         self.assertEqual(self.admin.post(self.path, headers=headers, json=data).status_code, 400)
-        self.booking.status = 'Accepted'; main.db.session.commit()
+        self.booking.status = 'Declined'; main.db.session.commit()
         self.assertEqual(self.admin.get(self.path).status_code, 409)
         self.assertEqual(self.admin.post(self.path, headers=headers, json=data).status_code, 409)
+
+    def test_accepted_booking_edit_requests_acknowledgement_separately_from_payment(self):
+        self.booking.status = 'Accepted'
+        account = main.ClientAccount.query.filter_by(email=self.booking.email).one()
+        main.db.session.add(main.ClientEmailPreference(client_id=account.id, booking_updates=False))
+        main.db.session.commit()
+        data, headers = self.payload()
+        data['rows'][0]['events'][0]['theme'] = 'Updated theme'
+        with patch.object(main, 'send_client_email', return_value=True) as send:
+            response = self.admin.post(self.path, headers=headers, json=data)
+            self.assertEqual(response.status_code, 200, response.json)
+            send.assert_called_once()
+            self.assertIn("I've reviewed these updates", send.call_args.args[2])
+        self.assertEqual(self.booking.status, 'Accepted')
+        self.assertEqual(main.tool_models[1].query.filter_by(booking_id=self.booking.id).count(), 0)
+        change = main.notification_models[0].query.filter_by(booking_id=self.booking.id).one()
+        self.assertIn(b'Awaiting client acknowledgement', self.admin.get('/admin/bookings?filter=all').data)
+        client = self.fixture.client
+        detail = client.get(f'/client/bookings/{self.booking.id}')
+        self.assertIn(b'Updated theme', detail.data)
+        self.assertEqual(client.post(f'/client/bookings/{self.booking.id}/acknowledge-updates',
+            data={'csrf_token': self.fixture.fixture.fixture.csrf(), 'change_id': change.id}).status_code, 302)
+        self.assertIsNotNone(change.acknowledged_at)
+        self.assertNotIn(b'Awaiting client acknowledgement', self.admin.get('/admin/bookings?filter=all').data)
+
+        data, headers = self.payload()
+        data['rows'][0]['events'][0]['event_date'] = '2099-02-01'
+        response = self.admin.post(self.path, headers=headers, json=data)
+        self.assertEqual(response.status_code, 400, response.json)
+        self.assertIn('Activity & date changes', response.json['errors'][0])
 
     def test_internal_notes_only_do_not_notify_client(self):
         data, headers = self.payload()
@@ -95,11 +195,11 @@ class BookingEditTest(unittest.TestCase):
 
     def test_email_failure_preserves_portal_changes_and_stale_save_is_rejected(self):
         data, headers = self.payload()
-        data['rows'][0]['phone'] = '+447911123888'
+        data['rows'][0]['events'][0]['theme'] = 'Saved despite email failure'
         with patch.object(main, 'send_client_email', side_effect=RuntimeError('Synthetic email failure')):
             response = self.admin.post(self.path, headers=headers, json=data)
         self.assertEqual(response.status_code, 200, response.json)
-        self.assertEqual(self.booking.phone, '+447911123888')
+        self.assertEqual(self.booking.theme, 'Saved despite email failure')
         self.assertEqual(main.notification_models[0].query.filter_by(booking_id=self.booking.id).count(), 1)
         self.assertFalse(main.notification_models[1].query.filter_by(kind='booking').one().email_sent)
         self.assertEqual(self.admin.post(self.path, headers=headers, json=data).status_code, 409)

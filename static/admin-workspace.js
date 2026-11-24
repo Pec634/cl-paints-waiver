@@ -97,8 +97,9 @@
     status.add(new Option('All statuses', ''));
     const states = [...new Set(rows.map(row => row.dataset.recordStatus).filter(Boolean))].sort();
     states.forEach(state => status.add(new Option(state, state)));
-    const statusLabel = document.createElement('label'); statusLabel.textContent = 'Status'; statusLabel.append(status); tools.append(statusLabel);
-    statusLabel.hidden = states.length === 0;
+    if (states.length && !table.classList.contains('booking-table')) {
+      const statusLabel = document.createElement('label'); statusLabel.textContent = 'Status'; statusLabel.append(status); tools.append(statusLabel);
+    }
     const size = document.createElement('select'); [10, 25, 50].forEach(value => size.add(new Option(`${value} per page`, String(value))));
     const sizeLabel = document.createElement('label'); sizeLabel.textContent = 'Show'; sizeLabel.append(size); tools.append(sizeLabel);
     const wrapper = table.closest('.table-wrap') || table;

@@ -711,6 +711,14 @@
     border-bottom: 1px solid var(--border);
 }
 
+.booking-section.panel:is(.booking-availability-check, .booking-saved-pricing) {
+    padding: clamp(18px, 3vw, 32px);
+}
+
+.booking-section.panel:is(.booking-availability-check, .booking-saved-pricing) > h2 {
+    margin-top: 0;
+}
+
 .booking-section[hidden] {
     display: none;
 }

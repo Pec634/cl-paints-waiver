@@ -75,7 +75,7 @@ Bookings | CL Paints
                 </div>
             </div>
 
-            <div class="waiver-tools">
+            <div class="waiver-tools booking-list-controls">
                 <form method="get" class="booking-filter-form"><label for="bookingStatusFilter">Show bookings</label><select name="filter" id="bookingStatusFilter">{% for value, label in booking_filters %}<option value="{{ value }}" {% if active_booking_filter == value %}selected{% endif %}>{{ label }} ({{ booking_filter_counts[value] }})</option>{% endfor %}</select><button class="btn" type="submit">Apply filter</button></form>
                 <select id="bookingSearchType" aria-label="Search by">
                     <option value="client">Client</option>
@@ -92,37 +92,19 @@ Bookings | CL Paints
                         {% set booking = row.booking %}
                         <article class="booking-row booking-request-card" id="booking-{{ booking.id }}" data-record-status="{{ booking.status }}" aria-labelledby="booking-title-{{ booking.id }}">
                             <header class="booking-card-heading">
-                                <div><small>{{ booking.public_reference }}</small><h3 id="booking-title-{{ booking.id }}" data-search-client>{{ booking.first_name }} {{ booking.last_name }}</h3><small>Submitted {{ booking.submitted_at.strftime("%d/%m/%Y %H:%M") }}</small></div>
-                                <div>{% set badge_status = booking.status %}{% include '_status_badge.html' %}{% if booking_pending_agreement(booking) %}<p>Client signature pending</p>{% endif %}</div>
+                                <div class="booking-card-client"><h3 id="booking-title-{{ booking.id }}" data-search-client>{{ booking.first_name }} {{ booking.last_name }}</h3><small>{{ booking.public_reference }}</small></div>
+                                <div class="booking-card-event"><strong data-search-event>{{ booking.event_type }}<span hidden> {{ booking.event_address }}</span></strong><time datetime="{{ booking.event_date.isoformat() }}">{{ booking.event_date.strftime('%d %b %Y') }}</time></div>
+                                <div class="booking-card-status">{% set badge_status = booking.status %}{% include '_status_badge.html' %}{% if booking_pending_agreement(booking) %}<small>Client signature pending</small>{% endif %}{% if booking.id in pending_acknowledgements %}<small>Awaiting client acknowledgement</small>{% endif %}</div>
                             </header>
-                            <dl class="booking-card-facts">
-                                <div><dt>Event</dt><dd data-search-event>{{ booking.event_type }}<br>{{ booking.event_address }}</dd></div>
-                                <div><dt>Event date</dt><dd>{{ booking.event_date.strftime("%d/%m/%Y") }}</dd></div>
-                                <div><dt>Contact</dt><dd><span data-search-phone>{{ booking.phone }}</span><br><span data-search-email>{{ booking.email }}</span></dd></div>
-                            </dl>
-                            <div class="booking-card-invoices">{% include '_invoice_documents.html' %}{% for invoice in invoice_links(booking) %}<p><a href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">Invoice {{ invoice.reference }}</a></p>{% endfor %}</div>
+                            <span hidden data-search-phone>{{ booking.phone }}</span><span hidden data-search-email>{{ booking.email }}</span>
                             <div class="booking-card-actions">
-                                {% if booking.status in ['Under Review','Accepted'] %}<a class="btn small" href="{{ url_for('admin_staff_timesheets', assign_booking=booking.id) }}">Select staff</a>{% endif %}
-                                {% if booking.status == 'Accepted' and row.public_event_count %}
-                                <form method="post" action="{{ url_for('admin_create_booking_events', booking_id=booking.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="return_to" value="events"><button class="btn small" type="submit">{{ 'View / create linked events' if row.created_events else 'Create event from booking' }}</button></form>
-                                {% endif %}
                                 <a class="btn small primary" href="{{ url_for('admin_payments', booking_id=booking.id) }}">Payments &amp; invoices</a>
-                                <a class="btn small" href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Activity &amp; date changes</a>
-                                {% if booking.status == 'Under Review' %}<a class="btn small primary" href="{{ url_for('admin_edit_booking', booking_id=booking.id) }}">Edit booking details</a>{% endif %}
-                                <a class="btn small" href="{{ url_for('admin_booking_messages', booking_id=booking.id) }}">Messages{% if booking_message_counts.get(booking.id) %} &middot; {{ booking_message_counts[booking.id] }} unread{% endif %}</a>
                                 <details class="booking-detail">
                                     <summary>View booking details</summary><div class="calendar-detail-content">{% include '_admin_booking_details.html' %}</div></details>
                                 <details class="booking-detail booking-manage-detail booking-action-detail">
                                     <summary>Manage request</summary>
                                     <form data-warn-unsaved method="post" action="{{ url_for('admin_manage_booking', booking_id=booking.id) }}" class="booking-manage-form">
-                                        <label class="booking-field">
-                                            <span>Status</span>
-                                            <select name="status">
-                                                {% for status in ['Under Review', 'Awaiting Payment', 'Accepted', 'Declined'] %}
-                                                <option value="{{ status }}" {% if booking.status == status %}selected{% endif %}>{{ status }}</option>
-                                                {% endfor %}
-                                            </select>
-                                        </label>
+                                        <div class="booking-field"><strong>Current status</strong><div>{% set badge_status = booking.status %}{% include '_status_badge.html' %}</div></div>
                                         <fieldset class="travel-mileage-fields booking-field-wide">
                                             <legend>Admin travel distance and charge</legend>
                                             <p>Enter one-way road miles for each event day. First {{ row.pricing_rules.free_miles }} miles per day are free; additional miles are £{{ row.pricing_rules.mile_rate }} each, capped at £{{ row.pricing_rules.travel_cap }} for the whole booking.</p>
@@ -147,26 +129,47 @@ Bookings | CL Paints
                                             <input type="checkbox" name="sign_on_behalf" value="yes">
                                             <span>I am authorized to sign on behalf of CL Paints.</span>
                                         </label>
+                                        <p class="booking-field-wide">Saving changes to client-visible details asks the client to acknowledge them in their booking. Internal notes are private.</p>
+                                        {% if booking.status == 'Under Review' and row.payment_outstanding > 0 and not booking_pending_agreement(booking) %}
+                                        <p class="booking-field-wide"><strong>Request payment</strong> moves the booking to Awaiting Payment and tells the client that payment is due.</p>
+                                        {% endif %}
                                         <div class="booking-manage-actions">
-                                            <button class="btn small" type="submit" name="action" value="update">Update</button>
-                                            <button class="btn small primary" type="submit" name="action" value="request_payment">Reviewed &mdash; request payment</button><button class="btn small" type="submit" name="action" value="accept">Confirm booking</button>
-                                            <button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>
+                                            <button class="btn small primary" type="submit" name="action" value="update">Save changes</button>
+                                            {% if booking.status == 'Under Review' and row.payment_outstanding > 0 and not booking_pending_agreement(booking) %}<button class="btn small" type="submit" name="action" value="request_payment">Request payment</button>{% endif %}
+                                            {% if booking.status in ['Under Review', 'Awaiting Payment'] and not booking_pending_agreement(booking) %}<button class="btn small" type="submit" name="action" value="accept">Confirm booking</button>{% endif %}
+                                            {% if booking.status in ['Under Review', 'Awaiting Payment', 'Accepted'] %}<button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>{% endif %}
                                         </div>
                                     </form>
                                 </details>
-                                {% if booking.status in booking_deletable_statuses %}
-                                <details class="booking-detail booking-delete-detail booking-action-detail">
-                                    <summary>Delete request</summary>
-                                    {% set deletion_blocker = booking_deletion_blocker(booking) %}
-                                    {% if deletion_blocker %}<p class="booking-admin-notice">Deletion unavailable: {{ deletion_blocker }}</p>{% else %}
-                                    <form method="post" action="{{ url_for('admin_delete_booking',booking_id=booking.id) }}" class="client-form">
-                                        <input type="hidden" name="csrf_token" value="{{ booking_delete_csrf }}">
-                                        <p>Permanently delete this unconfirmed request, including its messages, uploaded documents and form responses. The client account and unrelated bookings stay in place.</p>
-                                        <label><input type="checkbox" name="confirm_delete" value="yes" required> I want to permanently delete {{ booking.public_reference }}.</label>
-                                        <button type="submit" class="btn small booking-decline">Delete non-confirmed booking</button>
-                                    </form>{% endif %}
+                                <details class="booking-detail booking-more-actions booking-action-detail">
+                                    <summary>More actions{% if booking_message_counts.get(booking.id) %} ? {{ booking_message_counts[booking.id] }} unread{% endif %}</summary>
+                                    <div class="booking-card-extra">
+                                        <small>Submitted {{ booking.submitted_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                                        <div class="booking-card-extra-links">
+                                            {% if booking.status in ['Under Review','Accepted'] %}<a class="btn small" href="{{ url_for('admin_staff_timesheets', assign_booking=booking.id) }}">Select staff</a>{% endif %}
+                                            {% if booking.status == 'Accepted' and row.public_event_count %}
+                                            <form method="post" action="{{ url_for('admin_create_booking_events', booking_id=booking.id) }}"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="return_to" value="events"><button class="btn small" type="submit">{{ 'View / create linked events' if row.created_events else 'Create event from booking' }}</button></form>
+                                            {% endif %}
+                                            <a class="btn small" href="{{ url_for('admin_booking_activity', booking_id=booking.id) }}">Activity &amp; date changes</a>
+                                            {% if booking.status in ['Under Review', 'Awaiting Payment', 'Accepted'] %}<a class="btn small primary" href="{{ url_for('admin_edit_booking', booking_id=booking.id) }}">Edit booking details</a>{% endif %}
+                                            <a class="btn small" href="{{ url_for('admin_booking_messages', booking_id=booking.id) }}">Messages{% if booking_message_counts.get(booking.id) %} &middot; {{ booking_message_counts[booking.id] }} unread{% endif %}</a>
+                                        </div>
+                                        <div class="booking-card-invoices">{% include '_invoice_documents.html' %}{% for invoice in invoice_links(booking) %}<p><a href="{{ invoice.payment_url }}" target="_blank" rel="noopener noreferrer">Invoice {{ invoice.reference }}</a></p>{% endfor %}</div>
+                                        {% if booking.status in booking_deletable_statuses %}
+                                        <details class="booking-detail booking-delete-detail booking-action-detail">
+                                            <summary>Delete request</summary>
+                                            {% set deletion_blocker = booking_deletion_blocker(booking) %}
+                                            {% if deletion_blocker %}<p class="booking-admin-notice">Deletion unavailable: {{ deletion_blocker }}</p>{% else %}
+                                            <form method="post" action="{{ url_for('admin_delete_booking',booking_id=booking.id) }}" class="client-form">
+                                                <input type="hidden" name="csrf_token" value="{{ booking_delete_csrf }}">
+                                                <p>Permanently delete this unconfirmed request, including its messages, uploaded documents and form responses. The client account and unrelated bookings stay in place.</p>
+                                                <label><input type="checkbox" name="confirm_delete" value="yes" required> I want to permanently delete {{ booking.public_reference }}.</label>
+                                                <button type="submit" class="btn small booking-decline">Delete non-confirmed booking</button>
+                                            </form>{% endif %}
+                                        </details>
+                                        {% endif %}
+                                    </div>
                                 </details>
-                                {% endif %}
                             </div>
                         </article>
                     {% else %}

@@ -87,7 +87,7 @@
     });
   }
   document.querySelectorAll('.booking-row').forEach(row => {
-    const details = row.querySelector('.booking-detail:not(.booking-manage-detail)');
+    const details = row.querySelector('.booking-detail:not(.booking-action-detail)');
     if (!details) return;
     row.tabIndex = 0;
     row.setAttribute('aria-haspopup', 'dialog');

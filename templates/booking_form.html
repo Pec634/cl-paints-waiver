@@ -1,21 +1,28 @@
 {% extends 'base.html' %}
 
 {% block title %}
-Client Booking Request | CL Paints
+{{ 'Edit booking' if admin_edit else 'Client Booking Request' }} | CL Paints
 {% endblock %}
 
 {% block body %}
 <main class="booking-public">
-{% with notice_booking=editing_booking %}{% include '_booking_unconfirmed_notice.html' %}{% endwith %}
+{% if not admin_edit %}{% with notice_booking=editing_booking %}{% include '_booking_unconfirmed_notice.html' %}{% endwith %}{% endif %}
 {% if on_behalf %}<p class="client-booking-banner"><a href="{{ url_for('admin_bookings') }}">Back to admin bookings</a> · <strong>Admin: book on behalf of a client</strong>. The client will review and sign in their portal. You are entering details, not signing their agreement.</p>{% endif %}
 {% if kiosk_item %}<a class="btn" href="{{ url_for('kiosk_menu') }}">Back to kiosk forms</a>{% endif %}
 {% if booking_offer %}<p class="client-booking-banner"><strong>{{ booking_offer.title }}</strong> ? Save ?{{ booking_offer.saving }} per hour. Offer applies when your request is submitted during the promotion period; travel and minimum duration still apply.</p>{% endif %}
     {% if portal_account and not private_booking_access %}<p class="client-booking-banner"><a href="{{ url_for('client.bookings') }}">← My bookings</a> · Signed in as {{ portal_account.email }}</p>{% endif %}
     <header class="booking-public-header">
         <a class="brand" href="/">{{ business_settings.business_name }}</a>
+        {% if admin_edit %}
+        <a class="btn" href="{{ url_for('admin_bookings', filter='all', _anchor='booking-' ~ editing_booking.id) }}">Back to bookings</a>
+        <h1>Edit booking {{ editing_booking.public_reference }}</h1>
+        <p>Check the saved details below. Changes to client-visible details are sent to the client for acknowledgement.</p>
+        {% if editing_booking.status == 'Accepted' %}<p>Use <a href="{{ url_for('admin_booking_activity', booking_id=editing_booking.id) }}">Activity &amp; date changes</a> to propose new dates or times.</p>{% endif %}
+        {% else %}
         <small>CLIENT BOOKING REQUEST</small>
         <h1>Let's plan your event.</h1><p>Read our <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener">Privacy policy</a> for how we handle your information.</p>
         <p>Send us your details and we will review availability and costs with you.</p><p><a href="mailto:{{ business_settings.contact_email }}">{{ business_settings.contact_email }}</a>{% if business_settings.phone %} · {{ business_settings.phone }}{% endif %}{% if business_settings.website %} · <a href="{{ business_settings.website }}" target="_blank" rel="noopener noreferrer">{{ business_settings.website.replace('https://','').replace('http://','').rstrip('/') }}</a>{% endif %}</p>
+        {% endif %}
     </header>
 
     {% if submitted %}
@@ -37,25 +44,48 @@ Client Booking Request | CL Paints
     {% endif %}
 
     {% if booking_account %}<p class="client-booking-banner"><a href="{{ url_for('admin_client_profile',client_id=booking_account.id) }}">Back to client account</a> · Booking for <strong>{{ booking_account.first_name }} {{ booking_account.last_name }}</strong> ({{ booking_account.email }}). This booking will be linked to their account and requires their review, signature and confirmation.</p>{% endif %}
-    {% if editing_booking %}<section class="panel"><h2>Edit booking {{ editing_booking.public_reference }}</h2><p>You can save changes as often as needed until CL Paints confirms your booking. Each save returns your booking to Under Review and requires a new admin review. Check the revised details and sign below when saving.</p><p>Existing billing address: {{ editing_booking.client_address }}. Please check each address field below.</p><a class="btn" href="{{ url_for('client.booking_detail',booking_id=editing_booking.id) }}">Back to booking</a></section>{% endif %}
-    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('client_edit_booking',booking_id=editing_booking.id) if editing_booking else url_for('admin_booking_on_behalf',client_id=booking_account.id) if booking_account else url_for('admin_booking_on_behalf') if on_behalf else url_for('booking_request') }}">
+    {% if editing_booking and not admin_edit %}<section class="panel"><h2>Edit booking {{ editing_booking.public_reference }}</h2><p>You can save changes as often as needed until CL Paints confirms your booking. Each save returns your booking to Under Review and requires a new admin review. Check the revised details and sign below when saving.</p><p>Existing billing address: {{ editing_booking.client_address }}. Please check each address field below.</p><a class="btn" href="{{ url_for('client.booking_detail',booking_id=editing_booking.id) }}">Back to booking</a></section>{% endif %}
+    {% if admin_edit %}<script id="import-config" type="application/json">{{ edit_config|tojson }}</script>{% endif %}
+    <form class="booking-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_edit_booking',booking_id=editing_booking.id) if admin_edit else url_for('client_edit_booking',booking_id=editing_booking.id) if editing_booking else url_for('admin_booking_on_behalf',client_id=booking_account.id) if booking_account else url_for('admin_booking_on_behalf') if on_behalf else url_for('booking_request') }}">
         {% if editing_booking %}<input type="hidden" name="booking_version" value="{{ edit_version }}">{% endif %}
         <input type="hidden" name="booking_terms_version" value="{{ booking_terms_version() }}">
 <section class="booking-section panel booking-availability-check"><h2>Check availability</h2><p>After entering your dates, times and venue, check them together here. Availability is provisional until CL Paints confirms your booking.</p><button type="button" class="btn" id="booking-check-dates">Check dates and times</button><p id="booking-dates-result" role="status"></p></section>
 {% if seasonal_form %}<section class="booking-section panel"><h2>{{ seasonal_form.title }}</h2><p>{{ seasonal_form.description }}</p><input type="hidden" name="seasonal_id" value="{{ seasonal_form.id }}"><div class="client-form">{% with fields=native_form_fields(seasonal_form), field_form=seasonal_form %}{% include '_native_fields.html' %}{% endwith %}</div><label class="booking-field booking-field-wide"><span>Upload your design ideas (optional)</span><input type="file" name="design_images" accept="image/jpeg,image/png,image/webp" multiple><small>Up to six images, each no larger than 15 MB. Stored privately for CL Paints to review.</small></label>{% if seasonal_form.terms %}<p class="rota-note">{{ seasonal_form.terms }}</p><label><input type="checkbox" name="seasonal_agree" value="yes" required> I have read and accept this seasonal booking information.</label>{% endif %}</section>{% endif %}
+        {% if admin_edit %}
+        {% set saved_response = native_booking_details(editing_booking) %}
+        {% if saved_response %}
+        {% from '_native_answers.html' import answer with context %}
+        <section class="booking-section panel">
+          <h2>{{ saved_response.snapshot.title }}</h2>
+          <p>Answers from the original submission</p>
+          {% for label, value in saved_response.answers.items() %}
+          {% set definition = saved_response.snapshot.get('fields', [])|selectattr('label','equalto',label)|first|default({}) %}
+          <div class="native-response-answer"><strong>{{ label }}</strong>{{ answer(value, definition) }}</div>
+          {% endfor %}
+        </section>
+        {% endif %}
+        {% endif %}
 
         <div class="booking-error" id="bookingValidationError" role="alert" tabindex="-1" hidden></div>
-        {% if not seasonal_form %}{% include '_form_spam.html' %}{% endif %}
+        {% if not seasonal_form and not admin_edit %}{% include '_form_spam.html' %}{% endif %}
         <link rel="stylesheet" href="{{ url_for('static',filename='native-fields.css') }}">
-        {% include '_booking_packages.html' %}
+        {% if admin_edit %}
+        <section class="booking-section panel booking-saved-pricing" id="booking-travel-details"><h2>Saved pricing</h2>
+          {% if intake.get('package') or intake.get('extras') %}<p>Package: {{ intake.get('package', {}).get('name', 'None') if intake.get('package') else 'None' }}. Extras: {{ intake.get('extras', [])|map(attribute='name')|join(', ') or 'None' }}.</p>{% endif %}
+          <label class="booking-field"><span>Booking hourly rate (£)</span><input name="booking_hourly_rate" type="number" min="0.01" step="0.01" value="{{ pricing_rate }}" required></label>
+          <p>Saved travel charge: £{{ '%.2f'|format(editing_booking.travel_charge) }}</p>
+          <p id="booking-travel-estimate" role="status"></p>
+          <label class="booking-field"><span>Internal notes</span><textarea name="internal_notes" rows="3">{{ form_data.get('internal_notes', editing_booking.internal_notes or '') }}</textarea></label>
+        </section>
+        {% else %}{% include '_booking_packages.html' %}{% endif %}
 
-        {% if portal_account or on_behalf %}<input type="hidden" name="csrf_token" value="{{ session.get('client_csrf', '') }}">{% endif %}
+        {% if portal_account or on_behalf or admin_edit %}<input type="hidden" name="csrf_token" value="{{ session.get('client_csrf', '') }}">{% endif %}
         <section class="booking-section">
             <div class="booking-section-heading">
                 <span>01</span>
                 <div>
                     <h2>Your request</h2>
-                    <p>Choose your preferred dates and times, then send your booking details for review.</p>
+                    <p>{{ 'Review the booking details before saving changes.' if admin_edit else 'Choose your preferred dates and times, then send your booking details for review.' }}</p>
                 </div>
             </div>
 
@@ -73,6 +103,7 @@ Client Booking Request | CL Paints
             </div>
         </section>
 
+        {% if not admin_edit %}
         <section class="booking-section" data-full-booking>
             <div class="booking-section-heading">
                 <span>02</span>
@@ -163,10 +194,11 @@ Client Booking Request | CL Paints
                 </label>
             </div>
         </section>
+        {% endif %}
 
         <section class="booking-section" data-full-booking>
             <div class="booking-section-heading">
-                <span>03</span>
+                <span>{{ '02' if admin_edit else '03' }}</span>
                 <div>
                     <h2>Event details</h2>
                     <p>Bookings require at least {{ business_settings.minimum_hours }} hours.</p>
@@ -287,6 +319,7 @@ Client Booking Request | CL Paints
                             <textarea rows="3" data-event-field="additional_info" placeholder="For a birthday, include the name, gender and age; or any gate or door access codes."></textarea>
                         </label>
                     </div>
+                    {% if admin_edit %}<label class="booking-field"><span>One-way travel miles</span><input type="number" min="0" max="10000" step="0.01" data-event-field="travel_miles"></label><output data-day-travel-estimate></output>{% endif %}
                     <p class="event-day-same-note" data-same-day-note hidden>Using the same event details as the first date.</p>
                 </article>
             </template>
@@ -307,11 +340,17 @@ Client Booking Request | CL Paints
             <div class="booking-price-preview" aria-live="polite">
                 <div><span>Total booked hours</span><strong id="totalBookedHours">0 hours</strong></div>
                 <div><span>Total pitch / stall fees payable by CL Paints</span><strong id="totalPitchFees">£0.00</strong></div>
-                <div><span>Estimated event cost</span><strong id="estimatedEventCost">£0.00</strong></div>
-                <div id="depositEstimateRow" hidden><span>Estimated 50% deposit</span><strong id="depositEstimateAmount">£0.00</strong></div>
+                <div><span>Estimated event cost</span><strong id="estimatedEventCost">{{ '£%.2f'|format(editing_booking.total_event_cost) if admin_edit else '£0.00' }}</strong></div>
+                {% if admin_edit %}
+                <div><span>Travel charge</span><strong id="adminTravelCharge">£{{ '%.2f'|format(editing_booking.travel_charge) }}</strong></div>
+                <div><span>Total including travel</span><strong id="adminBookingTotal">£{{ '%.2f'|format(saved_payment.total) }}</strong></div>
+                <div><span>Outstanding balance</span><strong id="adminOutstandingBalance">£{{ '%.2f'|format(saved_payment.outstanding) }}</strong></div>
+                {% endif %}
+                <div id="depositEstimateRow"{% if not admin_edit or form_data.get('payment_preference') != '50% deposit' %} hidden{% endif %}><span>Estimated 50% deposit</span><strong id="depositEstimateAmount">{{ '£%.2f'|format(saved_payment.total / 2) if admin_edit else '£0.00' }}</strong></div>
                 <p>Pitch / stall fees are costs to CL Paints and are not included in your event cost or deposit.</p>
                 <p>£{{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate) }} per hour for hourly bookings, excluding revenue-sharing dates and dates where CL Paints pays a pitch fee. Travel is calculated and added by CL Paints after review.</p>
-                <p id="paymentEstimate">Choose a payment arrangement to see the estimated amount.</p>
+                <p id="paymentEstimate">{{ 'Showing saved amounts. The estimate updates when you change the booking.' if admin_edit else 'Choose a payment arrangement to see the estimated amount.' }}</p>
+                {% if admin_edit %}<button type="button" class="btn" id="adminBookingQuote">Calculate updated estimate</button><p id="adminBookingQuoteResult" role="status"></p>{% endif %}
             </div>
 
             <label class="booking-field booking-payment-field">
@@ -320,6 +359,10 @@ Client Booking Request | CL Paints
                     <option value="">Choose one</option>
                     <option value="Full payment" {% if form_data.get('payment_preference') == 'Full payment' %}selected{% endif %}>Pay in full at booking</option>
                     <option value="50% deposit" {% if form_data.get('payment_preference') == '50% deposit' %}selected{% endif %}>Pay a 50% deposit, balance on event date</option>
+                    <option value="No payment required" {% if form_data.get('payment_preference') == 'No payment required' %}selected{% endif %}>No payment required</option>
+                    {% if admin_edit and form_data.get('payment_preference') and form_data.get('payment_preference') not in ['Full payment', '50% deposit', 'No payment required'] %}
+                    <option value="{{ form_data.get('payment_preference') }}" selected>{{ form_data.get('payment_preference') }}</option>
+                    {% endif %}
                 </select>
             </label>
 
@@ -332,7 +375,7 @@ Client Booking Request | CL Paints
                 <p id="referralVerification" role="status" aria-live="polite"></p>
             </div>
 
-            {% include '_booking_legal_text.html' %}
+            {% if not admin_edit %}{% include '_booking_legal_text.html' %}
 
             {% if on_behalf %}<label><input type="checkbox" name="admin_authority" value="yes" required> I am authorised to enter these booking details on behalf of the client. The client must provide their own signature and agreement.</label>{% endif %}
             <div class="booking-consents" {% if on_behalf %}hidden{% endif %}>
@@ -346,10 +389,11 @@ Client Booking Request | CL Paints
             </label>
 
             <p class="booking-payment-note">This form records your preferred payment arrangement only. It does not take payment or confirm a booking. CL Paints will calculate travel costs and contact you to confirm availability, final costs and payment.</p>
-            <button class="btn primary booking-submit" type="submit">{{ 'Save changes for CL Paints to review' if editing_booking else 'Create booking and request client signature' if on_behalf else 'Send booking request' }}</button>
+            {% endif %}
+            <button class="btn primary booking-submit" type="submit">{{ 'Save changes' if admin_edit else 'Save changes for CL Paints to review' if editing_booking else 'Create booking and request client signature' if on_behalf else 'Send booking request' }}</button>
         </section>
     </form>
-    <dialog id="bookingReviewDialog" class="booking-review-dialog" aria-labelledby="bookingReviewTitle"><h2 id="bookingReviewTitle">Review your booking request</h2><p>Check the details below. Sending this request does not confirm availability or take payment.</p><div id="bookingReviewContent"></div><div class="nav"><button class="btn" type="button" id="bookingReviewEdit">Back to editing</button><button class="btn primary" type="button" id="bookingReviewSend">Confirm and send request</button></div></dialog>
+    <dialog id="bookingReviewDialog" class="booking-review-dialog" aria-labelledby="bookingReviewTitle"><h2 id="bookingReviewTitle">{{ 'Review booking changes' if admin_edit else 'Review your booking request' }}</h2><p>{{ 'Check the updated details below before saving them for the client to acknowledge.' if admin_edit else 'Check the details below. Sending this request does not confirm availability or take payment.' }}</p><div id="bookingReviewContent"></div><div class="nav"><button class="btn" type="button" id="bookingReviewEdit">Back to editing</button><button class="btn primary" type="button" id="bookingReviewSend">{{ 'Save changes' if admin_edit else 'Confirm and send request' }}</button></div></dialog>
     {% endif %}
 </main>
 
@@ -357,6 +401,8 @@ Client Booking Request | CL Paints
 document.addEventListener("DOMContentLoaded", () => {
     const form = document.querySelector(".booking-form");
     if (!form) return;
+    const adminEdit = {{ (admin_edit or false)|tojson }};
+    const automaticFreePayment = !adminEdit && {{ (not on_behalf)|tojson }};
 
     const businessType = form.querySelector('[name="client_type"]');
     const businessNameField = document.getElementById("businessNameField");
@@ -422,8 +468,6 @@ document.addEventListener("DOMContentLoaded", () => {
         religionInput.required = !isBusiness;
     }
 
-    businessType.addEventListener("change", syncBusinessType);
-    syncBusinessType();
 
     function syncEthnicityDetail() {
         const group = ethnicityGroup.value;
@@ -452,10 +496,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    ethnicityGroup.addEventListener("change", syncEthnicityDetail);
-    syncEthnicityDetail();
-    if (ethnicityDetail.dataset.initialValue) {
-        ethnicityDetail.value = ethnicityDetail.dataset.initialValue;
+    if (businessType) {
+        businessType.addEventListener("change", syncBusinessType);
+        syncBusinessType();
+        ethnicityGroup.addEventListener("change", syncEthnicityDetail);
+        syncEthnicityDetail();
+        if (ethnicityDetail.dataset.initialValue) ethnicityDetail.value = ethnicityDetail.dataset.initialValue;
     }
 
     function isSingleDate() {
@@ -493,6 +539,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 revenue_share_percent: repeatedValues.charge_type === "Revenue sharing" ? repeatedValues.revenue_share_percent || "" : "",
                 celebrates_christmas_easter: repeatedValues.publicity_type === "Private" ? repeatedValues.celebrates_christmas_easter || "" : "",
                 additional_info: repeatedValues.additional_info || ""
+                {% if admin_edit %}, travel_miles: values.travel_miles || ""{% endif %}
             };
         });
     }
@@ -579,12 +626,30 @@ document.addEventListener("DOMContentLoaded", () => {
         totalCost += [...form.querySelectorAll('[name="booking_extras"]:checked')].reduce((total, extra) => total + Number(extra.dataset.price), 0);
         const hours = totalMinutes / 60;
         totalHoursOutput.textContent = `${Number.isInteger(hours) ? hours : hours.toFixed(2)} hours`;
+        if (adminEdit) return;
         totalCostOutput.textContent = new Intl.NumberFormat("en-GB", {
             style: "currency", currency: "GBP"
         }).format(totalCost);
 
+        if (automaticFreePayment) {
+            const complete = schedule.length && schedule.every(day => day.start_time && day.finish_time
+                && day.finish_time > day.start_time && day.charge_type && day.pitch_fee_required);
+            const free = complete && Math.round(totalCost * 100) === 0;
+            if (free) {
+                paymentChoice.value = "No payment required";
+            } else if (paymentChoice.disabled) {
+                paymentChoice.value = "";
+            }
+            paymentChoice.disabled = Boolean(free);
+        }
         document.getElementById("depositEstimateRow").hidden = paymentChoice.value !== "50% deposit";
-        if (paymentChoice.value === "50% deposit") {
+        paymentChoice.setCustomValidity(paymentChoice.value === "No payment required" && totalCost > 0
+            ? "Choose a payment arrangement for bookings with an event charge." : "");
+        if (paymentChoice.value === "No payment required") {
+            paymentEstimate.textContent = totalCost > 0
+                ? "This booking has an event charge. Choose a payment arrangement."
+                : "No event payment is currently estimated. CL Paints will confirm any travel charge.";
+        } else if (paymentChoice.value === "50% deposit") {
             document.getElementById("depositEstimateAmount").textContent = new Intl.NumberFormat("en-GB", {
                 style: "currency", currency: "GBP"
             }).format(totalCost / 2);
@@ -613,7 +678,11 @@ document.addEventListener("DOMContentLoaded", () => {
             card.querySelector("h3").textContent = `Event day ${index + 1}`;
             card.querySelectorAll("[data-event-field]").forEach((field) => {
                 const fieldName = field.dataset.eventField;
-                field.value = dayValues[fieldName] || "";
+                const value = String(dayValues[fieldName] ?? "");
+                if (adminEdit && value && field.tagName === "SELECT" && ![...field.options].some(option => option.value === value)) {
+                    field.add(new Option(value, value));
+                }
+                field.value = value;
                 field.addEventListener("input", updatePricing);
                 field.addEventListener("change", updatePricing);
             });
@@ -654,8 +723,10 @@ document.addEventListener("DOMContentLoaded", () => {
             dayList.replaceChildren();
             renderEventDays();
         }
-        const restoredEthnicity = ethnicityDetail.value;
-        syncBusinessType(); syncEthnicityDetail(); ethnicityDetail.value = restoredEthnicity;
+        if (businessType) {
+            const restoredEthnicity = ethnicityDetail.value;
+            syncBusinessType(); syncEthnicityDetail(); ethnicityDetail.value = restoredEthnicity;
+        }
         updatePricing();
     });
 
@@ -683,6 +754,69 @@ document.addEventListener("DOMContentLoaded", () => {
     const travelNote = document.getElementById('booking-travel-estimate');
     const availabilityButton = document.getElementById('booking-check-dates');
     const availabilityResult = document.getElementById('booking-dates-result');
+    const quoteButton = document.getElementById('adminBookingQuote');
+    if (quoteButton) {
+        const result = document.getElementById('adminBookingQuoteResult');
+        const travelCharge = document.getElementById('adminTravelCharge');
+        const bookingTotal = document.getElementById('adminBookingTotal');
+        const outstanding = document.getElementById('adminOutstandingBalance');
+        const depositRow = document.getElementById('depositEstimateRow');
+        const depositAmount = document.getElementById('depositEstimateAmount');
+        let timeout;
+        let pending;
+        function clearEstimate() {
+            pending?.abort();
+            clearTimeout(timeout);
+            result.textContent = '';
+            travelNote.textContent = '';
+            paymentEstimate.textContent = 'Updating the estimate…';
+            depositRow.hidden = paymentChoice.value !== '50% deposit';
+            if (!depositRow.hidden) depositAmount.textContent = '—';
+            dayList.querySelectorAll('[data-day-travel-estimate]').forEach(output => { output.textContent = ''; });
+        }
+        async function refreshEstimate() {
+            clearEstimate();
+            const controller = new AbortController();
+            pending = controller;
+            result.textContent = 'Calculating…';
+            const data = new FormData(form);
+            data.set('action', 'quote');
+            data.set('event_schedule', JSON.stringify({same_details: sameDetailsInput.checked, events: readSchedule()}));
+            try {
+                const response = await fetch(form.action, {method: 'POST', body: data, signal: controller.signal});
+                if (!response.ok) throw new Error();
+                const {quote} = await response.json();
+                if (controller.signal.aborted) return;
+                totalCostOutput.textContent = `£${quote.event_total}`;
+                travelCharge.textContent = `£${quote.travel}`;
+                bookingTotal.textContent = `£${quote.total}`;
+                outstanding.textContent = `£${quote.outstanding}`;
+                depositRow.hidden = quote.deposit == null;
+                if (!depositRow.hidden) depositAmount.textContent = `£${quote.deposit}`;
+                paymentEstimate.textContent = paymentChoice.value === 'No payment required' && Number(quote.outstanding) > 0
+                    ? 'The event has no charge. The outstanding balance includes travel.'
+                    : 'Updated estimate. Save changes to apply these amounts.';
+                result.textContent = quote.notes.join(' ');
+                travelNote.textContent = `Estimated travel charge: £${quote.travel}`;
+                dayList.querySelectorAll('[data-day-travel-estimate]').forEach((output, index) => {
+                    output.textContent = `Estimated day travel charge: £${quote.days[index].travel}`;
+                });
+            } catch {
+                if (!controller.signal.aborted) {
+                    result.textContent = 'Check the booking details before calculating the estimate.';
+                    paymentEstimate.textContent = 'The estimate could not be updated. The totals shown are from the last calculation.';
+                }
+            }
+        }
+        function scheduleEstimate(event) {
+            if (!event.target.matches('[data-event-field], #eventDateCount, #sameEventDetails, [name="single_date"], [name="payment_preference"], [name="booking_hourly_rate"]')) return;
+            clearEstimate();
+            timeout = setTimeout(refreshEstimate, 250);
+        }
+        form.addEventListener('input', scheduleEstimate);
+        form.addEventListener('change', scheduleEstimate);
+        quoteButton.addEventListener('click', refreshEstimate);
+    }
     availabilityButton.addEventListener('click',async () => {
         availabilityButton.disabled=true;availabilityResult.textContent='Checking event dates…';
         try {
@@ -744,21 +878,20 @@ document.addEventListener("DOMContentLoaded", () => {
             event.preventDefault();
             reviewContent.replaceChildren();
             const value = name => form.elements.namedItem(name)?.value || '';
-            const sections = Array.from(form.querySelectorAll('.booking-section'));
-            reviewSection('Client details', [
+            if (businessType) reviewSection('Client details', [
                 `${value('title')} ${value('first_name')} ${value('last_name')}`.trim(),
                 `${value('client_type')}${value('job_title') ? ' · '+value('job_title') : ''}`,
                 businessType.value === 'business' && value('business_name') ? `Business name: ${value('business_name')}` : '',
                 `${value('email')} · ${value('phone')}`,
-                ['address_property','address_street','address_city','address_postcode','address_country'].map(value).join(', '),
+                value('client_address') || ['address_property','address_street','address_city','address_postcode','address_country'].map(value).join(', '),
                 `Date of birth: ${value('date_of_birth')}`,
                 ethnicityGroup.disabled ? '' : `Ethnicity: ${value('ethnicity')} · ${value('ethnicity_detail')}`,
                 religionInput.disabled ? '' : `Religion: ${value('religion')}`
-            ], sections[1]);
+            ], businessType.closest('.booking-section'));
             reviewSection('Event details', readSchedule().map((day, index) =>
-                `Day ${index+1}: ${day.date}, ${day.start_time}–${day.finish_time} · ${day.event_type} · ${day.event_address} · ${day.publicity_type} · ${day.charge_type}${day.revenue_share_percent ? ' · '+day.revenue_share_percent+'% to organiser' : ''} · Theme: ${day.theme}${day.additional_info ? ' · '+day.additional_info : ''}`), sections[2]);
+                `Day ${index+1}: ${day.date}, ${day.start_time}–${day.finish_time} · ${day.event_type} · ${day.event_address} · ${day.publicity_type} · ${day.charge_type}${day.revenue_share_percent ? ' · '+day.revenue_share_percent+'% to organiser' : ''} · Theme: ${day.theme}${day.additional_info ? ' · '+day.additional_info : ''}`), dayList.closest('.booking-section'));
             reviewSection('Payment preference', [value('payment_preference'),
-                `Estimated event cost: ${totalCostOutput.textContent}. Travel charges are confirmed after review.`,
+                adminEdit ? '' : `Estimated event cost: ${totalCostOutput.textContent}. Travel charges are confirmed after review.`,
                 `Referral code: ${value('promo_code') || 'None'}`], paymentChoice.closest('.booking-section'));
             reviewSection('Package, extras and travel', [value('booking_package') || 'Standard hourly pricing', [...form.querySelectorAll('[name="booking_extras"]:checked')].map(control=>control.value).join(', ') || 'No extras', travelNote.textContent || 'Travel to be confirmed',value('design_captions')].filter(Boolean),document.getElementById('booking-packages') || document.getElementById('booking-travel-details'));
             const nativeRoot=form.querySelector('[data-native-fields]');
@@ -766,7 +899,7 @@ document.addEventListener("DOMContentLoaded", () => {
             reviewDialog.showModal();
         } else {
             submitButton.disabled = true;
-            submitButton.textContent = 'Sending your request…';
+            submitButton.textContent = adminEdit ? 'Saving changes…' : 'Sending your request…';
         }
     });
 

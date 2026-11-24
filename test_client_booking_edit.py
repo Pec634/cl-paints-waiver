@@ -37,6 +37,18 @@ class ClientBookingEditTest(unittest.TestCase):
         self.assertEqual(response.status_code, 302, response.get_data(as_text=True)[-1500:])
         main.db.session.refresh(self.booking)
 
+    def test_zero_cost_client_form_sets_no_payment_automatically(self):
+        form = self.form()
+        schedule = json.loads(form['event_schedule'])
+        schedule['events'][0]['charge_type'] = 'Customers'
+        form['event_schedule'] = json.dumps(schedule)
+        form.pop('payment_preference')
+        with patch.object(main, 'send_client_email', return_value=True):
+            response = self.client.post(self.path, data=form)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.booking.total_event_cost, 0)
+        self.assertEqual(self.booking.payment_preference, 'No payment required')
+
     def test_repeated_edits_require_review_and_preserve_staff_fields(self):
         self.booking.internal_notes = 'Private notes'
         self.booking.travel_charge = 15
@@ -165,6 +177,15 @@ class ClientBookingEditTest(unittest.TestCase):
         page = self.client.get(self.path)
         browsers.NativeFormBrowserTest().browser(page.data, '''
             const form = document.querySelector('.booking-form');
+            const charge = form.querySelector('[data-event-field="charge_type"]');
+            const preference = form.elements.payment_preference;
+            charge.value = 'Customers';
+            charge.dispatchEvent(new Event('change', {bubbles: true}));
+            assert(preference.disabled && preference.value === 'No payment required', 'free bookings should select no payment automatically');
+            charge.value = 'Client';
+            charge.dispatchEvent(new Event('change', {bubbles: true}));
+            assert(!preference.disabled && preference.value === '', 'paid bookings should prompt for an arrangement');
+            preference.value = 'Full payment';
             const venue = form.querySelector('[data-event-field="event_address"]');
             assert(venue.value === 'Town Hall', 'Existing venue should be prefilled');
             assert(form.querySelector('[data-event-field="start_time"]').value === '10:00', 'Existing time missing');

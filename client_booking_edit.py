@@ -41,7 +41,12 @@ def form_values(booking, schedule):
     values = MultiDict({column.name: str(getattr(booking, column.name) or '')
                         for column in booking.__table__.columns
                         if column.name not in ('internal_notes', 'company_signature', 'signature')})
-    data = json.loads(booking.event_schedule or '{}')
+    try:
+        data = json.loads(booking.event_schedule or '{}')
+    except (ValueError, TypeError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
     events = [dict(day, pitch_fee_required='yes' if day.get('pitch_fee_required') else 'no')
               for day in schedule(booking)]
     values['event_schedule'] = json.dumps(dict(events=events, same_details=data.get('same_details', False)))

@@ -2115,8 +2115,10 @@ def booking_request():
             total_event_cost, intake_options = booking_options(workflow_options, request.form, normalized_schedule, total_event_cost)
             intake_options['possible_duplicates'] = possible_duplicates
             payment_preference = request.form.get("payment_preference", "")
-            if payment_preference not in {"Full payment", "50% deposit"}:
-                raise ValueError("Choose a payment preference.")
+            from payment_workflow import NO_PAYMENT_REQUIRED, validate_payment_preference
+            if not on_behalf and total_event_cost == 0:
+                payment_preference = NO_PAYMENT_REQUIRED
+            validate_payment_preference(payment_preference, total_event_cost)
             if not on_behalf and request.form.get("liability_acknowledged") != "yes":
                 raise ValueError("Read and acknowledge the liability statement.")
             if not on_behalf and request.form.get("terms_accepted") != "yes":
@@ -2403,14 +2405,20 @@ def admin_bookings():
             "final_total": Decimal(booking.total_event_cost or 0) + Decimal(booking.travel_charge or 0),
             "pricing_rules": saved_schedule.get("pricing_rules", DEFAULT_BUSINESS_SETTINGS) if isinstance(saved_schedule, dict) else DEFAULT_BUSINESS_SETTINGS,
             "public_event_count": sum(event.get("publicity_type") == "Public" for event in events),
+            "payment_outstanding": payment['outstanding'],
             "created_events": Event.query.filter_by(booking_id=booking.id).order_by(Event.booking_day_number.asc()).all(),
         })
 
+    Change = notification_models[0]
+    pending_acknowledgements = set(db.session.scalars(db.select(Change.booking_id).where(
+        Change.booking_id.in_([row['booking'].id for row in booking_rows]),
+        Change.acknowledged_at.is_(None)).distinct()))
     referral_codes = ReferralCode.query.order_by(ReferralCode.code.asc()).all()
     return render_template(
         "admin_bookings.html",
         bookings=bookings,
         booking_rows=booking_rows,
+        pending_acknowledgements=pending_acknowledgements,
         referral_codes=referral_codes,
         booking_filters=filters, active_booking_filter=active_filter, booking_filter_counts=filter_counts,
         booking_count=len(bookings),
@@ -2514,10 +2522,10 @@ def admin_manage_booking(booking_id):
         if not can_confirm:
             db.session.rollback()
             return redirect(url_for('admin_bookings', payment_error='confirmation'))
+    status_email_sent = app.extensions['client_booking_updated'](
+        booking, previous_snapshot, booking_schedule_events, request_acknowledgement=action == 'update')
     db.session.commit()
-    status_email_sent = None
-    status_email_sent = app.extensions['client_booking_updated'](booking, previous_snapshot, booking_schedule_events)
-    if booking.status in ('Under Review', 'Accepted'):
+    if (action == 'accept' or (action == 'update' and status_email_sent is None)) and booking.status in ('Under Review', 'Accepted'):
         return redirect(url_for('admin_staff_timesheets', assign_booking=booking.id))
     return redirect(url_for(
         "admin_bookings",

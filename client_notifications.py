@@ -8,6 +8,7 @@ from string import Formatter
 from flask import abort, current_app, redirect, request, session, url_for, has_app_context, g
 import secrets
 EMAIL_KINDS = ('booking', 'reward', 'portal_enquiry', 'website_enquiry')
+BOOKING_ACKNOWLEDGEMENT = "Please open your booking and select ‘I've reviewed these updates’ to acknowledge these changes."
 
 EMAIL_DEFAULTS = {
     'notification_booking_added_subject': 'A booking has been added to your CL Paints account - {reference}',
@@ -129,6 +130,8 @@ def render_notification(config, name, kind, reference, details, link, preview=Fa
         elif details.startswith('A booking has been added to your account.'):
             subject = config.get('notification_booking_added_subject', EMAIL_DEFAULTS['notification_booking_added_subject']).format(**variables)
             body = config.get('notification_booking_added_body', EMAIL_DEFAULTS['notification_booking_added_body']).format(**variables)
+        if details.endswith(BOOKING_ACKNOWLEDGEMENT) and BOOKING_ACKNOWLEDGEMENT not in body:
+            body += '\n\n' + BOOKING_ACKNOWLEDGEMENT
         body += '\n\nPlease log in to your client portal to review this update. Do not reply to this automatic email.'
     heading = config['notification_heading'].format(**variables)
     footer = config['notification_footer'].format(**variables)
@@ -175,18 +178,19 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         return notice.email_sent if enabled else None
     app.extensions['client_notification_model'] = Notice
     app.extensions['client_notice_deliver'] = deliver
-    def booking_updated(booking, before, schedule):
+    def booking_updated(booking, before, schedule, *, request_acknowledgement=False):
         after = booking_snapshot(booking, schedule)
         changes = {key: {'before': before.get(key, 'Not set'), 'after': after.get(key, 'Removed')}
                    for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
         if not changes:
             return None
         db.session.add(Change(booking_id=booking.id, changes_json=json.dumps(changes)))
-        db.session.commit()
         details = '\n'.join(f'{key}: {value["before"]} → {value["after"]}' for key, value in changes.items())
+        if request_acknowledgement:
+            details += '\n\n' + BOOKING_ACKNOWLEDGEMENT
         return notify(booking.email, booking.first_name, 'booking', booking.public_reference, details,
                       url_for('client.booking_detail', booking_id=booking.id, _external=True),
-                      essential='Status' in changes or before.get('Status') == 'Under Review')
+                      essential=request_acknowledgement or 'Status' in changes or before.get('Status') == 'Under Review')
     def reward(email, name, reference, details):
         return notify(email, name, 'reward', reference, details, url_for('client.rewards', _external=True))
     def reward_code(code, details):

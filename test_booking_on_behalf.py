@@ -29,6 +29,20 @@ class OnBehalfTest(unittest.TestCase):
                 date='2099-01-05', start_time='10:00', finish_time='12:00', event_address='Town Hall',
                 event_type='Business event', theme='N/A', pitch_fee_required='no', publicity_type='Private', location_type='Indoors', charge_type='Client')]}))
 
+    def test_no_payment_preference_requires_zero_event_charge(self):
+        self.assertIn(b'<option value="No payment required"', self.admin.get(self.path).data)
+        form = dict(self.form(), payment_preference='No payment required')
+        invalid = self.admin.post(self.path, data=form)
+        self.assertIn(b'Choose a payment arrangement for bookings with an event charge.', invalid.data)
+        schedule = json.loads(form['event_schedule'])
+        schedule['events'][0]['charge_type'] = 'Customers'
+        form['event_schedule'] = json.dumps(schedule)
+        with patch.object(main, 'send_client_email', return_value=True):
+            self.assertEqual(self.admin.post(self.path, data=form).status_code, 302)
+        booking = main.Booking.query.order_by(main.Booking.id.desc()).first()
+        self.assertEqual(booking.payment_preference, 'No payment required')
+        self.assertEqual(booking.total_event_cost, 0)
+
     def create(self):
         form = self.form()
         form.update(signature='Not the client', liability_acknowledged='yes', terms_accepted='yes')

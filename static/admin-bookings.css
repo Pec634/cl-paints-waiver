@@ -14,28 +14,38 @@
     .booking-actions-menu { width: 100%; }
     .booking-actions-menu > nav { position: static; width: 100%; margin-top: 8px; box-sizing: border-box; }
 }
-.admin .booking-requests-scroll { max-height: 68vh; max-height: 68dvh; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 3px; }
+.admin main .table-wrap.booking-requests-scroll { max-height: 68vh; max-height: 68dvh; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 3px; }
 .admin .booking-requests-scroll:focus-visible { outline: 2px solid var(--pink); outline-offset: 3px; }
-.admin .booking-request-list { display: grid; gap: 12px; width: 100%; min-width: 0; }
-.admin .booking-request-card { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: white; overflow-wrap: anywhere; }
+.admin .booking-list-controls { flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin .booking-list-controls .booking-filter-form { gap: 8px; }
+.admin .booking-list-controls .portal-saved-filter { margin: 0; gap: 8px; }
+.booking-list-controls .portal-saved-filter [role="status"]:empty { display: none; }
+.admin .booking-list-controls :is(.btn, select, input[type="search"]) { box-sizing: border-box; min-height: 44px; padding: 8px 12px; }
+.admin .booking-list-controls input[type="search"] { flex: 1 1 190px; min-width: 0; }
+.admin .booking-request-list { display: grid; gap: 8px; width: 100%; min-width: 0; }
+.admin .booking-request-card { min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: white; overflow-wrap: anywhere; }
 .admin .booking-request-card[hidden] { display: none; }
-.booking-card-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 12px; }
+.booking-card-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: start; gap: 8px 16px; }
 .booking-card-heading > div { min-width: 0; }
-.admin .booking-card-heading h3 { margin: 6px 0; font-size: 1.15rem; }
-.booking-card-heading small { color: var(--muted); }
-.booking-card-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
-.booking-card-facts > div { min-width: 0; }
-.booking-card-facts dt { color: var(--muted); font-size: .85rem; font-weight: 700; margin-bottom: 6px; }
-.booking-card-facts dd { margin: 0; line-height: 1.6; }
+.admin .booking-card-heading h3 { margin: 0; font-size: 1.05rem; }
+.booking-card-heading :is(small, time) { display: block; color: var(--muted); font-size: .82rem; margin-top: 2px; }
+.booking-card-status { text-align: end; }
 .booking-card-invoices { min-width: 0; }
 .booking-card-invoices > .panel { padding: 10px 12px; margin: 10px 0; border-radius: 8px; box-shadow: none; }
 .booking-card-invoices > .panel :is(h2, p) { margin: 4px 0; }
 .admin .booking-card-invoices > .panel h2 { font-size: .9rem; }
-.booking-card-actions { display: flex; flex-wrap: wrap; align-items: start; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
-.booking-card-actions > .booking-detail { flex: 1 1 100%; min-width: 0; }
-.booking-card-actions > .booking-detail { margin: 0; }
-.booking-card-actions > .booking-detail > summary { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: #f6f8fc; }
-.booking-card-actions > .booking-delete-detail > summary { color: #9c2639; background: #fff7f8; }
+.booking-card-actions { display: flex; flex-wrap: wrap; align-items: start; gap: 6px; margin-top: 8px; }
+.booking-card-actions > .booking-detail { min-width: 0; margin: 0; padding: 0; border: 0; }
+.booking-card-actions > .booking-detail[open] { flex-basis: 100%; }
+.admin .booking-card-actions :is(.btn, .booking-detail > summary) { display: inline-flex; align-items: center; box-sizing: border-box; min-height: 36px; padding: 6px 10px; font-size: .875rem; line-height: 1.35; }
+.admin .booking-card-actions .booking-detail > summary { gap: 5px; list-style: none; border: 1px solid var(--border); border-radius: 6px; background: #f6f8fc; }
+.booking-card-actions .booking-detail > summary::-webkit-details-marker { display: none; }
+.booking-card-actions .booking-detail > summary::before { content: ''; width: 0; height: 0; border-block: 4px solid transparent; border-left: 5px solid currentColor; }
+.booking-card-actions .booking-detail[open] > summary::before { transform: rotate(90deg); }
+.booking-card-actions .booking-delete-detail > summary { color: #9c2639; background: #fff7f8; }
+.booking-card-extra { border-left: 2px solid var(--border); margin-top: 8px; padding: 6px 0 0 10px; }
+.booking-card-extra > small { color: var(--muted); }
+.booking-card-extra-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-block: 8px; }
 .booking-card-actions .booking-manage-form, .booking-card-actions .booking-detail dl { min-width: 0; max-width: 100%; }
 .booking-card-actions .booking-manage-form .booking-field { font-size: .9rem; }
 .booking-card-actions .booking-manage-form { gap: 9px; margin-top: 10px; }
@@ -45,14 +55,12 @@
 .booking-card-actions .travel-mileage-fields { padding: 9px; gap: 7px 12px; }
 .booking-card-actions :is(input, select, textarea, fieldset) { min-width: 0; max-width: 100%; box-sizing: border-box; }
 .booking-card-actions .booking-manage-actions { display: flex; flex-wrap: wrap; gap: 10px; grid-column: 1 / -1; }
-.admin .booking-card-actions .btn { min-height: 34px; padding: 6px 10px; white-space: normal; text-align: center; }
+.admin .booking-card-actions .btn { white-space: normal; text-align: center; }
 .booking-card-actions .client-form { margin-top: 16px; }
 @media (max-width: 800px) {
-    .booking-card-facts { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-    .admin .booking-request-card { padding: 12px; }
-    .booking-card-actions > .booking-detail > summary { padding-block: 10px; }
-    .admin .booking-card-actions .btn, .booking-card-actions .booking-field :is(input, select) { min-height: 44px; }
+    .booking-card-heading { grid-template-columns: minmax(0, 1fr) auto; }
+    .booking-card-event { grid-row: 2; grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+    .admin .booking-card-actions :is(.btn, .booking-detail > summary), .booking-card-actions .booking-field :is(input, select) { min-height: 44px; }
     .booking-card-actions .booking-manage-form, .booking-card-actions .travel-mileage-fields { grid-template-columns: minmax(0, 1fr); }
-    .booking-card-actions > a.btn { flex: 1 1 180px; }
     .booking-card-actions .booking-manage-actions .btn { flex: 1 1 180px; }
 }
