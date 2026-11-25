@@ -49,6 +49,24 @@ class ClientBookingEditTest(unittest.TestCase):
         self.assertEqual(self.booking.total_event_cost, 0)
         self.assertEqual(self.booking.payment_preference, 'No payment required')
 
+    def test_referral_can_be_claimed_during_initial_client_edit_and_cannot_be_replaced(self):
+        recorded_code, another_code = 'AbC23', 'XyZ45'
+        for code in (recorded_code, another_code):
+            fixtures.activate_referral(code)
+        self.assertIn(b'name="promo_code"', self.client.get(self.path).data)
+        with patch.object(main, 'send_client_email', return_value=True):
+            response = self.client.post(self.path, data=dict(self.form(), promo_code=recorded_code))
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(self.booking.promo_code, recorded_code)
+            self.assertTrue(self.booking.referral_verified)
+            self.assertFalse(fixtures.pending_agreement(self.booking))
+            response = self.client.post(self.path, data=dict(self.form('Second venue'), promo_code=another_code))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.booking.promo_code, recorded_code)
+        self.assertTrue(self.booking.referral_verified)
+        self.assertIsNotNone(main.db.session.get(main.ReferralCodeUse, recorded_code))
+        self.assertIsNone(main.db.session.get(main.ReferralCodeUse, another_code))
+
     def test_repeated_edits_require_review_and_preserve_staff_fields(self):
         self.booking.internal_notes = 'Private notes'
         self.booking.travel_charge = 15
@@ -185,6 +203,7 @@ class ClientBookingEditTest(unittest.TestCase):
             charge.value = 'Client';
             charge.dispatchEvent(new Event('change', {bubbles: true}));
             assert(!preference.disabled && preference.value === '', 'paid bookings should prompt for an arrangement');
+            assert(!preference.querySelector('[value="No payment required"]'), 'paid bookings should hide the no-payment option');
             preference.value = 'Full payment';
             const venue = form.querySelector('[data-event-field="event_address"]');
             assert(venue.value === 'Town Hall', 'Existing venue should be prefilled');

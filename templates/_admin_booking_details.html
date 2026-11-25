@@ -29,6 +29,8 @@
                                         <dt>Event estimate</dt><dd>£{{ "%.2f"|format(booking.total_event_cost) }}</dd>
                                         <dt>Travel charge</dt><dd>£{{ "%.2f"|format(booking.travel_charge) }}</dd>
                                         <dt>Current total</dt><dd>£{{ "%.2f"|format(row.final_total) }}</dd>
+                                        {% set reward_discount = booking_reward_discount(booking) %}
+                                        {% if reward_discount %}<dt>30-minute referral reward</dt><dd>−£{{ "%.2f"|format(reward_discount) }} included in total</dd>{% endif %}
                                         <dt>Payment preference</dt><dd>{{ booking.payment_preference }}</dd>
                                         <dt>Referral code</dt><dd>{% if booking.promo_code %}<a href="{{ url_for('rewards.dashboard', q=booking.promo_code) }}">{{ booking.promo_code }}</a>{% else %}None{% endif %}</dd>
                                         <dt>Referral status</dt><dd>{{ "Verified" if booking.referral_verified else ("Pending migration" if booking.promo_code and booking.referral_verified is none else ("Invalid" if booking.promo_code else "Not provided")) }}</dd>

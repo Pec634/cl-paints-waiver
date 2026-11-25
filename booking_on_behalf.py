@@ -16,7 +16,7 @@ def pending_agreement(booking):
         return False
 
 
-def register(app, db, Booking, current_client, schedule, settings):
+def register(app, db, Booking, current_client, schedule, settings, claim_referral, notify_referral):
     def terms_hash():
         return hashlib.sha256(terms_text().encode()).hexdigest()
 
@@ -53,6 +53,15 @@ def register(app, db, Booking, current_client, schedule, settings):
         if booking.status != 'Under Review':
             abort(409)
         before = booking_snapshot(booking, schedule)
+        code = request.form.get('promo_code', '').strip() if not booking.promo_code else ''
+        if code:
+            try:
+                claim_referral(code)
+            except ValueError as error:
+                flash(str(error), 'error')
+                return redirect(url_for('client.booking_detail', booking_id=booking.id))
+            booking.promo_code = code
+            booking.referral_verified = True
         data = json.loads(booking.event_schedule)
         data['on_behalf'].update(pending=False, signed_at=datetime.utcnow().isoformat(), signed_by=account.email,
             signed_via='private_booking_link' if getattr(g, 'private_booking', None) else 'client_portal',
@@ -67,5 +76,7 @@ def register(app, db, Booking, current_client, schedule, settings):
         booking.event_schedule = json.dumps(data)
         app.extensions['client_booking_updated'](booking, before, schedule)
         db.session.commit()
+        if code:
+            notify_referral(booking)
         flash('Your signature and agreement have been saved. CL Paints will review and confirm your booking separately.', 'success')
         return redirect(url_for('client.booking_detail', booking_id=booking.id))

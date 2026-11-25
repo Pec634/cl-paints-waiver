@@ -9,6 +9,7 @@ from flask import request, session, render_template, jsonify, redirect, url_for
 from booking_import import EVENT_FIELDS, convert_row
 from client_notifications import booking_snapshot
 from booking_pricing import calculate
+from booking_rewards import reward_discount
 
 BOOKING_EDIT_FIELDS = (*EVENT_FIELDS, 'payment_preference', 'booking_hourly_rate', 'total_event_cost',
                        'travel_charge', 'internal_notes')
@@ -23,6 +24,8 @@ def register(app, db, Booking, Event, admin_required, schedule, settings):
     @app.route('/admin/bookings/<int:booking_id>/edit', methods=['GET', 'POST'])
     @admin_required
     def admin_edit_booking(booking_id):
+        from payment_workflow import NO_PAYMENT_REQUIRED, validate_payment_preference
+
         booking = Booking.query.filter_by(id=booking_id).with_for_update().first_or_404()
         if booking.status not in ('Under Review', 'Awaiting Payment', 'Accepted'):
             return jsonify(error='Only active bookings can be edited here.'), 409
@@ -61,13 +64,18 @@ def register(app, db, Booking, Event, admin_required, schedule, settings):
                 for field in (*BOOKING_EDIT_FIELDS, 'event_schedule', 'single_date'):
                     if field in request.form:
                         form_data[field] = request.form[field]
+            saved_payment = app.extensions['payment_summary'](booking)
+            no_payment_due = saved_payment['total'] == saved_payment['outstanding'] == 0
+            if no_payment_due:
+                form_data['payment_preference'] = NO_PAYMENT_REQUIRED
             return render_template('booking_form.html', admin_edit=True, editing_booking=booking,
                 form_data=form_data, edit_version=request.form.get('booking_version') if form_submit else version(booking),
                 error=error,
                 pricing_rate=form_data.get('booking_hourly_rate', row['booking_hourly_rate']),
                 business_settings=dict(saved_rules, max_event_dates=max(len(events), int(saved_rules['max_event_dates']))),
                 google_maps_api_key=os.getenv('GOOGLE_MAPS_API_KEY', ''),
-                intake=stored.get('intake_options', {}), saved_payment=app.extensions['payment_summary'](booking),
+                intake=stored.get('intake_options', {}), saved_payment=saved_payment, no_payment_due=no_payment_due,
+                applied_reward=reward_discount(booking),
                 edit_config=dict(initialSource=initial, token=token,
                     version=version(booking))), code
 
@@ -127,14 +135,19 @@ def register(app, db, Booking, Event, admin_required, schedule, settings):
                 if rate <= 0:
                     raise ValueError('The booking hourly rate must be greater than zero.')
                 data['pricing_rules'] = dict(data.get('pricing_rules', {}), hourly_rate=str(rate))
-            preference = submitted.get('payment_preference', booking.payment_preference)
+            preference = submitted.get('payment_preference', '' if form_submit else booking.payment_preference)
             raw_events, intake, rules, quote = calculate(booking, raw_events, original_events, data, settings(),
                 preference, app.extensions['payment_summary'](booking)['paid'])
-            from payment_workflow import NO_PAYMENT_REQUIRED, validate_payment_preference
-            if preference != booking.payment_preference or preference == NO_PAYMENT_REQUIRED:
-                validate_payment_preference(preference, Decimal(quote['event_total']))
+            total = Decimal(quote['total'])
+            outstanding = Decimal(quote['outstanding'])
+            if total == outstanding == 0:
+                preference = NO_PAYMENT_REQUIRED
+                quote['deposit'] = None
             if payload.get('action') == 'quote':
                 return jsonify(quote=quote)
+            if preference != booking.payment_preference or preference == NO_PAYMENT_REQUIRED:
+                validate_payment_preference(preference, total, outstanding)
+            base['payment_preference'] = preference
             base['events'] = raw_events
             columns = [column for column in Booking.__table__.columns if column.name != 'id']
             values = convert_row(base, columns)
@@ -161,9 +174,12 @@ def register(app, db, Booking, Event, admin_required, schedule, settings):
                         raise ValueError('Invalid event-day reference. Reload this booking.')
                     used.add(index)
                     preserved = dict(original_events[index])
+                    preserved.pop('reward_discount', None)
                     preserved.update(updated)
                     updated.clear()
                     updated.update(preserved)
+                if raw.get('reward_discount'):
+                    updated['reward_discount'] = raw['reward_discount']
             # Public event records may have waivers and rewards attached; keep
             # their day identity and synchronize dates/venues on edit.
             for linked in Event.query.filter_by(booking_id=booking.id).all():

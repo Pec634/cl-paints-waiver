@@ -130,12 +130,18 @@ Bookings | CL Paints
                                             <span>I am authorized to sign on behalf of CL Paints.</span>
                                         </label>
                                         <p class="booking-field-wide">Saving changes to client-visible details asks the client to acknowledge them in their booking. Internal notes are private.</p>
-                                        {% if booking.status == 'Under Review' and row.payment_outstanding > 0 and not booking_pending_agreement(booking) %}
+                                        {% set can_request_payment = booking.status == 'Under Review' and row.payment_outstanding > 0 and not booking_pending_agreement(booking) %}
+                                        {% if can_request_payment %}
                                         <p class="booking-field-wide"><strong>Request payment</strong> moves the booking to Awaiting Payment and tells the client that payment is due.</p>
+                                        {% if row.invoice_amount_warnings %}
+                                        <div class="booking-field-wide">
+                                            {% with invoice_amount_warnings=row.invoice_amount_warnings %}{% include '_invoice_amount_warnings.html' %}{% endwith %}
+                                        </div>
+                                        {% endif %}
                                         {% endif %}
                                         <div class="booking-manage-actions">
                                             <button class="btn small primary" type="submit" name="action" value="update">Save changes</button>
-                                            {% if booking.status == 'Under Review' and row.payment_outstanding > 0 and not booking_pending_agreement(booking) %}<button class="btn small" type="submit" name="action" value="request_payment">Request payment</button>{% endif %}
+                                            {% if can_request_payment %}<button class="btn small" type="submit" name="action" value="request_payment">Request payment</button>{% endif %}
                                             {% if booking.status in ['Under Review', 'Awaiting Payment'] and not booking_pending_agreement(booking) %}<button class="btn small" type="submit" name="action" value="accept">Confirm booking</button>{% endif %}
                                             {% if booking.status in ['Under Review', 'Awaiting Payment', 'Accepted'] %}<button class="btn small booking-decline" type="submit" name="action" value="decline">Decline</button>{% endif %}
                                         </div>

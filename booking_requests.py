@@ -97,7 +97,9 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
             else:
                 from client_notifications import booking_snapshot
                 before = booking_snapshot(booking, schedule)
-                if action == 'complete' and item.kind == 'cancellation': booking.status = 'Cancelled'
+                if action == 'complete' and item.kind == 'cancellation':
+                    booking.status = 'Cancelled'
+                    app.extensions['release_booking_reward'](booking)
                 item.status = 'Completed' if action == 'complete' else 'Declined'
                 item.response = response
                 item.reviewed_at = datetime.utcnow()

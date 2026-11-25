@@ -1,0 +1,15 @@
+{% if invoice_amount_warnings %}
+<div class="booking-admin-notice" role="status">
+  <strong>Review SumUp invoice amounts before requesting payment</strong>
+  <ul>
+    {% for warning in invoice_amount_warnings %}
+    <li>
+      {{ warning.invoice.purpose }} invoice {{ warning.invoice.reference }} · Linked amount £{{ '%.2f'|format(warning.invoice.amount) }}.
+      {{ warning.basis }} £{{ '%.2f'|format(warning.expected) }}, £{{ '%.2f'|format(warning.difference|abs) }} {{ 'higher' if warning.difference > 0 else 'lower' }}.
+      <a class="client-text-link" href="{{ warning.invoice.payment_url }}" target="_blank" rel="noopener noreferrer">Check invoice in SumUp</a>
+    </li>
+    {% endfor %}
+  </ul>
+  <p>Confirm which invoice is open and what the client has already paid in SumUp. Use the current balance to decide whether an updated invoice or a credit is needed.</p>
+</div>
+{% endif %}

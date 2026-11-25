@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for, abort, flash, send_file
+from flask import Flask, render_template, request, jsonify, render_template_string, session, redirect, url_for, abort, flash, send_file, g
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
@@ -381,6 +381,10 @@ class ClientRewardOwner(db.Model):
     code = db.Column(db.String(100), primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('client_account.id'), nullable=False, index=True)
 
+from booking_rewards import define_models as define_booking_reward_models, register as register_booking_rewards
+BookingReward, BookingRewardHistory = define_booking_reward_models(db)
+register_booking_rewards(app, db, Booking, ClientAccount, BookingReward, BookingRewardHistory)
+
 
 class ClientEnquiry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -527,7 +531,7 @@ class EventMoodboardImage(db.Model):
 
 from loyalty import define_models
 loyalty_models = define_models(db)
-from client_notifications import define_notification_models
+from client_notifications import define_notification_models, ensure_notification_schema
 notification_models = define_notification_models(db)
 from client_notifications import define_read_model
 app.extensions['notification_read_model'] = define_read_model(db)
@@ -644,6 +648,7 @@ MoodboardOrder = define_moodboard_order(db)
 
 with app.app_context():
     db.create_all()
+    ensure_notification_schema(db)
     from pos import ensure_schema as ensure_pos_schema
     ensure_pos_schema(db)
     from staff_timesheets import ensure_schema as ensure_staff_time_schema
@@ -1724,6 +1729,12 @@ def claim_booking_code(code):
         raise ValueError("Code invalid. This referral code has already been used.") from None
 
 
+def notify_booking_referral_claim(booking):
+    app.extensions['client_reward_code_notice'](
+        booking.promo_code,
+        f'Referral code {booking.promo_code} has been used in a booking request. A reward is earned after the qualifying event is attended and confirmed by CL Paints.')
+
+
 @app.post("/api/referrals/verify")
 def verify_referral_code():
     data = request.get_json(silent=True)
@@ -1744,6 +1755,8 @@ def admin_rewards():
 
 
 def send_booking_request_confirmation(booking):
+    from booking_rewards import reward_discount
+
     try:
         schedule_data = json.loads(booking.event_schedule or "{}")
         events = schedule_data.get("events", [])
@@ -1795,6 +1808,9 @@ def send_booking_request_confirmation(booking):
             "",
         ])
 
+    discount = reward_discount(booking)
+    if discount:
+        lines.append(f"30-minute referral reward: £{discount:.2f} off the face-painting charge.")
     lines.extend([
         "PAYMENT AND TOTALS",
         f"Estimated event subtotal: £{Decimal(booking.total_event_cost or 0):.2f}",
@@ -1845,6 +1861,9 @@ def booking_request():
         ).with_for_update().first_or_404()
         if editing_booking.status not in ('Under Review', 'Awaiting Payment'):
             abort(409)
+    from booking_on_behalf import pending_agreement
+    can_enter_referral = not on_behalf and (
+        editing_booking is None or (pending_agreement(editing_booking) and not editing_booking.promo_code))
     from native_forms import available as native_available, answers as native_answers, design_uploads
     from native_form_records import read_form_files, upload_names, confirmation
     NativeForm = native_form_models[0]
@@ -1863,9 +1882,12 @@ def booking_request():
     offer = app.extensions['active_hourly_discount'](pricing_rules['hourly_rate'])
     if offer:
         pricing_rules.update(hourly_rate=offer['hourly_rate'], promotion=offer)
-    if editing_booking:
-        pricing_rules.update(json.loads(editing_booking.event_schedule or '{}').get('pricing_rules', {}))
+    saved_schedule = json.loads(editing_booking.event_schedule or '{}') if editing_booking else {}
+    if isinstance(saved_schedule, dict):
+        pricing_rules.update(saved_schedule.get('pricing_rules', {}))
+    saved_booking_intake = saved_schedule.get('intake_options', {}) if isinstance(saved_schedule, dict) else {}
     portal_account = None if on_behalf else get_current_client()
+    reward_client = portal_account if not getattr(g, 'private_booking', None) else None
     booking_account = None
     if on_behalf and 'client_id' in request.args:
         client_id = request.args.get('client_id', type=int)
@@ -2110,15 +2132,29 @@ def booking_request():
                     "estimated_cost": str(day_cost),
                 })
 
+            from booking_pricing import apply_half_hour_reward
+            from booking_rewards import reward_discount
             from form_workflows import booking_options
             possible_duplicates = app.extensions['form_workflows']['booking_check'](seasonal_form, normalized_schedule, email)
-            total_event_cost, intake_options = booking_options(workflow_options, request.form, normalized_schedule, total_event_cost)
+            total_event_cost, intake_options = booking_options(
+                workflow_options, request.form, normalized_schedule, total_event_cost,
+                saved_intake=saved_booking_intake)
             intake_options['possible_duplicates'] = possible_duplicates
+            existing_reward = bool(editing_booking and reward_discount(editing_booking))
+            requested_reward = request.form.get('use_booking_reward') == 'yes' and not existing_reward
+            if requested_reward and not reward_client:
+                raise ValueError('Sign in to your client account to use your earned reward.')
+            if existing_reward or requested_reward:
+                discount = apply_half_hour_reward(normalized_schedule, pricing_rules['hourly_rate'], intake_options.get('package'))
+                if not discount:
+                    raise ValueError('The 30-minute reward applies to a private booking with a face-painting charge.')
+                total_event_cost -= discount
             payment_preference = request.form.get("payment_preference", "")
             from payment_workflow import NO_PAYMENT_REQUIRED, validate_payment_preference
-            if not on_behalf and total_event_cost == 0:
+            payment_total = total_event_cost + (editing_booking.travel_charge if editing_booking else Decimal(0))
+            if not on_behalf and payment_total == 0:
                 payment_preference = NO_PAYMENT_REQUIRED
-            validate_payment_preference(payment_preference, total_event_cost)
+            validate_payment_preference(payment_preference, payment_total)
             if not on_behalf and request.form.get("liability_acknowledged") != "yes":
                 raise ValueError("Read and acknowledge the liability statement.")
             if not on_behalf and request.form.get("terms_accepted") != "yes":
@@ -2126,16 +2162,13 @@ def booking_request():
             if not on_behalf and request.form.get('booking_terms_version') and request.form['booking_terms_version'] != app.jinja_env.globals['booking_terms_version']():
                 raise ValueError('The booking terms changed while you were completing the form. Read the updated terms and submit again.')
 
-            promo_code = request.form.get("promo_code", "").strip() or None
-            referral_verified = None
-            if editing_booking:
-                promo_code = editing_booking.promo_code
-                referral_verified = editing_booking.referral_verified
-            elif promo_code:
-                referral_verified = booking_code_is_valid(promo_code)
-                if not referral_verified:
-                    raise ValueError("The referral code is invalid, already processed or expired. Remove it or enter a valid code.")
-                claim_booking_code(promo_code)
+            claimed_referral = request.form.get("promo_code", "").strip() if can_enter_referral else ''
+            promo_code = editing_booking.promo_code if editing_booking else None
+            referral_verified = editing_booking.referral_verified if editing_booking else None
+            if claimed_referral:
+                claim_booking_code(claimed_referral)
+                promo_code = claimed_referral
+                referral_verified = True
 
             first_event = normalized_schedule[0]
             booking = Booking(
@@ -2163,6 +2196,7 @@ def booking_request():
                     "intake_options": intake_options,
                     "seasonal_form": {'id': seasonal_form.id, 'title': seasonal_form.title, 'terms': seasonal_form.terms, 'answers': seasonal_answers, 'snapshot': app.extensions['native_form_records']['snapshot'](seasonal_form)} if seasonal_form else None,
                     "same_details": all_dates_same_details,
+                    **({'booking_reward': True} if existing_reward or requested_reward else {}),
                     "on_behalf": {'created_by': ADMIN_EMAIL or 'CL Paints admin', 'created_at': datetime.utcnow().isoformat(), 'pending': True} if on_behalf else None,
                     "events": normalized_schedule,
                 }),
@@ -2194,10 +2228,18 @@ def booking_request():
             )
             if editing_booking:
                 from client_booking_edit import save_revision
+                if requested_reward:
+                    app.extensions['claim_booking_reward'](
+                        reward_client.id, editing_booking, request.form.get('booking_reward_token', ''), discount)
                 save_revision(app, db, editing_booking, booking, portal_account, BookingRequest,
                               ClientEnquiry, booking_schedule_events, read_address(request.form), settings)
+                if claimed_referral:
+                    notify_booking_referral_claim(editing_booking)
                 return redirect(url_for('client.booking_detail', booking_id=editing_booking.id))
             db.session.add(booking)
+            if requested_reward:
+                app.extensions['claim_booking_reward'](
+                    reward_client.id, booking, request.form.get('booking_reward_token', ''), discount)
             if seasonal_form:
                 app.extensions['native_form_records']['record_booking'](seasonal_form, booking, seasonal_answers, seasonal_field_uploads)
                 app.extensions['native_form_records']['clear_draft'](seasonal_form)
@@ -2216,9 +2258,8 @@ def booking_request():
                 email_sent = app.extensions['client_booking_review_requested'](booking)
                 return redirect(url_for('admin_share_booking', booking_id=booking.id, created='yes', status_email='sent' if email_sent else 'failed'))
             email_sent = send_booking_request_confirmation(booking)
-            if booking.promo_code and booking.referral_verified:
-                app.extensions['client_reward_code_notice'](booking.promo_code,
-                    f'Referral code {booking.promo_code} has been used in a booking request. A reward is earned after the qualifying event is attended and confirmed by CL Paints.')
+            if claimed_referral:
+                notify_booking_referral_claim(booking)
             if portal_account:
                 return redirect(url_for('client.booking_detail', booking_id=booking.id, submitted='yes'))
             return redirect(url_for(
@@ -2234,6 +2275,9 @@ def booking_request():
             db.session.rollback()
             error = "We could not save your request. Please try again."
 
+    from booking_rewards import reward_discount
+    applied_reward = reward_discount(editing_booking) if editing_booking else Decimal(0)
+    reward_offer = app.extensions['booking_reward_offer'](reward_client.id) if reward_client and not applied_reward else ''
     return render_template(
         "booking_form.html",
         error=error,
@@ -2244,6 +2288,11 @@ def booking_request():
         submitted=request.args.get("submitted"),
         portal_account=portal_account,
         on_behalf=on_behalf,
+        can_enter_referral=can_enter_referral,
+        applied_reward=applied_reward,
+        booking_reward_token=reward_offer,
+        booking_form_hourly_rate=pricing_rules['hourly_rate'],
+        saved_booking_intake=saved_booking_intake,
         booking_account=booking_account,
         editing_booking=editing_booking,
         edit_version=(request.form.get('booking_version') if request.method == 'POST' else
@@ -2358,10 +2407,16 @@ def admin_bookings():
     filters = [('all','All bookings'),('review','Awaiting review'),('payment','Reviewed — awaiting payment'),('confirmed','All time bookings confirmed'),
                ('declined','Declined'),('cancelled','Cancelled'),
                ('upcoming','Future bookings confirmed'),('requests','Change / cancellation requests'),
+               ('acknowledgement','Awaiting client acknowledgement'),
                ('deposit','Deposits due'),('balance','Balances outstanding')]
     active_filter = request.args.get('filter', 'all')
     if active_filter not in dict(filters): abort(400)
     pending_ids = {item.booking_id for item in BookingRequest.query.filter_by(status='Pending').all()}
+    Change = notification_models[0]
+    pending_acknowledgements = set(db.session.scalars(db.select(Change.booking_id).where(
+        Change.acknowledged_at.is_(None)).distinct()))
+    invoices_by_booking = app.extensions['booking_invoices_by_id'](
+        [booking.id for booking in bookings if booking.status == 'Under Review'])
     filter_counts = dict.fromkeys(dict(filters), 0)
     booking_rows = []
     for booking in bookings:
@@ -2394,6 +2449,7 @@ def admin_bookings():
             upcoming=booking.status == 'Accepted' and any(date >= today for date in dates),
             deposit=active and payment['deposit'] > payment['paid'] and bool(payment['deposit_due']) and payment['deposit_due'] <= today,
             balance=active and payment['outstanding'] > 0,
+            acknowledgement=booking.id in pending_acknowledgements,
             requests=booking.id in pending_ids, cancelled=booking.status == 'Cancelled', declined=booking.status == 'Declined')
         for key, matches in flags.items(): filter_counts[key] += int(matches)
         if not flags[active_filter]: continue
@@ -2406,13 +2462,11 @@ def admin_bookings():
             "pricing_rules": saved_schedule.get("pricing_rules", DEFAULT_BUSINESS_SETTINGS) if isinstance(saved_schedule, dict) else DEFAULT_BUSINESS_SETTINGS,
             "public_event_count": sum(event.get("publicity_type") == "Public" for event in events),
             "payment_outstanding": payment['outstanding'],
+            "invoice_amount_warnings": app.extensions['invoice_amount_warnings'](
+                invoices_by_booking.get(booking.id, ()), payment),
             "created_events": Event.query.filter_by(booking_id=booking.id).order_by(Event.booking_day_number.asc()).all(),
         })
 
-    Change = notification_models[0]
-    pending_acknowledgements = set(db.session.scalars(db.select(Change.booking_id).where(
-        Change.booking_id.in_([row['booking'].id for row in booking_rows]),
-        Change.acknowledged_at.is_(None)).distinct()))
     referral_codes = ReferralCode.query.order_by(ReferralCode.code.asc()).all()
     return render_template(
         "admin_bookings.html",
@@ -2522,6 +2576,8 @@ def admin_manage_booking(booking_id):
         if not can_confirm:
             db.session.rollback()
             return redirect(url_for('admin_bookings', payment_error='confirmation'))
+    if booking.status == 'Declined' and previous_status != 'Declined':
+        app.extensions['release_booking_reward'](booking)
     status_email_sent = app.extensions['client_booking_updated'](
         booking, previous_snapshot, booking_schedule_events, request_acknowledgement=action == 'update')
     db.session.commit()
@@ -3281,7 +3337,8 @@ register_booking_edit(app, db, Booking, Event, admin_required, booking_schedule_
 from booking_terms import register as register_booking_terms
 register_booking_terms(app, db, BusinessSetting, admin_required)
 from booking_on_behalf import register as register_booking_on_behalf
-register_booking_on_behalf(app, db, Booking, get_current_client, booking_schedule_events, get_business_settings)
+register_booking_on_behalf(app, db, Booking, get_current_client, booking_schedule_events, get_business_settings,
+                          claim_booking_code, notify_booking_referral_claim)
 from booking_access import register as register_booking_access
 register_booking_access(app, db, BookingAccess, Booking, ClientAccount, admin_required, get_business_settings)
 from outgoing_emails import register as register_outgoing_emails

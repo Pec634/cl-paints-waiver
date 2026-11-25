@@ -67,6 +67,24 @@ def read_image(upload):
 def register(app, db, models, admin_required, Booking):
     Category, Item, Entry, BookingCheck = models
 
+    def latest_booking_checks(booking_ids):
+        if not booking_ids:
+            return {}
+        latest_entries = db.select(db.func.max(BookingCheck.entry_id)).where(
+            BookingCheck.booking_id.in_(booking_ids)
+        ).group_by(BookingCheck.booking_id)
+        checks = db.session.execute(
+            db.select(BookingCheck.booking_id, Category.id, Entry)
+            .select_from(BookingCheck)
+            .join(Entry, Entry.id == BookingCheck.entry_id)
+            .outerjoin(Category, db.and_(Category.id == BookingCheck.category_id, Category.name == Entry.category_name))
+            .where(BookingCheck.entry_id.in_(latest_entries))
+        )
+        return {booking_id: dict(category_id=category_id, entry=entry)
+                for booking_id, category_id, entry in checks}
+
+    app.extensions['latest_booking_equipment_checks'] = latest_booking_checks
+
     def check_csrf():
         token = session.get('equipment_csrf')
         if not token or not secrets.compare_digest(token, request.form.get('csrf_token', '')):

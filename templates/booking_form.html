@@ -341,10 +341,15 @@
                 <div><span>Total booked hours</span><strong id="totalBookedHours">0 hours</strong></div>
                 <div><span>Total pitch / stall fees payable by CL Paints</span><strong id="totalPitchFees">£0.00</strong></div>
                 <div><span>Estimated event cost</span><strong id="estimatedEventCost">{{ '£%.2f'|format(editing_booking.total_event_cost) if admin_edit else '£0.00' }}</strong></div>
+                {% if booking_reward_token or applied_reward %}
+                <div id="bookingRewardEstimateRow"{% if not applied_reward %} hidden{% endif %}><span>30-minute referral reward</span><strong id="bookingRewardEstimate">{{ '−£%.2f'|format(applied_reward or 0) }}</strong></div>
+                {% endif %}
                 {% if admin_edit %}
                 <div><span>Travel charge</span><strong id="adminTravelCharge">£{{ '%.2f'|format(editing_booking.travel_charge) }}</strong></div>
                 <div><span>Total including travel</span><strong id="adminBookingTotal">£{{ '%.2f'|format(saved_payment.total) }}</strong></div>
+                {% if editing_booking.status == 'Accepted' %}
                 <div><span>Outstanding balance</span><strong id="adminOutstandingBalance">£{{ '%.2f'|format(saved_payment.outstanding) }}</strong></div>
+                {% endif %}
                 {% endif %}
                 <div id="depositEstimateRow"{% if not admin_edit or form_data.get('payment_preference') != '50% deposit' %} hidden{% endif %}><span>Estimated 50% deposit</span><strong id="depositEstimateAmount">{{ '£%.2f'|format(saved_payment.total / 2) if admin_edit else '£0.00' }}</strong></div>
                 <p>Pitch / stall fees are costs to CL Paints and are not included in your event cost or deposit.</p>
@@ -353,27 +358,37 @@
                 {% if admin_edit %}<button type="button" class="btn" id="adminBookingQuote">Calculate updated estimate</button><p id="adminBookingQuoteResult" role="status"></p>{% endif %}
             </div>
 
+            {% if booking_reward_token %}
+            <input type="hidden" name="booking_reward_token" value="{{ booking_reward_token }}">
+            <label class="check" id="bookingRewardOption" hidden>
+                <input type="checkbox" id="useBookingReward" name="use_booking_reward" value="yes" {% if form_data.get('use_booking_reward') == 'yes' and form_data.get('booking_reward_token') == booking_reward_token %}checked{% endif %}>
+                <span>Use my earned 30-minute face-painting reward. Your booked time stays the same, and the equivalent of 30 minutes comes off the face-painting charge.</span>
+            </label>
+            {% endif %}
+
             <label class="booking-field booking-payment-field">
                 <span>Preferred payment arrangement</span>
-                <select name="payment_preference" required>
+                <select name="payment_preference" required{% if admin_edit and no_payment_due %} disabled{% endif %}>
                     <option value="">Choose one</option>
                     <option value="Full payment" {% if form_data.get('payment_preference') == 'Full payment' %}selected{% endif %}>Pay in full at booking</option>
                     <option value="50% deposit" {% if form_data.get('payment_preference') == '50% deposit' %}selected{% endif %}>Pay a 50% deposit, balance on event date</option>
-                    <option value="No payment required" {% if form_data.get('payment_preference') == 'No payment required' %}selected{% endif %}>No payment required</option>
+                    <option value="No payment required" {% if form_data.get('payment_preference') == 'No payment required' and (not admin_edit or no_payment_due) %}selected{% endif %}{% if admin_edit and not no_payment_due %} hidden disabled{% endif %}>No payment required</option>
                     {% if admin_edit and form_data.get('payment_preference') and form_data.get('payment_preference') not in ['Full payment', '50% deposit', 'No payment required'] %}
                     <option value="{{ form_data.get('payment_preference') }}" selected>{{ form_data.get('payment_preference') }}</option>
                     {% endif %}
                 </select>
             </label>
 
+            {% if can_enter_referral %}
             <div class="booking-referral-entry">
                 <label class="booking-field booking-payment-field">
                     <span>Referral code <small>Optional</small></span>
-                    <small>Enter the five-character referral code exactly as supplied. The referring customer earns 30 minutes free face painting after your qualifying booking is attended.</small><input name="promo_code" id="referralCodeInput" maxlength="100" autocomplete="off" {% if editing_booking %}readonly{% endif %} value="{{ form_data.get('promo_code', '') }}">
+                    <small>Enter the five-character referral code exactly as supplied. The referring customer earns 30 minutes free face painting after your qualifying booking is attended.</small><input name="promo_code" id="referralCodeInput" maxlength="100" autocomplete="off" value="{{ form_data.get('promo_code', '') }}">
                 </label>
                 <button class="btn" type="button" id="verifyReferralButton">Verify code</button>
                 <p id="referralVerification" role="status" aria-live="polite"></p>
             </div>
+            {% endif %}
 
             {% if not admin_edit %}{% include '_booking_legal_text.html' %}
 
@@ -437,9 +452,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const totalCostOutput = document.getElementById("estimatedEventCost");
     const paymentEstimate = document.getElementById("paymentEstimate");
     const paymentChoice = form.querySelector('[name="payment_preference"]');
+    const noPaymentOption = paymentChoice.querySelector('[value="No payment required"]');
+    const knownTravel = Number({{ (editing_booking.travel_charge|string if editing_booking else '0')|tojson }});
+    function showNoPaymentOption(show) {
+        const wasSelected = paymentChoice.value === noPaymentOption.value;
+        if (show && !noPaymentOption.parentNode) paymentChoice.add(noPaymentOption);
+        noPaymentOption.hidden = noPaymentOption.disabled = !show;
+        if (!show) {
+            noPaymentOption.remove();
+            if (wasSelected) paymentChoice.value = '';
+        }
+    }
+    if (adminEdit) showNoPaymentOption(!noPaymentOption.disabled);
     const referralInput = document.getElementById("referralCodeInput");
     const referralButton = document.getElementById("verifyReferralButton");
     const referralResult = document.getElementById("referralVerification");
+    const rewardOption = document.getElementById('bookingRewardOption');
+    const rewardCheckbox = document.getElementById('useBookingReward');
+    const rewardEstimate = document.getElementById('bookingRewardEstimate');
+    const rewardEstimateRow = document.getElementById('bookingRewardEstimateRow');
+    const rewardApplied = {{ (applied_reward is defined and applied_reward > 0)|tojson }};
+    const hourlyRate = Number({{ (booking_form_hourly_rate|default(business_settings.hourly_rate))|tojson }});
 
     const ethnicityBreakdowns = {
         "Asian or Asian British": ["Bangladeshi", "Chinese", "Indian", "Pakistani", "Other Asian background"],
@@ -595,12 +628,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }).format(pitchFeePence / 100);
         let totalMinutes = 0;
         let totalCost = 0;
+        let eligibleDayCost = 0;
+        let validTimes = true;
 
         schedule.forEach((eventDay) => {
             const cards = dayList.querySelectorAll("[data-event-day]");
             const card = cards[schedule.indexOf(eventDay)];
             const durationDisplay = card?.querySelector("[data-duration-display]");
             if (!eventDay.start_time || !eventDay.finish_time) {
+                validTimes = false;
                 if (durationDisplay) durationDisplay.textContent = "Duration: enter start and finish times";
                 return;
             }
@@ -608,6 +644,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const [finishHour, finishMinute] = eventDay.finish_time.split(":").map(Number);
             const minutes = finishHour * 60 + finishMinute - startHour * 60 - startMinute;
             if (minutes <= 0) {
+                validTimes = false;
                 if (durationDisplay) durationDisplay.textContent = "Duration: finish time must be later than start time";
                 return;
             }
@@ -617,7 +654,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             totalMinutes += minutes;
             if (eventDay.pitch_fee_required !== "yes" && !['Revenue sharing','Customers'].includes(eventDay.charge_type)) {
-                totalCost += (minutes / 60) * Number({{ (booking_offer.hourly_rate if booking_offer else business_settings.hourly_rate)|tojson }});
+                const dayCost = dayHours * hourlyRate;
+                totalCost += dayCost;
+                if (!eligibleDayCost && eventDay.charge_type === 'Client' && eventDay.pitch_fee_required === 'no') {
+                    eligibleDayCost = dayCost;
+                }
             }
         });
 
@@ -627,14 +668,32 @@ document.addEventListener("DOMContentLoaded", () => {
         const hours = totalMinutes / 60;
         totalHoursOutput.textContent = `${Number.isInteger(hours) ? hours : hours.toFixed(2)} hours`;
         if (adminEdit) return;
+        if (rewardEstimate) {
+            const packagePrice = packageChoice?.value ? Number(packageChoice.dataset.price) : null;
+            const eligible = validTimes && eligibleDayCost > 0 && (packagePrice === null || packagePrice > 0)
+                && schedule.every(day => day.date && day.publicity_type === 'Private');
+            if (rewardOption) {
+                rewardOption.hidden = !eligible;
+                rewardCheckbox.disabled = !eligible;
+            }
+            const discount = eligible && (rewardApplied || rewardCheckbox?.checked)
+                ? Math.min(packagePrice ?? eligibleDayCost,
+                    Math.round(50 * (packagePrice === null ? hourlyRate : packagePrice / Number(packageChoice.dataset.hours))) / 100)
+                : 0;
+            totalCost -= discount;
+            rewardEstimateRow.hidden = !discount;
+            rewardEstimate.textContent = '−' + new Intl.NumberFormat('en-GB', {style: 'currency', currency: 'GBP'}).format(discount);
+        }
         totalCostOutput.textContent = new Intl.NumberFormat("en-GB", {
             style: "currency", currency: "GBP"
         }).format(totalCost);
 
+        const totalWithTravel = Math.round((totalCost + knownTravel) * 100);
+        showNoPaymentOption(totalWithTravel === 0);
         if (automaticFreePayment) {
             const complete = schedule.length && schedule.every(day => day.start_time && day.finish_time
                 && day.finish_time > day.start_time && day.charge_type && day.pitch_fee_required);
-            const free = complete && Math.round(totalCost * 100) === 0;
+            const free = complete && totalWithTravel === 0;
             if (free) {
                 paymentChoice.value = "No payment required";
             } else if (paymentChoice.disabled) {
@@ -643,12 +702,8 @@ document.addEventListener("DOMContentLoaded", () => {
             paymentChoice.disabled = Boolean(free);
         }
         document.getElementById("depositEstimateRow").hidden = paymentChoice.value !== "50% deposit";
-        paymentChoice.setCustomValidity(paymentChoice.value === "No payment required" && totalCost > 0
-            ? "Choose a payment arrangement for bookings with an event charge." : "");
         if (paymentChoice.value === "No payment required") {
-            paymentEstimate.textContent = totalCost > 0
-                ? "This booking has an event charge. Choose a payment arrangement."
-                : "No event payment is currently estimated. CL Paints will confirm any travel charge.";
+            paymentEstimate.textContent = "No payment is currently estimated. CL Paints will confirm any travel charge.";
         } else if (paymentChoice.value === "50% deposit") {
             document.getElementById("depositEstimateAmount").textContent = new Intl.NumberFormat("en-GB", {
                 style: "currency", currency: "GBP"
@@ -707,6 +762,7 @@ document.addEventListener("DOMContentLoaded", () => {
     dateCountInput.addEventListener("input", renderEventDays);
     sameDetailsInput.addEventListener("change", renderEventDays);
     paymentChoice.addEventListener("change", updatePricing);
+    rewardCheckbox?.addEventListener('change', updatePricing);
     renderEventDays();
 
     form.addEventListener('native-draft-collect', () => {
@@ -787,14 +843,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!response.ok) throw new Error();
                 const {quote} = await response.json();
                 if (controller.signal.aborted) return;
+                const noPaymentDue = Number(quote.total) === 0 && Number(quote.outstanding) === 0;
+                showNoPaymentOption(noPaymentDue);
+                paymentChoice.disabled = noPaymentDue;
+                if (noPaymentDue) paymentChoice.value = noPaymentOption.value;
                 totalCostOutput.textContent = `£${quote.event_total}`;
+                if (rewardEstimate) rewardEstimate.textContent = `−£${quote.reward_discount}`;
                 travelCharge.textContent = `£${quote.travel}`;
                 bookingTotal.textContent = `£${quote.total}`;
-                outstanding.textContent = `£${quote.outstanding}`;
+                if (outstanding) outstanding.textContent = `£${quote.outstanding}`;
                 depositRow.hidden = quote.deposit == null;
                 if (!depositRow.hidden) depositAmount.textContent = `£${quote.deposit}`;
-                paymentEstimate.textContent = paymentChoice.value === 'No payment required' && Number(quote.outstanding) > 0
-                    ? 'The event has no charge. The outstanding balance includes travel.'
+                paymentEstimate.textContent = !noPaymentDue && !paymentChoice.value
+                    ? 'Choose a payment arrangement for the updated total.'
                     : 'Updated estimate. Save changes to apply these amounts.';
                 result.textContent = quote.notes.join(' ');
                 travelNote.textContent = `Estimated travel charge: £${quote.travel}`;
@@ -892,7 +953,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 `Day ${index+1}: ${day.date}, ${day.start_time}–${day.finish_time} · ${day.event_type} · ${day.event_address} · ${day.publicity_type} · ${day.charge_type}${day.revenue_share_percent ? ' · '+day.revenue_share_percent+'% to organiser' : ''} · Theme: ${day.theme}${day.additional_info ? ' · '+day.additional_info : ''}`), dayList.closest('.booking-section'));
             reviewSection('Payment preference', [value('payment_preference'),
                 adminEdit ? '' : `Estimated event cost: ${totalCostOutput.textContent}. Travel charges are confirmed after review.`,
-                `Referral code: ${value('promo_code') || 'None'}`], paymentChoice.closest('.booking-section'));
+                rewardEstimate && !rewardEstimateRow.hidden ? `30-minute referral reward: ${rewardEstimate.textContent}` : '',
+                referralInput ? `Referral code: ${value('promo_code') || 'None'}` : ''], paymentChoice.closest('.booking-section'));
             reviewSection('Package, extras and travel', [value('booking_package') || 'Standard hourly pricing', [...form.querySelectorAll('[name="booking_extras"]:checked')].map(control=>control.value).join(', ') || 'No extras', travelNote.textContent || 'Travel to be confirmed',value('design_captions')].filter(Boolean),document.getElementById('booking-packages') || document.getElementById('booking-travel-details'));
             const nativeRoot=form.querySelector('[data-native-fields]');
             if (nativeRoot && window.CLFormReviewItems) reviewSection('Additional questions', window.CLFormReviewItems(nativeRoot), nativeRoot);
@@ -903,7 +965,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    referralButton.addEventListener("click", async () => {
+    referralButton?.addEventListener("click", async () => {
         const code = referralInput.value.trim();
         if (!code) {
             referralResult.textContent = "Enter a referral code first.";
@@ -929,7 +991,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    referralInput.addEventListener("input", () => {
+    referralInput?.addEventListener("input", () => {
         referralResult.textContent = "";
         delete referralResult.dataset.status;
     });

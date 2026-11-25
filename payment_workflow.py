@@ -7,11 +7,13 @@ NO_PAYMENT_REQUIRED = 'No payment required'
 PAYMENT_PREFERENCES = ('Full payment', '50% deposit', NO_PAYMENT_REQUIRED)
 
 
-def validate_payment_preference(preference, event_total):
+def validate_payment_preference(preference, total, outstanding=0):
     if preference not in PAYMENT_PREFERENCES:
         raise ValueError('Choose a payment preference.')
-    if preference == NO_PAYMENT_REQUIRED and event_total > 0:
-        raise ValueError('Choose a payment arrangement for bookings with an event charge.')
+    if preference == NO_PAYMENT_REQUIRED and total > 0:
+        raise ValueError('Choose a payment arrangement when the booking total is above £0.')
+    if preference == NO_PAYMENT_REQUIRED and outstanding > 0:
+        raise ValueError('Choose a payment arrangement when there is an outstanding balance.')
 
 
 def payments_allowed(booking):

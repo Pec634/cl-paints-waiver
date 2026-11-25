@@ -1,4 +1,8 @@
 {% set package_list = form_catalog(workflow_options.get('packages',''),'Packages') %}{% set extra_list = form_catalog(workflow_options.get('extras',''),'Extras') %}
+{% if saved_booking_intake %}
+{% if saved_booking_intake.get('package') %}{% set package_list = [saved_booking_intake.package] %}{% endif %}
+{% if saved_booking_intake.get('extras') %}{% set extra_list = saved_booking_intake.extras %}{% endif %}
+{% endif %}
 {% if package_list or extra_list %}<section class="booking-section panel" id="booking-packages"><h2>Choose your package and extras</h2>
 {% if package_list %}<fieldset><legend>Package</legend><div class="native-card-grid"><label class="native-card"><input type="radio" name="booking_package" value="" {% if not form_data.get('booking_package') %}checked{% endif %}>Standard hourly pricing</label>
 {% for package in package_list %}<label class="native-card"><input type="radio" name="booking_package" value="{{ package.name }}" data-price="{{ package.price }}" data-hours="{{ package.hours }}" {% if form_data.get('booking_package')==package.name %}checked{% endif %}>{% if package.get('image') %}<img src="{{ package.image }}" alt="{{ package.name }}" loading="lazy">{% endif %}<strong>{{ package.name }}</strong><span>£{{ package.price }} · {{ package.hours }} hours per event</span><small>{{ package.description }}</small></label>{% endfor %}</div><p>Enter the package duration for each event. Package prices require Client pays and no pitch fee.</p></fieldset>{% endif %}

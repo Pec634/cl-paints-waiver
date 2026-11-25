@@ -149,8 +149,11 @@ def register(app, db, models, Booking, Event, Change, Message, BookingRequest, E
         for change in Change.query.filter_by(booking_id=booking.id).all():
             audit = audits.get(change.id)
             who = audit.actor if admin and audit else ('You' if audit and audit.role == 'client' else 'CL Paints')
-            rows.append(dict(at=change.created_at, label='Booking details updated', actor=who,
-                details='\n'.join(f'{key}: {value["before"]} → {value["after"]}' for key, value in sorted(change.changes.items()))))
+            row = dict(at=change.created_at, label='Booking details updated', actor=who,
+                details='\n'.join(f'{key}: {value["before"]} → {value["after"]}' for key, value in sorted(change.changes.items())))
+            if admin:
+                row['acknowledgement'] = dict(email_sent_at=change.email_sent_at, acknowledged_at=change.acknowledged_at)
+            rows.append(row)
         if admin:
             for audit in Activity.query.filter_by(booking_id=booking.id, change_id=None).all():
                 changes = json.loads(audit.details)

@@ -1,4 +1,5 @@
-"""Booking links to invoices created in SumUp; no automatic payment synchronisation."""
+"""Booking links to invoices created in SumUp and local amount comparisons."""
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import secrets
@@ -33,7 +34,44 @@ def validate_link(value):
     return value
 
 
+def invoice_amount_warnings(invoices, payment):
+    """Compare the latest attached invoice for each purpose with its local amount."""
+    warnings = []
+    seen_purposes = set()
+    for invoice in invoices:
+        if invoice.purpose in seen_purposes:
+            continue
+        seen_purposes.add(invoice.purpose)
+        if invoice.purpose == 'Full payment':
+            expected = payment['total']
+            basis = 'Current booking total'
+        elif invoice.purpose == 'Deposit' and payment['has_plan']:
+            expected = payment['deposit']
+            basis = 'Current scheduled deposit'
+        elif invoice.purpose == 'Balance':
+            paid_before_attachment = sum((entry.amount if entry.kind == 'payment' else -entry.amount
+                                          for entry in payment['entries'] if entry.recorded_at <= invoice.created_at), Decimal(0))
+            expected = max(Decimal(0), payment['total'] - paid_before_attachment)
+            basis = 'Current total less net payments recorded before attachment'
+        else:
+            continue
+        difference = expected - invoice.amount
+        if difference:
+            warnings.append(dict(invoice=invoice, expected=expected, basis=basis, difference=difference))
+    return warnings
+
+
 def register(app, db, Invoice, Booking, admin_required, current_client, schedule):
+    def invoices_by_booking(booking_ids):
+        invoices = defaultdict(list)
+        rows = Invoice.query.filter(Invoice.booking_id.in_(booking_ids)).order_by(Invoice.created_at.desc(), Invoice.id.desc())
+        for invoice in rows:
+            invoices[invoice.booking_id].append(invoice)
+        return invoices
+
+    app.extensions['booking_invoices_by_id'] = invoices_by_booking
+    app.extensions['invoice_amount_warnings'] = invoice_amount_warnings
+
     @app.context_processor
     def invoice_context():
         if request.endpoint not in ('admin_payments', 'client.booking_detail'):
@@ -76,4 +114,7 @@ def register(app, db, Invoice, Booking, admin_required, current_client, schedule
             except (ValueError, InvalidOperation, IntegrityError):
                 db.session.rollback()
                 flash('Could not attach the invoice. Check the number is unique, the amount and date are valid, and the customer link is a secure SumUp URL.', 'error')
-        return render_template('admin_booking_invoices.html', booking=booking, client_csrf=token)
+        payment = app.extensions['payment_summary'](booking)
+        warnings = invoice_amount_warnings(invoices_by_booking([booking_id]).get(booking_id, ()), payment)
+        return render_template('admin_booking_invoices.html', booking=booking, client_csrf=token,
+                               invoice_amount_warnings=warnings)

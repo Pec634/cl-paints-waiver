@@ -1,3 +1,4 @@
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import unittest
 import test_loyalty as fixtures
@@ -41,6 +42,73 @@ class SumUpInvoicesTest(unittest.TestCase):
         for bad in ['NaN', '-1', '0', '1.001']:
             self.fixture.admin.post(self.path, data=dict(self.data, amount=bad))
         self.assertEqual(main.BookingInvoice.query.count(), 0)
+
+    def test_full_invoice_difference_uses_latest_attachment_and_includes_travel(self):
+        admin = self.fixture.admin
+        self.assertEqual(admin.post(self.path, data=dict(self.data, purpose='Full payment', amount='100.00')).status_code, 302)
+        payments = f'/admin/bookings/{self.booking.id}/payments'
+        heading = b'Review SumUp invoice amounts before requesting payment'
+        self.assertNotIn(heading, admin.get(payments).data)
+
+        self.booking.travel_charge = Decimal('20')
+        main.db.session.commit()
+        page = admin.get(payments).data
+        self.assertIn(heading, page)
+        self.assertIn('Full payment invoice INV-101 · Linked amount £100.00'.encode(), page)
+        self.assertIn('Current booking total £120.00, £20.00 higher'.encode(), page)
+        self.assertIn(heading, admin.get(self.path).data)
+        overview = admin.get('/admin/payments?filter=invoice_mismatch').data
+        self.assertIn(b'SumUp invoice amount to review', overview)
+        self.assertIn(self.booking.public_reference.encode(), overview)
+        self.assertNotIn(heading, self.fixture.client.get(f'/client/bookings/{self.booking.id}').data)
+
+        self.assertEqual(admin.post(self.path, data=dict(
+            self.data, reference='INV-102', purpose='Full payment', amount='120.00')).status_code, 302)
+        self.assertNotIn(heading, admin.get(payments).data)
+        self.assertEqual(main.BookingInvoice.query.count(), 2)
+        self.assertNotIn(self.booking.public_reference.encode(), admin.get('/admin/payments?filter=invoice_mismatch').data)
+
+    def test_deposit_invoice_compared_with_payment_schedule_only(self):
+        admin = self.fixture.admin
+        self.assertEqual(admin.post(self.path, data=self.data).status_code, 302)
+        payments = f'/admin/bookings/{self.booking.id}/payments'
+        self.assertNotIn(b'Review SumUp invoice amounts', admin.get(payments).data)
+
+        Plan = main.tool_models[0]
+        plan = Plan(booking_id=self.booking.id, deposit=Decimal('50'))
+        main.db.session.add(plan)
+        main.db.session.commit()
+        self.booking.total_event_cost = Decimal('120')
+        main.db.session.commit()
+        self.assertNotIn(b'Review SumUp invoice amounts', admin.get(payments).data)
+
+        plan.deposit = Decimal('35')
+        main.db.session.commit()
+        page = admin.get(payments).data
+        self.assertIn('Deposit invoice INV-101 · Linked amount £50.00'.encode(), page)
+        self.assertIn('Current scheduled deposit £35.00, £15.00 lower'.encode(), page)
+
+    def test_balance_invoice_ignores_payment_after_attachment(self):
+        admin = self.fixture.admin
+        payments = f'/admin/bookings/{self.booking.id}/payments'
+        Entry = main.tool_models[1]
+
+        def record(amount, token, when):
+            main.db.session.add(Entry(booking_id=self.booking.id, token=token, amount=Decimal(amount),
+                kind='payment', method='Cash', paid_date=date.today(), recorded_at=when))
+            main.db.session.commit()
+
+        record('30', 'balance-deposit', datetime.utcnow() - timedelta(hours=1))
+        self.assertEqual(admin.post(self.path, data=dict(self.data, purpose='Balance', amount='70.00')).status_code, 302)
+        record('70', 'balance-settlement', datetime.utcnow() + timedelta(minutes=1))
+        self.assertNotIn(b'Review SumUp invoice amounts', admin.get(payments).data)
+
+        self.booking.total_event_cost = Decimal('95')
+        main.db.session.commit()
+        page = admin.get(payments).data
+        self.assertIn('Balance invoice INV-101 · Linked amount £70.00'.encode(), page)
+        self.assertIn('Current total less net payments recorded before attachment £65.00, £5.00 lower'.encode(), page)
+        self.assertIn(self.booking.public_reference.encode(), admin.get('/admin/payments?filter=invoice_mismatch').data)
 
     def test_saved_links_appear_in_booking_calendar_and_activity_details(self):
         self.fixture.admin.post(self.path, data=self.data)

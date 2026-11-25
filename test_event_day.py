@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from unittest.mock import patch
 import test_business_tools as fixtures
@@ -41,6 +41,58 @@ class EventDayTest(unittest.TestCase):
         self.assertNotIn(b'waiver', private_card)
         booking.status='Cancelled'; main.db.session.commit()
         self.assertNotIn(b'Private party', self.admin.get('/admin/event-day').data)
+
+    def test_upcoming_booking_shows_latest_booking_check_with_equipment_permission(self):
+        Category, _, Entry, BookingCheck = main.equipment_models
+        booking = self.fixture.booking
+        booking.status = 'Accepted'
+        booking.event_date = self.today + timedelta(days=2)
+        day = f'/admin/event-day?date={booking.event_date.isoformat()}'
+        category = Category(name='Private parties', name_key='private parties')
+        main.db.session.add_all([
+            category,
+            Entry(category_name=category.name, recorded_by='Defaults editor',
+                  recorded_at=datetime(2026, 7, 1, 9), needed=['Paints'], not_needed=[]),
+        ])
+        main.db.session.commit()
+        self.assertIn(b'Equipment checklist not saved', self.admin.get(day).data)
+
+        other_category = Category(name='Other category', name_key='other category')
+        first = Entry(category_name=other_category.name, recorded_by='Earlier checker',
+                      recorded_at=datetime(2026, 7, 1, 9, 10), needed=[], not_needed=[])
+        latest = Entry(category_name=category.name, recorded_by='Latest checker',
+                       recorded_at=datetime(2026, 7, 1, 9, 15), needed=[], not_needed=[])
+        main.db.session.add_all([other_category, first, latest])
+        main.db.session.flush()
+        for entry, group in ((first, other_category), (latest, category)):
+            main.db.session.add(BookingCheck(entry_id=entry.id, booking_id=booking.id,
+                                              category_id=group.id, booking_label=booking.public_reference,
+                                              needed_ids=[]))
+        staff = main.app.extensions['pos_access'].Staff(
+            username='event-day-viewer', name='Event-day viewer', role='cashier', password_hash='unused',
+            permissions_json='["event_day"]')
+        main.db.session.add(staff)
+        main.db.session.commit()
+        page = self.admin.get(day).data
+        self.assertIn(b'Equipment checklist saved', page)
+        self.assertIn(b'Latest check for Private parties by <strong>Latest checker</strong>', page)
+        self.assertIn(b'01 Jul 2026, 10:15 BST', page)
+        self.assertIn(f'/admin/equipment?booking={booking.id}&amp;category={category.id}'.encode(), page)
+        self.assertNotIn(b'Earlier checker', page)
+        self.assertNotIn(b'Defaults editor', page)
+
+        staff_client = main.app.test_client()
+        now = datetime.now(timezone.utc).timestamp()
+        with staff_client.session_transaction() as state:
+            state.update(pos_staff_id=staff.id, pos_signed_in_at=now, pos_last_activity=now)
+        restricted = staff_client.get(day)
+        self.assertEqual(restricted.status_code, 200)
+        self.assertNotIn(b'Latest checker', restricted.data)
+        self.assertNotIn(b'Equipment checklist saved', restricted.data)
+
+        staff.permissions_json = '["event_day", "equipment"]'
+        main.db.session.commit()
+        self.assertIn(b'Latest checker', staff_client.get(day).data)
 
     def test_staff_rota_is_loaded_only_when_requested(self):
         main.db.session.add(main.BusinessSetting(key='connecteam_scheduler_id', value='123')); main.db.session.commit()

@@ -2,7 +2,7 @@
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from urllib.parse import urlencode
-from flask import abort, render_template, request
+from flask import abort, render_template, request, session
 from connecteam_rota import api
 
 
@@ -25,6 +25,10 @@ def register(app, db, Event, Booking, Waiver, Setting, loyalty_models, schedule,
                 if event.get('date') == selected.isoformat():
                     day_bookings[(booking.id, index + 1)] = (booking, event)
                     booking_rows.append(dict(booking=booking, event=event, event_index=index))
+        can_view_equipment = (not session.get('pos_staff_id')
+                              or app.extensions['pos_access'].allowed('admin_equipment'))
+        equipment_checks = app.extensions['latest_booking_equipment_checks'](
+            {row['booking'].id for row in booking_rows}) if can_view_equipment else {}
         corrections = app.extensions['loyalty_correction_model']
         for event in Event.query.filter_by(event_date=selected).order_by(Event.name).all():
             if event.booking_id and (event.booking_id, event.booking_day_number) not in day_bookings:
@@ -54,4 +58,5 @@ def register(app, db, Event, Booking, Waiver, Setting, loyalty_models, schedule,
                 except (ValueError, TypeError, KeyError, OverflowError):
                     rota_error = 'Staff rota could not be loaded. Open Staff rota to check the connection.'
         return render_template('admin_event_day.html', selected=selected, today=today, rows=rows, bookings=booking_rows,
-                               shifts=shifts, rota_error=rota_error, rota_loaded=rota_loaded)
+                               shifts=shifts, rota_error=rota_error, rota_loaded=rota_loaded,
+                               can_view_equipment=can_view_equipment, equipment_checks=equipment_checks)

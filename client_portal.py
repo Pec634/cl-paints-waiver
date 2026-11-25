@@ -296,7 +296,8 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     @portal.get('/rewards')
     @client_required
     def rewards(account):
-        return render_template('client/rewards.html', rewards=owned_rewards(account))
+        return render_template('client/rewards.html', rewards=owned_rewards(account),
+                               booking_reward_history=app.extensions['booking_reward_history'](account))
 
     @portal.route('/account', methods=['GET', 'POST'])
     @client_required

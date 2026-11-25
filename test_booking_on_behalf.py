@@ -1,10 +1,21 @@
 import json
 import unittest
+from datetime import date, timedelta
 from unittest.mock import patch
 import test_business_tools as fixtures
 from booking_on_behalf import pending_agreement
+from rewards import execute
 
 main = fixtures.main
+
+
+def activate_referral(code):
+    today = date.today()
+    execute('''
+        INSERT INTO referrals (customer_name, code, original_event_date, expires_date, status)
+        VALUES (:name, :code, :starts, :expires, :status)
+    ''', dict(name='Referral owner', code=code, starts=(today - timedelta(days=1)).isoformat(),
+              expires=(today + timedelta(days=1)).isoformat(), status='active'))
 
 
 class OnBehalfTest(unittest.TestCase):
@@ -33,7 +44,7 @@ class OnBehalfTest(unittest.TestCase):
         self.assertIn(b'<option value="No payment required"', self.admin.get(self.path).data)
         form = dict(self.form(), payment_preference='No payment required')
         invalid = self.admin.post(self.path, data=form)
-        self.assertIn(b'Choose a payment arrangement for bookings with an event charge.', invalid.data)
+        self.assertIn('Choose a payment arrangement when the booking total is above £0.'.encode(), invalid.data)
         schedule = json.loads(form['event_schedule'])
         schedule['events'][0]['charge_type'] = 'Customers'
         form['event_schedule'] = json.dumps(schedule)
@@ -105,6 +116,51 @@ class OnBehalfTest(unittest.TestCase):
     def test_generic_admin_form_posts_to_admin_route(self):
         page = self.admin.get(self.path)
         self.assertIn(b'action="/admin/bookings/new"', page.data)
+
+    def test_staff_cannot_apply_referral_and_client_can_supply_it_when_signing(self):
+        code = 'AbC23'
+        activate_referral(code)
+        self.assertNotIn(b'name="promo_code"', self.admin.get(self.path).data)
+        with patch.object(main, 'send_client_email', return_value=True):
+            response = self.admin.post(self.path, data=dict(self.form(), promo_code=code))
+        self.assertEqual(response.status_code, 302)
+        booking = main.Booking.query.order_by(main.Booking.id.desc()).first()
+        self.assertIsNone(booking.promo_code)
+        self.assertIsNone(main.db.session.get(main.ReferralCodeUse, code))
+
+        editor = self.admin.get(f'/admin/bookings/{booking.id}/edit')
+        self.assertEqual(editor.status_code, 200)
+        self.assertNotIn(b'name="promo_code"', editor.data)
+
+        detail = f'/client/bookings/{booking.id}'
+        self.assertIn(b'name="promo_code"', self.client.get(detail).data)
+        path = detail + '/agree'
+        with patch.object(main, 'send_client_email', return_value=True):
+            invalid = self.client.post(path, data=dict(self.agreement(booking), promo_code='Bad23'))
+            self.assertEqual(invalid.status_code, 302)
+            self.assertTrue(pending_agreement(booking))
+            self.assertIsNone(booking.promo_code)
+            valid = self.client.post(path, data=dict(self.agreement(booking), promo_code=code))
+        self.assertEqual(valid.status_code, 302)
+        self.assertFalse(pending_agreement(booking))
+        self.assertEqual(booking.promo_code, code)
+        self.assertTrue(booking.referral_verified)
+        self.assertIsNotNone(main.db.session.get(main.ReferralCodeUse, code))
+
+    def test_public_form_can_claim_a_valid_referral_code(self):
+        code = 'AbC23'
+        activate_referral(code)
+        self.assertIn(b'name="promo_code"', self.client.get('/booking').data)
+        with self.client.session_transaction() as session:
+            csrf = session['client_csrf']
+        form = dict(self.form(), csrf_token=csrf, promo_code=code, signature='Test Client',
+                    is_over_18='yes', liability_acknowledged='yes', terms_accepted='yes')
+        with patch.object(main, 'send_booking_request_confirmation', return_value=True):
+            response = self.client.post('/booking', data=form)
+        self.assertEqual(response.status_code, 302)
+        booking = main.Booking.query.filter_by(promo_code=code).one()
+        self.assertTrue(booking.referral_verified)
+        self.assertIsNotNone(main.db.session.get(main.ReferralCodeUse, code))
 
     def test_completion_displays_ready_to_share_link_and_qr(self):
         import re

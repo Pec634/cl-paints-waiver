@@ -84,10 +84,15 @@ def validate_options(data):
     return result
 
 
-def booking_options(settings, data, events, hourly_total):
+def booking_options(settings, data, events, hourly_total, *, saved_intake=None):
     """Authoritative package/extra pricing; posted estimates are never trusted."""
     packages = catalog(settings.get('packages',''),'Packages')
     extras = catalog(settings.get('extras',''),'Extras')
+    if saved_intake:
+        if saved_intake.get('package'):
+            packages = [saved_intake['package']]
+        if saved_intake.get('extras'):
+            extras = saved_intake['extras']
     selected = data.get('booking_package','')
     package = next((row for row in packages if row['name'] == selected),None)
     if selected and not package: raise ValueError('Choose a listed package.')

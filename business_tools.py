@@ -75,6 +75,7 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
         total = booking.total_event_cost + booking.travel_charge
         paid = sum((e.amount if e.kind == 'payment' else -e.amount for e in entries), Decimal(0))
         return dict(total=total, paid=paid, outstanding=max(Decimal(0), total-paid), credit=max(Decimal(0), paid-total),
+            has_plan=plan is not None,
             deposit=plan.deposit if plan else Decimal(0), deposit_due=plan.deposit_due if plan else None,
             balance_due=plan.balance_due if plan else None, entries=entries)
     def payment_fields(booking):
@@ -156,28 +157,37 @@ def register_tools(app, db, models, Booking, Account, Enquiry, Participant, loya
                 flash(str(error) if not isinstance(error, IntegrityError) else 'This payment was already recorded.', 'error')
         token = secrets.token_urlsafe(32)
         session[f'payment_entry_{booking.id}'] = token
-        return render_template('admin_payments.html',booking=booking,payment=summary(booking),client_csrf=csrf(),entry_token=token,today=datetime.now(ZoneInfo('Europe/London')).date())
+        payment = summary(booking)
+        invoices = app.extensions['booking_invoices_by_id']([booking_id]).get(booking_id, ())
+        warnings = app.extensions['invoice_amount_warnings'](invoices, payment)
+        return render_template('admin_payments.html', booking=booking, payment=payment, client_csrf=csrf(),
+            entry_token=token, today=datetime.now(ZoneInfo('Europe/London')).date(), invoice_amount_warnings=warnings)
 
     @app.get('/admin/payments')
     @admin_required
     def payments_overview():
         today = datetime.now(ZoneInfo('Europe/London')).date()
         selected = request.args.get('filter', 'outstanding')
-        if selected not in ('all','outstanding','deposit','overdue'): abort(400)
+        if selected not in ('all','outstanding','deposit','overdue','invoice_mismatch'): abort(400)
         rows = []
         totals = dict(received=Decimal(0), outstanding=Decimal(0), deposits=Decimal(0), overdue=Decimal(0))
-        for booking in Booking.query.order_by(Booking.submitted_at.desc()).all():
+        bookings = Booking.query.order_by(Booking.submitted_at.desc()).all()
+        invoices = app.extensions['booking_invoices_by_id']([booking.id for booking in bookings])
+        for booking in bookings:
             payment = summary(booking)
             active = booking.status in ('Accepted', 'Under Review', 'Awaiting Payment')
             remaining = min(payment['outstanding'], max(Decimal(0), payment['deposit']-payment['paid'])) if active else Decimal(0)
             deposit_due = bool(remaining and payment['deposit_due'] and payment['deposit_due'] <= today)
             overdue = active and payment['outstanding'] > 0 and bool(payment['balance_due']) and payment['balance_due'] < today
+            warnings = app.extensions['invoice_amount_warnings'](invoices.get(booking.id, ()), payment) if active else []
             totals['received'] += payment['paid']
             if active: totals['outstanding'] += payment['outstanding']
             if deposit_due: totals['deposits'] += remaining
             if overdue: totals['overdue'] += payment['outstanding']
-            match = selected == 'all' or (selected == 'outstanding' and active and payment['outstanding'] > 0) or (selected == 'deposit' and deposit_due) or (selected == 'overdue' and overdue)
-            if match: rows.append(dict(booking=booking, payment=payment, deposit_remaining=remaining, overdue=overdue, deposit_due=deposit_due))
+            match = selected == 'all' or (selected == 'outstanding' and active and payment['outstanding'] > 0) or (selected == 'deposit' and deposit_due) or (selected == 'overdue' and overdue) or (selected == 'invoice_mismatch' and warnings)
+            if match:
+                rows.append(dict(booking=booking, payment=payment, deposit_remaining=remaining, overdue=overdue,
+                                 deposit_due=deposit_due, invoice_amount_warnings=warnings))
         return render_template('admin_payments_overview.html', rows=rows, totals=totals, selected=selected)
 
     def calendar_rows():

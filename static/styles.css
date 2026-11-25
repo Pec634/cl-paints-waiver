@@ -723,6 +723,10 @@
     display: none;
 }
 
+#bookingRewardOption[hidden] {
+    display: none;
+}
+
 .availability-check-panel {
     margin-top: 22px;
     padding: 20px;

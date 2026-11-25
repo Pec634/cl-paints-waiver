@@ -76,10 +76,15 @@ def save_revision(app, db, booking, revised, account, Request, Enquiry, schedule
             if field in old:
                 day[field] = old[field]
     # Only fields accepted and validated by the public booking handler are copied.
-    # Preserve staff notes, travel charges, payment records and referral claims.
+    # Preserve staff notes, travel charges, payment records and existing referral claims.
     for field in EDITABLE_FIELDS:
         setattr(booking, field, getattr(revised, field))
+    if not booking.promo_code and revised.promo_code:
+        booking.promo_code = revised.promo_code
+        booking.referral_verified = revised.referral_verified
     previous.update({key: updated[key] for key in ('events', 'same_details', 'intake_options', 'booking_legal', 'pricing_rules')})
+    if updated.get('booking_reward'):
+        previous['booking_reward'] = True
     previous['billing_address'] = address
     if previous.get('on_behalf'):
         terms = app.jinja_env.get_template('_booking_legal_text.html').render(business_settings=settings)

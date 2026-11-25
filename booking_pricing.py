@@ -1,7 +1,7 @@
 """One server-side calculation for review-stage price previews and saves."""
 from copy import deepcopy
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from booking_import import normalize_time
 
 
@@ -13,6 +13,41 @@ def money(value, label):
         return amount.quantize(Decimal('.01'))
     except (ValueError, InvalidOperation):
         raise ValueError(f'Enter a valid non-negative {label}.')
+
+
+def _reward_day(events):
+    if any(str(day.get('publicity_type', '')).strip().casefold() != 'private' for day in events):
+        return None
+    return next((day for day in events
+                 if str(day.get('charge_type', '')).strip().casefold() == 'client'
+                 and str(day.get('pitch_fee_required', '')).strip().casefold() not in ('yes', 'true', '1')
+                 and money(day.get('estimated_cost'), 'event cost') > 0), None)
+
+
+def reward_eligible(events):
+    """An entirely private booking needs a positive face-painting charge to qualify."""
+    return _reward_day(events) is not None
+
+
+def apply_half_hour_reward(events, hourly_rate, package=None):
+    """Apply the value of 30 minutes to one eligible event's gross painting charge."""
+    for event in events:
+        event.pop('reward_discount', None)
+    day = _reward_day(events)
+    if day is None:
+        return Decimal('0.00')
+    cost = money(day['estimated_cost'], 'event cost')
+    if package:
+        hours = money(package.get('hours'), 'package duration')
+        if hours <= 0:
+            raise ValueError('The package duration must be greater than zero.')
+        rate = money(package.get('price'), 'package price') / hours
+    else:
+        rate = money(hourly_rate, 'hourly rate')
+    discount = min(cost, (rate / 2).quantize(Decimal('.01'), rounding=ROUND_HALF_UP))
+    day['estimated_cost'] = str(cost - discount)
+    day['reward_discount'] = str(discount)
+    return discount
 
 
 def pricing_key(day):
@@ -36,6 +71,7 @@ def calculate(booking, raw_events, original_events, data, settings, payment_pref
         original_index = raw.get('_original_index')
         old = original_events[original_index] if type(original_index) is int and 0 <= original_index < len(original_events) else {}
         day = dict(old, **raw)
+        day.pop('reward_discount', None)
         day['start_time'] = normalize_time(raw.get('start_time', ''))
         day['finish_time'] = normalize_time(raw.get('finish_time', ''))
         start = datetime.strptime(day['start_time'], '%H:%M')
@@ -90,6 +126,11 @@ def calculate(booking, raw_events, original_events, data, settings, payment_pref
         notes.append('Priced extras no longer apply because an event is not Client pays without a pitch fee.')
     extras_total = sum((money(extra['price'], 'extra price') for extra in extras), Decimal(0))
     intake['extras_total'] = str(extras_total)
+    reward_discount = Decimal('0.00')
+    if data.get('booking_reward'):
+        if not reward_eligible(events):
+            raise ValueError('This booking has an attached referral reward. Keep every event private and include a paid face-painting day, or remove the reward before changing these details.')
+        reward_discount = apply_half_hour_reward(events, rules['hourly_rate'], intake.get('package'))
     event_total = sum((Decimal(day['estimated_cost']) for day in events), Decimal(0)) + extras_total
     remaining = Decimal(rules['travel_cap']); travel = Decimal(0)
     for day in events:
@@ -110,6 +151,7 @@ def calculate(booking, raw_events, original_events, data, settings, payment_pref
     if total > Decimal('99999999.99'):
         raise ValueError('The booking total is too large.')
     quote = dict(event_total=f'{event_total:.2f}', travel=f'{travel:.2f}', total=f'{total:.2f}',
+        reward_discount=f'{reward_discount:.2f}',
         extras=f'{extras_total:.2f}', pitch_cost=f'{sum((money(day.get("pitch_fee_amount"), "pitch fee") for day in events), Decimal(0)):.2f}',
         deposit=f'{(total / 2).quantize(Decimal(".01")):.2f}' if payment_preference == '50% deposit' else None,
         outstanding=f'{max(Decimal(0), total - Decimal(paid)):.2f}', rate=str(rules['hourly_rate']),

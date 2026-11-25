@@ -7,6 +7,9 @@
 <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
 <input type="hidden" name="booking_version" value="{{ agreement_version }}">
 <input type="hidden" name="terms_hash" value="{{ agreement_terms_hash }}">
+{% if not booking.promo_code %}
+<p><label>Referral code (optional) <input name="promo_code" maxlength="100" autocomplete="off"></label></p>
+{% endif %}
 <p><label><input type="checkbox" name="is_over_18" value="yes" required> I confirm I am aged 18 or over and authorised to make this booking.</label></p>
 <p><label><input type="checkbox" name="liability_acknowledged" value="yes" required> I have read and acknowledge the liability statement.</label></p>
 <p><label><input type="checkbox" name="terms_accepted" value="yes" required> I agree to the CL Paints booking terms and conditions for this booking.</label></p>

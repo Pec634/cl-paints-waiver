@@ -2,6 +2,7 @@
 {% block content %}
 <h1>Attach SumUp invoice</h1>
 <p>{{ booking.public_reference }} · {{ booking.first_name }} {{ booking.last_name }}</p>
+{% include '_invoice_amount_warnings.html' %}
 <section class="panel">
 <h2>Invoice recipient</h2>
 <p>{{ booking.first_name }} {{ booking.last_name }} · {{ booking.email }}</p>

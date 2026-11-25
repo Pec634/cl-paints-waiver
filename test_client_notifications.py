@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 import test_client_portal as portal_tests
+from client_booking_edit import history_time
 from client_notifications import EMAIL_DEFAULTS
 main = portal_tests.main
 Change, Notice = main.notification_models
@@ -41,11 +42,27 @@ class NotificationsTest(unittest.TestCase):
         self.assertIn(b'Your booking has been updated', detail.data)
         self.assertIn(b'client-field-updated', detail.data)
         change = Change.query.one()
+        self.assertIsNotNone(change.email_sent_at)
+        self.assertGreaterEqual(change.email_sent_at, Notice.query.one().created_at)
+        activity = f'/admin/bookings/{self.booking.id}/activity'
+        before = self.admin.get(activity)
+        self.assertIn(b'Update email sent', before.data)
+        self.assertIn(history_time(change.email_sent_at).encode(), before.data)
+        self.assertIn(b'Awaiting client acknowledgement', before.data)
+        other = self.fixture.booking('other@example.com')
+        filtered = self.admin.get('/admin/bookings?filter=acknowledgement')
+        self.assertIn(b'Awaiting client acknowledgement (1)', filtered.data)
+        self.assertIn(f'id="booking-{self.booking.id}"'.encode(), filtered.data)
+        self.assertNotIn(f'id="booking-{other.id}"'.encode(), filtered.data)
         target = f'/client/bookings/{self.booking.id}/acknowledge-updates'
         self.assertEqual(self.client.post(target, data={}).status_code, 400)
         self.client.post(target, data={'csrf_token':self.fixture.csrf(), 'change_id':change.id})
         self.assertNotIn(b'Your booking has been updated', self.client.get(f'/client/bookings/{self.booking.id}').data)
         self.assertIsNotNone(Change.query.one().acknowledged_at)
+        after = self.admin.get(activity)
+        self.assertIn(history_time(change.acknowledged_at).encode(), after.data)
+        self.assertNotIn(b'Awaiting client acknowledgement', after.data)
+        self.assertIn(b'Awaiting client acknowledgement (0)', self.admin.get('/admin/bookings?filter=acknowledgement').data)
 
     def test_status_updates_and_failed_email_preserve_booking(self):
         with patch.object(main, 'send_client_email', return_value=False):
@@ -53,6 +70,8 @@ class NotificationsTest(unittest.TestCase):
         self.assertIn('status_email=failed', response.location)
         self.assertEqual(self.booking.status, 'Awaiting Payment')
         self.assertFalse(Notice.query.one().email_sent)
+        self.assertIsNone(Change.query.one().email_sent_at)
+        self.assertIn(b'No send time recorded', self.admin.get(f'/admin/bookings/{self.booking.id}/activity').data)
         self.assertIn('Status', Change.query.one().changes)
         self.assertIn(b'Reviewed &amp; awaiting payment', self.client.get(f'/client/bookings/{self.booking.id}').data)
         self.update(action='decline')

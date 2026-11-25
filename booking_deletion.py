@@ -61,6 +61,8 @@ def register(app, db, Booking, admin_required):
             return redirect(url_for('admin_bookings', deletion_error=reason))
         reference = booking.public_reference
         try:
+            app.extensions['release_booking_reward'](booking, deleted=True)
+            db.session.flush()
             # Keep import receipts/batches for duplicate detection without a broken FK.
             receipts = db.metadata.tables['record_import_receipt']
             db.session.execute(receipts.update().where(receipts.c.booking_id == booking.id).values(booking_id=None))

@@ -68,7 +68,9 @@ class BookingEditTest(unittest.TestCase):
                 assert(form.querySelector('#booking-travel-estimate').textContent.includes('£20.00'), 'travel total did not update');
                 assert(form.querySelector('#adminTravelCharge').textContent === '£20.00', 'payment travel did not update');
                 assert(form.querySelector('#adminBookingTotal').textContent === '£120.00', 'payment total did not update');
-                assert(form.querySelector('#adminOutstandingBalance').textContent === '£120.00', 'outstanding balance did not update');
+                assert(!form.elements.payment_preference.querySelector('[value="No payment required"]'),
+                    'positive booking total should hide the no-payment option');
+                assert(!form.querySelector('#adminOutstandingBalance'), 'unconfirmed booking should show the total only');
                 assert(!form.querySelector('#depositEstimateRow').hidden && form.querySelector('#depositEstimateAmount').textContent === '£60.00',
                     'deposit did not include travel');
                 assert(form.checkValidity(), 'saved booking should be ready to review');
@@ -92,6 +94,10 @@ class BookingEditTest(unittest.TestCase):
             event_schedule=json.dumps({'events': events})))
         self.assertEqual(quote.json['quote']['travel'], '20.00')
         self.assertEqual(quote.json['quote']['deposit'], '60.00')
+        events[0]['charge_type'] = 'Customers'
+        travel_only = dict(row, payment_preference='No payment required', event_schedule=json.dumps({'events': events}))
+        self.assertEqual(self.admin.post(self.path, data=dict(travel_only, action='quote')).json['quote']['total'], '20.00')
+        self.assertEqual(self.admin.post(self.path, data=travel_only).status_code, 400)
         with patch.object(main, 'send_client_email', return_value=True):
             self.assertEqual(self.admin.post(self.path, data=row).status_code, 302)
         self.assertEqual(self.booking.theme, 'Space')
@@ -101,6 +107,57 @@ class BookingEditTest(unittest.TestCase):
         stale = self.admin.post(self.path, data=row)
         self.assertEqual(stale.status_code, 409)
         self.assertIn(f'name="booking_version" value="{data["version"]}"'.encode(), stale.data)
+
+    def test_admin_editor_selects_and_saves_no_payment_when_total_and_balance_are_zero(self):
+        self.booking.status = 'Accepted'
+        self.booking.charge_type = 'Customers'
+        self.booking.total_event_cost = Decimal(0)
+        self.booking.travel_charge = Decimal(0)
+        self.booking.payment_preference = '50% deposit'
+        main.db.session.commit()
+
+        page = self.admin.get(self.path)
+        self.assertIn(b'<option value="No payment required" selected>', page.data)
+        if EDGE.is_file():
+            BrowserChecks.browser(self, page.data, '''
+                const form = document.querySelector('.booking-form');
+                const preference = form.elements.payment_preference;
+                const miles = form.querySelector('[data-event-field="travel_miles"]');
+                const depositRow = document.querySelector('#depositEstimateRow');
+                const assertFree = () => {
+                    assert(preference.value === 'No payment required' && preference.disabled, 'zero should select no payment');
+                    assert(depositRow.hidden, 'free bookings should hide the deposit estimate');
+                };
+                assertFree();
+                window.fetch = async (url, options) => {
+                    const schedule = JSON.parse(options.body.get('event_schedule'));
+                    const charge = schedule.events[0].travel_miles === '30' ? '20.00' : '0.00';
+                    return Response.json({quote: {event_total: '0.00', total: charge, travel: charge, outstanding: '0.00',
+                        deposit: null, days: [{travel: charge}], notes: []}});
+                };
+                miles.value = '30';
+                change(miles);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                assert(!preference.disabled && !preference.value, 'a positive total should prompt for payment preference');
+                assert(!preference.querySelector('[value="No payment required"]'), 'a zero balance alone should not allow the option');
+                miles.value = '0';
+                change(miles);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                assertFree();
+            ''', 1100)
+
+        data, headers = self.payload()
+        row = data['rows'][0]
+        row['events'][0].update(charge_type='Customers', travel_miles='0')
+        quote = self.admin.post(self.path, headers=headers, json=dict(data, action='quote')).json['quote']
+        self.assertEqual((quote['total'], quote['outstanding'], quote['deposit']), ('0.00', '0.00', None))
+
+        form = dict(row, csrf_token=headers['X-Import-Token'], booking_version=data['version'],
+                    event_schedule=json.dumps({'events': row['events']}))
+        form.pop('payment_preference')
+        with patch.object(main, 'send_client_email', return_value=True):
+            self.assertEqual(self.admin.post(self.path, data=form).status_code, 302)
+        self.assertEqual(self.booking.payment_preference, 'No payment required')
 
     def test_edits_update_portal_notifications_and_audit_and_preserve_consent(self):
         data, headers = self.payload()
@@ -160,6 +217,7 @@ class BookingEditTest(unittest.TestCase):
         account = main.ClientAccount.query.filter_by(email=self.booking.email).one()
         main.db.session.add(main.ClientEmailPreference(client_id=account.id, booking_updates=False))
         main.db.session.commit()
+        self.assertIn(b'id="adminOutstandingBalance"', self.admin.get(self.path).data)
         data, headers = self.payload()
         data['rows'][0]['events'][0]['theme'] = 'Updated theme'
         with patch.object(main, 'send_client_email', return_value=True) as send:

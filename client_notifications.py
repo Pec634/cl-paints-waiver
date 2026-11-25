@@ -7,6 +7,8 @@ from decimal import Decimal
 from string import Formatter
 from flask import abort, current_app, redirect, request, session, url_for, has_app_context, g
 import secrets
+from sqlalchemy import inspect
+
 EMAIL_KINDS = ('booking', 'reward', 'portal_enquiry', 'website_enquiry')
 BOOKING_ACKNOWLEDGEMENT = "Please open your booking and select ‘I've reviewed these updates’ to acknowledge these changes."
 
@@ -55,6 +57,7 @@ def define_notification_models(db):
         booking_id = db.Column(db.Integer, db.ForeignKey('booking.id'), nullable=False, index=True)
         changes_json = db.Column(db.Text, nullable=False)
         created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+        email_sent_at = db.Column(db.DateTime)
         acknowledged_at = db.Column(db.DateTime)
         @property
         def changes(self):
@@ -70,6 +73,12 @@ def define_notification_models(db):
         email_sent = db.Column(db.Boolean, nullable=False, default=False)
     return BookingChange, ClientNotification
 
+def ensure_notification_schema(db):
+    with db.engine.begin() as connection:
+        columns = inspect(connection).get_columns('booking_change')
+        if not any(column['name'] == 'email_sent_at' for column in columns):
+            connection.exec_driver_sql('ALTER TABLE booking_change ADD COLUMN email_sent_at TIMESTAMP')
+
 def define_read_model(db):
     class NotificationRead(db.Model):
         client_id = db.Column(db.Integer, db.ForeignKey('client_account.id'), primary_key=True)
@@ -77,10 +86,15 @@ def define_read_model(db):
     return NotificationRead
 
 def booking_snapshot(booking, schedule):
+    from booking_rewards import reward_discount
+
     result = {'Status': booking.status, 'Travel charge': f'£{booking.travel_charge:.2f}',
         'Estimated event cost': f'£{booking.total_event_cost:.2f}',
         'Estimated total': f'£{booking.total_event_cost + booking.travel_charge:.2f}',
-        'Payment preference': booking.payment_preference}
+        'Payment preference': booking.payment_preference, 'Referral code': booking.promo_code or 'None'}
+    discount = reward_discount(booking)
+    if discount:
+        result['30-minute referral reward'] = f'£{discount:.2f} off face painting'
     for field, label in [('client_type','Client type'), ('title','Title'), ('job_title','Job title'), ('business_name','Business name'),
                          ('first_name','First name'), ('last_name','Last name'), ('date_of_birth','Date of birth'),
                          ('is_over_18','Age 18 or over'), ('ethnicity','Ethnicity'), ('ethnicity_detail','Ethnic background'),
@@ -150,14 +164,14 @@ def render_notification(config, name, kind, reference, details, link, preview=Fa
 
 def register_notifications(app, db, models, Booking, Account, Owner, current_client, settings, send):
     Change, Notice = models
-    def notify(email, name, kind, reference, details, link, essential=False):
+    def notify(email, name, kind, reference, details, link, essential=False, booking_change=None):
         config = settings()
         subject, body, footer, message = render_notification(config, name, kind, reference, details, link)
         notice = Notice(email=email, kind=kind, reference=reference, details=details)
         db.session.add(notice)
         db.session.commit()
-        return deliver(notice, name, link, essential)
-    def deliver(notice, name, link, essential=False):
+        return deliver(notice, name, link, essential, booking_change)
+    def deliver(notice, name, link, essential=False, booking_change=None):
         email, kind = notice.email, notice.kind
         config = settings()
         subject, body, footer, message = render_notification(config, name, kind, notice.reference, notice.details, link)
@@ -174,6 +188,8 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
         except Exception:
             app.logger.exception('Client notification email failed; portal notification is saved')
             notice.email_sent = False
+        if notice.email_sent and booking_change is not None:
+            booking_change.email_sent_at = datetime.utcnow()
         db.session.commit()
         return notice.email_sent if enabled else None
     app.extensions['client_notification_model'] = Notice
@@ -184,13 +200,15 @@ def register_notifications(app, db, models, Booking, Account, Owner, current_cli
                    for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
         if not changes:
             return None
-        db.session.add(Change(booking_id=booking.id, changes_json=json.dumps(changes)))
+        booking_change = Change(booking_id=booking.id, changes_json=json.dumps(changes))
+        db.session.add(booking_change)
         details = '\n'.join(f'{key}: {value["before"]} → {value["after"]}' for key, value in changes.items())
         if request_acknowledgement:
             details += '\n\n' + BOOKING_ACKNOWLEDGEMENT
         return notify(booking.email, booking.first_name, 'booking', booking.public_reference, details,
                       url_for('client.booking_detail', booking_id=booking.id, _external=True),
-                      essential=request_acknowledgement or 'Status' in changes or before.get('Status') == 'Under Review')
+                      essential=request_acknowledgement or 'Status' in changes or before.get('Status') == 'Under Review',
+                      booking_change=booking_change)
     def reward(email, name, reference, details):
         return notify(email, name, 'reward', reference, details, url_for('client.rewards', _external=True))
     def reward_code(code, details):
