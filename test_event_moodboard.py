@@ -100,11 +100,15 @@ class EventMoodboardTest(unittest.TestCase):
         config = SimpleNamespace(cloud_name=None, api_key=None, api_secret=None)
         with patch.object(main.cloudinary, 'config', return_value=config), patch.object(main.cloudinary.uploader, 'upload') as upload:
             response = self.client.post('/admin/moodboard/upload', data={
-                'images': [(buffer, 'Test-design.png'), (BytesIO(b'invalid'), 'broken.png')],
+                'images': [(buffer, 'Test-design.png'), (BytesIO(content), 'renamed-copy.png'), (BytesIO(b'invalid'), 'broken.png')],
                 'design_type': 'small',
             }, follow_redirects=True)
         upload.assert_not_called()
         self.assertIn(b'1 image(s) could not be uploaded', response.data)
+        self.assertIn(b'Uploaded 1 image(s)', response.data)
+        self.assertIn(b'Skipped 1 duplicate image(s)', response.data)
+        self.assertIn(b'aria-label="Preview Test design"', response.data)
+        self.assertIsNone(main.MoodboardImage.query.filter_by(title='renamed copy').first())
         image = main.MoodboardImage.query.filter_by(title='Test design').one()
         image_id, image_url = image.id, image.image_url
         main.db.session.add(main.EventMoodboardImage(event_id=self.event.id, image_id=image_id))

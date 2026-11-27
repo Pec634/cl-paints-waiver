@@ -1,0 +1,23 @@
+﻿{% extends 'base.html' %}
+{% block title %}Live event till summary | CL Paints{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static', filename='pos.css') }}">
+<div class="admin">
+  {% include '_pos_sidebar.html' %}
+  <main id="portal-main">
+    <h1>Live public event till summary</h1>
+    <p>These figures are live. The event summary is recorded when you close the reconciled day.</p>
+    <p><a class="btn" href="{{ url_for('pos_home') }}">Back to till</a>
+       <a class="btn" href="{{ url_for('pos_reconcile', date=day.isoformat()) }}">Day-end reconciliation</a></p>
+    <form method="get" class="client-action-row">
+      <label>Date <input name="date" type="date" value="{{ day.isoformat() }}" required></label>
+      <button class="btn">Refresh totals</button>
+    </form>
+    {% for event in events %}
+      <section><h2>{{ event.name }}</h2>
+      {% with pos_summary=event.ledger %}{% include '_pos_ledger_summary.html' %}{% endwith %}
+      </section>
+    {% else %}<p>No public events are scheduled for this date.</p>{% endfor %}
+  </main>
+</div>
+{% endblock %}

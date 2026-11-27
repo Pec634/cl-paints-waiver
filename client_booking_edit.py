@@ -125,4 +125,4 @@ def save_revision(app, db, booking, revised, account, Request, Enquiry, schedule
         app.logger.exception('Client revision saved; admin notification email failed')
         sent = False
     flash('Changes saved and sent to CL Paints for review. You can edit again until confirmation.'
-          if sent else 'Changes saved for review, but the notification email could not be sent. Please message CL Paints.', 'success' if sent else 'warning')
+          if sent is not False else 'Changes saved for review, but the notification email could not be sent. Please message CL Paints.', 'success' if sent is not False else 'warning')

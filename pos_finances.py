@@ -92,18 +92,22 @@ class PosLedger:
             raise ValueError('Trading and loyalty must refer to the same event.')
         return event.id, getattr(event, 'booking_id', None), (getattr(event, 'booking_day_number', 1) or 1)-1
 
-    def summary(self, selected, booking_id=None, event_index=None, since=None):
+    def summary(self, selected, booking_id=None, event_index=None, since=None, trading_event_id=None):
         start = datetime.combine(selected, datetime.min.time(), UK).astimezone(UTC).replace(tzinfo=None)
         end = datetime.combine(selected+timedelta(days=1), datetime.min.time(), UK).astimezone(UTC).replace(tzinfo=None)
         paid_time = self.db.func.coalesce(self.Sale.paid_at,self.Sale.created_at)
         sales = self.Sale.query.filter(self.Sale.status == 'Paid', paid_time >= start, paid_time < end)
         refunds = self.Refund.query.join(self.Sale, self.Sale.id == self.Refund.sale_id).filter(
             self.Refund.status == 'Refunded', self.Refund.completed_at >= start, self.Refund.completed_at < end)
-        if booking_id is not None:
+        condition = None
+        if trading_event_id is not None:
+            condition = self.db.func.coalesce(self.Sale.trading_event_id, self.Sale.loyalty_event_id) == trading_event_id
+        elif booking_id is not None:
             events = self.db.session.query(self.Event.id).filter(self.Event.booking_id==booking_id,
                 self.Event.booking_day_number==event_index+1)
             condition = self.db.or_(self.db.and_(self.Sale.booking_id == booking_id, self.Sale.event_index == event_index),
                 self.db.and_(self.Sale.booking_id.is_(None),self.db.func.coalesce(self.Sale.trading_event_id,self.Sale.loyalty_event_id).in_(events)))
+        if condition is not None:
             sales, refunds = sales.filter(condition), refunds.filter(condition)
         totals = {key:Decimal('0.00') for key in ('cash_sales','card_sales','cash_refunds','card_refunds')}
         items, transactions = {}, []
@@ -133,7 +137,7 @@ class PosLedger:
         unpaid = self.Sale.query.filter(self.Sale.status!='Paid',self.Sale.created_at>=start,self.Sale.created_at<end)
         unconfirmed = self.Refund.query.join(self.Sale,self.Sale.id==self.Refund.sale_id).filter(self.Refund.status!='Refunded',
             self.Refund.created_at>=start,self.Refund.created_at<end)
-        if booking_id is not None:
+        if condition is not None:
             unpaid, unconfirmed = unpaid.filter(condition), unconfirmed.filter(condition)
         for sale in unpaid.all():
             transactions.append(dict(sale_id=sale.id,refund_id=None,reference=sale.reference,type=f'Sale: {sale.status} (excluded)',

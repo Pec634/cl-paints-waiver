@@ -39,7 +39,7 @@ Moodboard Library | CL Paints
         <section class="panel">
 
             {% for category, message in get_flashed_messages(with_categories=true) %}
-            <p class="booking-admin-error" role="alert">{{ message }}</p>
+            <p {% if category == "error" %}class="booking-admin-error" role="alert"{% else %}role="status"{% endif %}>{{ message }}</p>
             {% endfor %}
             <div class="panel-heading">
                 <div>
@@ -102,10 +102,10 @@ Moodboard Library | CL Paints
 
             <article class="moodboard-admin-card">
 
-                <img
-                    src="{{ image.image_url }}"
-                    alt="{{ image.title }}"
-                >
+                <button type="button" class="design-preview-button" data-preview-src="{{ image.image_url }}"
+                    data-preview-label="{{ image.title }}" aria-label="Preview {{ image.title }}">
+                    <img src="{{ image.image_url }}" alt="{{ image.title }}" loading="lazy">
+                </button>
 
                 <form
                     method="post"
@@ -186,4 +186,11 @@ Moodboard Library | CL Paints
 
 </div>
 
+<link rel="stylesheet" href="{{ url_for('static', filename='moodboard.css') }}">
+<dialog id="design-preview" class="design-preview" aria-labelledby="design-preview-title">
+    <button type="button" id="close-design-preview" autofocus>Close preview</button>
+    <h2 id="design-preview-title"></h2>
+    <img id="design-preview-image" alt="">
+</dialog>
+<script src="{{ url_for('static', filename='moodboard-preview.js') }}" defer></script>
 {% endblock %}

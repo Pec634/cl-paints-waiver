@@ -90,6 +90,26 @@ def register(app,db,models,Sale,Waiver,access,ledger):
         row.status='Resumed';db.session.commit()
         return jsonify(payload=payload,sale_token=row.sale_token)
 
+    def public_event_summaries(day):
+        public_event = app.extensions.get('kiosk_public_event')
+        if not public_event:
+            return []
+        events = ledger.Event.query.filter_by(event_date=day).order_by(ledger.Event.name, ledger.Event.id)
+        return [dict(name=event.name, event_id=event.id, ledger=ledger.summary(day, trading_event_id=event.id))
+                for event in events if public_event(event)]
+
+    @app.get('/admin/pos/event-summary')
+    @access.required
+    def pos_event_summary():
+        access.require_manager()
+        try:
+            day = date.fromisoformat(request.args.get('date', datetime.now(ZoneInfo('Europe/London')).date().isoformat()))
+        except ValueError:
+            abort(400)
+        response = app.make_response(render_template('pos_event_summary.html', day=day, events=public_event_summaries(day)))
+        response.cache_control.no_store = True
+        return response
+
     @app.route('/admin/pos/reconciliation',methods=['GET','POST'])
     @access.required
     def pos_reconcile():
@@ -118,10 +138,13 @@ def register(app,db,models,Sale,Waiver,access,ledger):
                     if day>datetime.now(ZoneInfo('Europe/London')).date(): raise ValueError('Future dates can only be saved as drafts.')
                     if (counted!=expected or sumup!=card) and not values['notes']: raise ValueError('Explain the cash or card differences before closing.')
                     if request.form.get('checked')!='yes': raise ValueError('Confirm the cash count and SumUp comparison before closing.')
+                    values['public_events'] = public_event_summaries(day)
+                    if ledger.summary(day)['version'] != summary['version']:
+                        raise ValueError('Till transactions changed. Reload and review the updated totals.')
                 saved=Reconciliation(day=day,revision=row.revision+1 if row else 1,status='Closed' if action=='close' else 'Draft',
                     data_json=json.dumps(values),recorded_by=access.actor())
                 db.session.add(saved);db.session.commit()
-                flash('Day-end reconciliation saved with its transaction and item snapshot.','success')
+                flash('Till closed and day-end summaries saved.' if action == 'close' else 'Comparison draft saved.', 'success')
                 return redirect(url_for('pos_reconcile',date=day.isoformat()))
             except (ValueError,IntegrityError) as exc:
                 db.session.rollback();error=str(exc) if isinstance(exc,ValueError) else 'Another manager saved this day. Reload before saving.'

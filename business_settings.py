@@ -15,7 +15,7 @@ from enquiry_automation import DEFAULTS as AUTO_REPLY_DEFAULTS
 DEFAULTS.update(AUTO_REPLY_DEFAULTS)
 DEFAULTS.update(EMAIL_DEFAULTS)
 DEFAULTS['login_reviews'] = json.dumps(DEFAULT_REVIEWS, ensure_ascii=False)
-DEFAULTS.update(website_giveaway_announcement='')
+DEFAULTS.update(website_giveaway_announcement='', admin_booking_email_enabled='yes')
 DEFAULTS.update(calendar_buffer_minutes='60', reminder_days='2', public_app_url='https://my.clpaints.com')
 DEFAULTS.update(facebook_url='https://www.facebook.com/profile.php?id=61578784131483&locale=en_GB',
                 instagram_url='https://www.instagram.com/cl.paints_/',
@@ -161,6 +161,8 @@ def register_settings(app, db, Setting, Credential, Reset, admin_required, fallb
                     values['contact_email'] = validate_email(values['contact_email'], check_deliverability=False).normalized
                     if values['website'] and not values['website'].startswith(('https://', 'http://')):
                         raise ValueError('The website must begin with https:// or http://.')
+                elif section == 'admin_booking_email':
+                    values['admin_booking_email_enabled'] = 'yes' if request.form.get('enabled') == 'yes' else 'no'
                 elif section == 'enquiry_automation':
                     from enquiry_automation import validate_settings
                     values = validate_settings(request.form)

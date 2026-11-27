@@ -60,6 +60,8 @@ def register(app, db, Message, Booking, Change, current_client, admin_required):
                     sent = app.extensions['client_booking_message_notice'](booking)
                     if not sent:
                         flash('Message saved, but its email notification could not be sent.', 'error')
+                elif notify := app.extensions.get('admin_booking_email'):
+                    notify(booking, 'New booking message', 'admin_booking_messages', booking_id=booking.id)
                 flash('Message saved in this booking conversation.', 'success')
                 return redirect(target)
         query = Message.query.filter_by(booking_id=booking.id)

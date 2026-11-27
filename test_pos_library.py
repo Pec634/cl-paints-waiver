@@ -587,6 +587,26 @@ class PosLibraryTest(unittest.TestCase):
         self.assertEqual(self.operation_models[1].query.count(),2)
         self.assertEqual(row.values['cash_variance'],'0.00')
 
+    def test_live_public_event_preview_is_only_recorded_on_close(self):
+        from zoneinfo import ZoneInfo
+        sale, _ = self.refundable_sale()
+        today = datetime.now(ZoneInfo('Europe/London')).date()
+        event = self.Event(name='Public fair', event_date=today, status='Open')
+        private = self.Event(name='Private event', event_date=today, status='Open')
+        self.db.session.add_all([event, private])
+        self.db.session.flush()
+        sale.trading_event_id = event.id
+        self.db.session.commit()
+        live = self.client.get(f'/admin/pos/event-summary?date={today.isoformat()}')
+        self.assertEqual(live.status_code, 200)
+        self.assertIn(b'Public fair', live.data)
+        self.assertNotIn(b'Private event', live.data)
+        self.assertEqual(self.operation_models[1].query.count(), 0)
+        self.assertEqual(self.close_day(today).status_code, 302)
+        saved, = self.operation_models[1].query.one().values['public_events']
+        self.assertEqual(saved['event_id'], event.id)
+        self.assertEqual(saved['ledger']['gross'], '15.00')
+
     def test_refund_email_failure_can_retry_without_repeating_refund(self):
         sale,data=self.refundable_sale()
         data.update(email_refund_receipt='yes',refund_receipt_email='customer@example.com')

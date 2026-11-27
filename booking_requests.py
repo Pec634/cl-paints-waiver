@@ -25,6 +25,8 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
     app.jinja_env.globals['booking_revision_history'] = history
     app.jinja_env.filters['booking_history_time'] = history_time
     def revision_email(item, account, booking):
+        if settings().get('admin_booking_email_enabled', 'yes') != 'yes':
+            return None
         return send_email(settings()['contact_email'], 'CL Paints: client edited booking',
             f'{account.first_name} {account.last_name} ({account.email})\nBooking: {booking.public_reference}\n\n{item.details}\n\nReview: {url_for("admin_booking_request", request_id=item.id, _external=True)}')
     app.extensions['client_revision_email'] = revision_email
@@ -70,7 +72,8 @@ def register(app, db, Request, Booking, Enquiry, current_client, admin_required,
             db.session.rollback()
             flash('This request is already awaiting review.', 'error')
             return redirect(url_for('client.booking_detail', booking_id=booking.id))
-        send_email(settings()['contact_email'], f'CL Paints: booking {kind} request',
+        if settings().get('admin_booking_email_enabled', 'yes') == 'yes':
+            send_email(settings()['contact_email'], f'CL Paints: booking {kind} request',
             f'{account.first_name} {account.last_name} ({account.email})\nBooking: {booking.public_reference}\n\n{details}\n\nReview: {url_for("admin_booking_request", request_id=item.id, _external=True)}')
         flash('Your request is saved for CL Paints to review. Your booking remains unchanged until a decision is made.', 'success')
         return redirect(url_for('client.booking_detail', booking_id=booking.id))

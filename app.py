@@ -450,6 +450,7 @@ class Customer(db.Model):
     )
 
 class MoodboardImage(db.Model):
+    content_digest = db.Column(db.String(64), unique=True)
     __tablename__ = "moodboard_image"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -648,6 +649,11 @@ MoodboardOrder = define_moodboard_order(db)
 
 with app.app_context():
     db.create_all()
+    with db.engine.begin() as connection:
+        schema = inspect(connection)
+        if 'content_digest' not in {column['name'] for column in schema.get_columns('moodboard_image')}:
+            connection.exec_driver_sql('ALTER TABLE moodboard_image ADD COLUMN content_digest VARCHAR(64)')
+            connection.exec_driver_sql('CREATE UNIQUE INDEX IF NOT EXISTS ix_moodboard_digest ON moodboard_image (content_digest)')
     ensure_notification_schema(db)
     from pos import ensure_schema as ensure_pos_schema
     ensure_pos_schema(db)
@@ -934,72 +940,65 @@ def admin_event_moodboard_print(event_id):
 @app.post("/admin/moodboard/upload")
 @admin_required
 def admin_moodboard_upload():
+    import hashlib
     from PIL import Image
-    files = request.files.getlist("images")
 
     design_type = request.form.get("design_type", "large").strip().lower()
-
     if design_type not in ("large", "small"):
         design_type = "large"
-
-    allowed_extensions = {"jpg", "jpeg", "png", "webp"}
-
     config = cloudinary.config()
     use_cloudinary = bool(config.cloud_name and config.api_key and config.api_secret)
-    skipped = 0
+    uploaded = duplicates = skipped = 0
+    legacy_local = {hashlib.sha256(content).hexdigest() for (content,) in db.session.query(MoodboardImageFile.content)
+        .join(MoodboardImage).filter(MoodboardImage.content_digest.is_(None)).yield_per(10)}
 
-    for file in files:
+    for file in request.files.getlist("images"):
         if not file or not file.filename:
             continue
-
-        extension = (
-            file.filename.rsplit(".", 1)[1].lower()
-            if "." in file.filename
-            else ""
-        )
-
-        if extension not in allowed_extensions:
+        content = file.stream.read(10_000_001)
+        if len(content) > 10_000_000:
             skipped += 1
             continue
-
-        title = os.path.splitext(file.filename)[0]
-        title = title.replace("_", " ").replace("-", " ").strip()
-        image = MoodboardImage(
-            title=title[:200] or "Moodboard Image",
-            active=True,
-            design_type=design_type
-        )
+        digest = hashlib.sha256(content).hexdigest()
+        if digest in legacy_local or MoodboardImage.query.filter_by(content_digest=digest).first():
+            duplicates += 1
+            continue
+        try:
+            with Image.open(BytesIO(content), formats=("JPEG", "PNG", "WEBP")) as source:
+                mime = Image.MIME[source.format]
+                source.verify()
+        except (OSError, SyntaxError, ValueError, Image.DecompressionBombError):
+            skipped += 1
+            continue
+        title = os.path.splitext(file.filename)[0].replace("_", " ").replace("-", " ").strip()
+        token = secrets.token_urlsafe(24)
+        image = MoodboardImage(title=title[:200] or "Moodboard Image", active=True,
+            design_type=design_type, content_digest=digest, image_url=url_for("moodboard_image_file", token=token))
+        db.session.add(image)
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            duplicates += 1
+            continue
         if use_cloudinary:
             try:
-                result = cloudinary.uploader.upload(file, folder="cl-paints/moodboard", resource_type="image")
+                result = cloudinary.uploader.upload(BytesIO(content), folder="cl-paints/moodboard", resource_type="image")
             except (CloudinaryError, ValueError):
+                db.session.rollback()
                 skipped += 1
                 continue
-            image.image_url = result["secure_url"]
-            image.storage_id = result["public_id"]
+            image.image_url, image.storage_id = result["secure_url"], result["public_id"]
         else:
-            content = file.stream.read(10_000_001)
-            if len(content) > 10_000_000:
-                skipped += 1
-                continue
-            try:
-                with Image.open(BytesIO(content), formats=("JPEG", "PNG", "WEBP")) as source:
-                    mime = Image.MIME[source.format]
-                    source.verify()
-            except (OSError, SyntaxError, ValueError, Image.DecompressionBombError):
-                skipped += 1
-                continue
-            token = secrets.token_urlsafe(24)
-            image.image_url = url_for("moodboard_image_file", token=token)
-        db.session.add(image)
-        if not use_cloudinary:
-            db.session.flush()
             db.session.add(MoodboardImageFile(image_id=image.id, token=token, content=content, mime=mime))
-
-    db.session.commit()
+        db.session.commit()
+        uploaded += 1
+    if uploaded:
+        flash(f"Uploaded {uploaded} image(s) to the Moodboard Library.", "success")
+    if duplicates:
+        flash(f"Skipped {duplicates} duplicate image(s) already in the library.", "info")
     if skipped:
-        flash(f"{skipped} image(s) could not be uploaded. Use valid JPG, PNG or WebP files"
-              + (" and try again." if use_cloudinary else " up to 10 MB."), "error")
+        flash(f"{skipped} image(s) could not be uploaded. Use valid JPG, PNG or WebP files up to 10 MB.", "error")
     return redirect(url_for("admin_moodboard"))
 
 
@@ -2257,6 +2256,7 @@ def booking_request():
             if on_behalf:
                 email_sent = app.extensions['client_booking_review_requested'](booking)
                 return redirect(url_for('admin_share_booking', booking_id=booking.id, created='yes', status_email='sent' if email_sent else 'failed'))
+            app.extensions['admin_booking_email'](booking, 'New booking request')
             email_sent = send_booking_request_confirmation(booking)
             if claimed_referral:
                 notify_booking_referral_claim(booking)
@@ -3151,6 +3151,18 @@ def send_portal_email(payload):
             raise RuntimeError('Email service is not configured.')
         return resend.Emails.send(message)
     return deliver(app, db, OutgoingEmail, payload, provider_send)
+
+
+def send_admin_booking_email(booking, update, endpoint='admin_bookings', **params):
+    settings = get_business_settings()
+    if settings['admin_booking_email_enabled'] != 'yes':
+        return None
+    link = settings['public_app_url'].rstrip('/') + url_for(endpoint, **params)
+    return send_client_email(settings['contact_email'], f'CL Paints: {update}',
+        f'{update} for booking {booking.public_reference}.\n\nOpen the admin portal: {link}')
+
+
+app.extensions['admin_booking_email'] = send_admin_booking_email
 
 
 def send_client_email(to, subject, body, html_body=None, attachments=None):
