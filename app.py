@@ -3087,7 +3087,8 @@ def admin_archive_event(event_id):
     if not session.get('client_csrf') or not secrets.compare_digest(session['client_csrf'], request.form.get('csrf_token', '')):
         abort(400)
     event = db.get_or_404(Event, event_id)
-    if KioskSession.query.filter(KioskSession.event_id == event.id, KioskSession.phase != 'closed').first():
+    if (not app.extensions['kiosk_public_event'](event)
+            and KioskSession.query.filter(KioskSession.event_id == event.id, KioskSession.phase != 'closed').first()):
         return redirect(url_for('admin_events', deletion_error='kiosk'))
     event.status = 'Archived'; event.is_current = False
     db.session.commit()

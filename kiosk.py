@@ -73,6 +73,10 @@ def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_requi
         for key in ['client_id','client_signed_in','client_remember','client_pending_remember','client_challenge','loyalty_scan_token']:
             session.pop(key, None)
 
+    def event_unavailable(item):
+        event = db.session.get(Event, item.event_id) if item.event_id else None
+        return bool(item.event_id and (not event or event.status not in ('Open', 'Closing Soon')))
+
     @app.before_request
     def kiosk_guard():
         item = active()
@@ -81,6 +85,11 @@ def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_requi
                    'kiosk_new_waiver','kiosk_lookup_id','kiosk_email_code','kiosk_verify_email','kiosk_confirm_members','kiosk_start_over'}
         allowed.update({'kiosk_menu', 'kiosk_choose', 'kiosk_form_done'})
         choices = json.loads(item.choices_json or '{}')
+        if event_unavailable(item) and request.endpoint in {
+            'kiosk_submit', 'kiosk_new_waiver', 'kiosk_lookup_id', 'kiosk_email_code',
+            'kiosk_verify_email', 'kiosk_confirm_members', 'kiosk_start_over',
+        }:
+            abort(410, 'This event is no longer open. Return to the kiosk menu.')
         if not item.event_id or (item.choices_json and not session.get('kiosk_event_chosen')):
             allowed.difference_update({'kiosk_submit', 'kiosk_new_waiver', 'kiosk_lookup_id', 'kiosk_email_code',
                 'kiosk_verify_email', 'kiosk_confirm_members', 'kiosk_start_over'})
@@ -239,6 +248,8 @@ def register(app, db, Kiosk, Setting, Event, Waiver, current_client, admin_requi
     def kiosk_customer():
         item = active()
         if not item: abort(403)
+        if event_unavailable(item):
+            return redirect(url_for('kiosk_menu'))
         if item.phase == 'complete':
             import math
             remaining=max(0,math.ceil((item.completed_at+timedelta(seconds=30)-datetime.utcnow()).total_seconds()))

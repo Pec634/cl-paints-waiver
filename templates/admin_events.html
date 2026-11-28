@@ -304,7 +304,7 @@ Event Management | CL Paints
                             </td>
 
                             <td data-label="Archive / delete">
-                                <form method="post" action="{{ url_for('admin_archive_event', event_id=event.id) }}" onsubmit="return confirm('Archive this event? Public links close and loyalty history is retained.');">
+                                <form method="post" action="{{ url_for('admin_archive_event', event_id=event.id) }}" onsubmit="return confirm('Archive this event? Its public links and kiosk check-in will close. Saved records are retained.');">
                                     <input type="hidden" name="csrf_token" value="{{ client_csrf }}"><button class="btn small" type="submit">Archive</button>
                                 </form>
                                 <form
