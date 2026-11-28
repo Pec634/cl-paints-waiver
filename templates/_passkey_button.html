@@ -1,0 +1,11 @@
+{% macro passkey_button(role, operation='signin') %}
+<div data-passkey-controls>
+  {% if operation == 'enrol' %}<label>Passkey name <input type="text" maxlength="80" name="passkey_name" placeholder="My phone"></label>{% endif %}
+  <button class="btn" type="button" hidden data-passkey-action
+    data-start="{{ url_for('portal_passkey_ceremony', role=role, operation=operation, phase='start') }}"
+    data-finish="{{ url_for('portal_passkey_ceremony', role=role, operation=operation, phase='finish') }}"
+    data-operation="{{ operation }}" data-csrf="{{ passkey_csrf_token() }}">{{ 'Add a passkey' if operation == 'enrol' else 'Sign in with a passkey' }}</button>
+  <p role="status" data-passkey-status></p>
+</div>
+<script src="{{ url_for('static', filename='portal-passkeys.js') }}" defer></script>
+{% endmacro %}

@@ -58,3 +58,214 @@
   .admin main :is(.table-wrap, .admin-table-scroll, .creates-orders-wrap, .creates-items-wrap) th { position: static; }
   .admin main textarea { max-height: none; }
 }
+
+/* A dark workspace shell with illuminated navigation and dashboard summaries. */
+@media screen {
+  .admin {
+    --workspace-ink: #f7edf6;
+    --workspace-muted: #d6bbce;
+    --workspace-edge: #f6c5ed35;
+    --workspace-tile: #241c2dee;
+    background:
+      radial-gradient(ellipse at 45% 0%, #60283e 0%, transparent 38%),
+      radial-gradient(ellipse at 100% 8%, #253f69 0%, transparent 35%),
+      radial-gradient(ellipse at 90% 100%, #67331e 0%, transparent 45%),
+      #15111b;
+  }
+
+  .admin > aside {
+    background: linear-gradient(155deg, #762748 0%, #341d32 30%, #1a1724 70%, #32201e 100%);
+    border-right: 1px solid var(--workspace-edge);
+    scrollbar-color: #b27698 #281b2b;
+  }
+
+  .admin > aside nav > a {
+    color: var(--workspace-ink);
+    border-radius: 9px;
+  }
+
+  .admin > aside nav > a:hover,
+  .admin > aside nav > a:focus-visible {
+    background: #ffffff1a;
+    color: #fff;
+  }
+
+  .admin > aside nav > a:is(.active, [aria-current="page"]) {
+    background: linear-gradient(110deg, #94375c, #643150);
+    color: #fff;
+    box-shadow: inset 3px 0 #ff9ac4;
+  }
+
+  .admin > main:not(.dashboard-main) {
+    background: #f5f1f7;
+    box-shadow: inset 0 3px #ba628d;
+  }
+
+  .admin > main:not(.dashboard-main) > :is(.top, .workspace-heading, .admin-clients-heading) {
+    padding: 18px 20px;
+    border-radius: 14px;
+    background: linear-gradient(115deg, #633149, #25233a 70%, #293b5c);
+  }
+
+  .admin > main > :is(.top, .workspace-heading, .admin-clients-heading),
+  .admin > .dashboard-main > :is(h1, h2),
+  .admin > main > :is(.top, .workspace-heading, .admin-clients-heading) :is(h1, h2, small, .dashboard-date) {
+    color: var(--workspace-ink);
+    border-color: var(--workspace-edge);
+  }
+
+  .admin > main > :is(.top, .workspace-heading, .admin-clients-heading) p,
+  .admin > .dashboard-main > p:not([class]) {
+    color: var(--workspace-muted);
+  }
+
+  .admin > .dashboard-main > p:not([class]) a { color: #ffb9d8; }
+
+  .admin .dashboard-date {
+    padding: 8px 12px;
+    background: #261d30;
+    border: 1px solid #987d9f;
+    border-radius: 12px;
+  }
+
+  .admin .dashboard-date #dashboardClock {
+    color: #fff;
+    font-weight: 800;
+  }
+
+  .admin .dashboard-work-row,
+  .admin .dashboard-tools-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .admin .dashboard-work-row > .dashboard-upcoming,
+  .admin .dashboard-tools-row > .dashboard-tools-panel { grid-column: auto; }
+  .admin .dashboard-work-row > .panel { align-self: stretch; }
+  .admin .dashboard-tools-row .dashboard-tools-folder > summary { padding: 2px 0; }
+  .admin .dashboard-tools-row .dashboard-tools-folder[open] > summary {
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  @media (max-width: 1050px) {
+    .admin .dashboard-work-row,
+    .admin .dashboard-tools-row { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .admin > main .panel {
+    border-color: #fff9;
+    box-shadow: 0 12px 36px #09051035;
+  }
+
+  .admin :is(.dashboard-stats article, .workspace-shortcuts a, .dashboard-quick) {
+    color: var(--workspace-ink);
+    background: linear-gradient(145deg, #3e2a43, var(--workspace-tile) 75%);
+    border: 1px solid var(--workspace-edge);
+    box-shadow: 0 10px 26px #0d080f45, inset 0 1px #ffffff0d;
+  }
+
+  .admin .dashboard-stats article { border-top: 2px solid #eb79ad; }
+  .admin .dashboard-stats > a:nth-child(3n+2) article { border-top-color: #8bc6f5; }
+  .admin .dashboard-stats > a:nth-child(3n) article { border-top-color: #efb56c; }
+
+  .admin .dashboard-main :is(.dashboard-stats article, .workspace-shortcuts a) strong,
+  .admin .dashboard-main .dashboard-quick :is(summary, a) { color: var(--workspace-ink); }
+  .admin .dashboard-main .dashboard-quick :is(summary, nav) {
+    background: var(--workspace-tile);
+    border-color: var(--workspace-edge);
+  }
+  .admin .dashboard-main .dashboard-quick :is(summary, a):hover {
+    background: #48334d;
+  }
+  .admin .dashboard-main .dashboard-quick :is(summary, a):focus-visible {
+    outline: 2px solid #f6a8cc;
+    outline-offset: 2px;
+  }
+  .admin .dashboard-main :is(.dashboard-stats article, .workspace-shortcuts a) :is(span, small) { color: var(--workspace-muted); }
+  .admin .dashboard-main :is(.dashboard-stats > a:hover article, .workspace-shortcuts a:hover) { border-color: #f6a8cc; }
+
+  .admin .portal-admin-toolbar {
+    background: #231b2a;
+    border: 1px solid var(--workspace-edge);
+    border-radius: 12px;
+    padding: 8px 12px;
+  }
+
+  .admin .btn:not(.primary, .danger, .admin-back-link),
+  #admin-quick-actions .btn,
+  .admin main:not(.pos-main) button:not([class]),
+  .admin main nav a.btn:not(.primary, .danger, .admin-back-link) {
+    color: #251b2b;
+    background: #fff;
+    border: 1px solid #aea0b4;
+  }
+
+  .admin .btn:not(.primary, .danger, .admin-back-link):hover,
+  #admin-quick-actions .btn:hover,
+  .admin main:not(.pos-main) button:not([class]):hover,
+  .admin main nav a.btn:not(.primary, .danger, .admin-back-link):hover {
+    color: #251b2b;
+    background: #f5e7f1;
+    border-color: #986487;
+  }
+
+  .admin .btn.primary,
+  .admin main nav a.btn.primary {
+    color: #fff;
+    background: #931b54;
+    border: 1px solid #931b54;
+  }
+
+  .admin .btn.primary:hover,
+  .admin main nav a.btn.primary:hover { background: #75123f; border-color: #75123f; }
+
+  .admin .portal-admin-toolbar .btn:not(.primary, .danger),
+  .admin main .portal-admin-toolbar a.btn:not(.primary, .danger) {
+    color: #fff;
+    background: #382b42;
+    border: 1px solid #9b809f;
+  }
+
+  .admin .portal-admin-toolbar .btn:not(.primary, .danger):hover,
+  .admin main .portal-admin-toolbar a.btn:not(.primary, .danger):hover {
+    color: #fff;
+    background: #513753;
+  }
+
+  .admin main nav[aria-label="Client profile sections"] .btn[aria-current="page"],
+  .admin main .builder-tabs button[aria-selected="true"] {
+    color: #fff;
+    background: #931b54;
+    border-color: #931b54;
+  }
+
+  .admin .btn.danger,
+  .admin main nav a.btn.danger {
+    color: #fff;
+    background: #8b2437;
+    border: 1px solid #8b2437;
+  }
+
+  .admin .btn.danger:hover,
+  .admin main nav a.btn.danger:hover { background: #6f182a; border-color: #6f182a; }
+
+  .admin :is(.btn, button):disabled,
+  .admin main .btn:disabled:hover,
+  .admin main .btn:is(.primary, .danger):disabled:hover,
+  .admin .portal-admin-toolbar button.btn:disabled {
+    color: #594a5a;
+    background: #f2eaf1;
+    border-color: #a798a7;
+    opacity: 1;
+    cursor: not-allowed;
+  }
+
+  .admin :is(.btn, button):focus-visible,
+  #admin-quick-actions .btn:focus-visible {
+    outline: 2px solid #26132d;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px #fff;
+  }
+}

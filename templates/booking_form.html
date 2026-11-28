@@ -250,7 +250,7 @@
                         </label>
                         <label class="booking-field">
                             <span>Event type</span>
-                            <input data-event-field="event_type" maxlength="150" required placeholder="Birthday, festival, school fair...">
+                            <input data-event-field="event_type" maxlength="150" list="booking-event-type-suggestions" required placeholder="Choose or describe your event">
                         </label>
                         <label class="booking-field">
                             <span>Theme</span>
@@ -323,6 +323,15 @@
                     <p class="event-day-same-note" data-same-day-note hidden>Using the same event details as the first date.</p>
                 </article>
             </template>
+            <datalist id="booking-event-type-suggestions">
+                <option value="Birthday"></option>
+                <option value="Wedding"></option>
+                <option value="Christening"></option>
+                <option value="School fair"></option>
+                <option value="Festival"></option>
+                <option value="Community event"></option>
+                <option value="Corporate event"></option>
+            </datalist>
             <input type="hidden" name="event_schedule" id="eventScheduleInput" value="{{ form_data.get('event_schedule', '') }}">
 
 

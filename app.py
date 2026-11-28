@@ -144,6 +144,7 @@ class Waiver(db.Model):
     responsible_first_name = db.Column(db.String(100), nullable=False)
     responsible_last_name = db.Column(db.String(100), nullable=False)
     responsible_email = db.Column(db.String(255), nullable=False)
+    responsible_account_id = db.Column(db.Integer, db.ForeignKey('client_account.id'), index=True)
 
     signed_date = db.Column(db.DateTime, nullable=False)
     expiry_date = db.Column(db.DateTime, nullable=False)
@@ -339,6 +340,7 @@ app.extensions['studio_community_models'] = (StudioDesign, StudioReport, StudioF
 
 
 class ClientAccount(db.Model):
+    email_changed_at = db.Column(db.DateTime)
     @property
     def account_number(self):
         return f'CL-A-{self.id:04d}' if self.id is not None else ''
@@ -568,7 +570,7 @@ from phone_push import define_models as define_phone_push_models
 phone_push_models = define_phone_push_models(db)
 from admin_client_profiles import define_model as define_admin_client_note
 AdminClientNote = define_admin_client_note(db)
-from participant_photos import define_model as define_participant_photo
+from participant_photos import define_model as define_participant_photo, lock_photo_query
 ParticipantPhoto = define_participant_photo(db)
 from email_media import define_model as define_email_media
 EmailMedia = define_email_media(db)
@@ -609,6 +611,8 @@ from pos_finances import define_refund_model
 PosRefund = define_refund_model(db)
 from pos_staff import define_models as define_pos_staff_models
 pos_staff_models = define_pos_staff_models(db)
+from portal_passkeys import define_models as define_passkey_models
+PortalPasskey, PasskeyChallenge = define_passkey_models(db)
 from pos_operations import define_models as define_pos_operation_models
 pos_operation_models = define_pos_operation_models(db)
 from staff_reports import define_models as define_staff_report_models
@@ -646,6 +650,11 @@ CreatesCollectionSlot = define_creates_collection_model(db)
 creates_models = define_creates_models(db)
 from moodboard_payments import define_model as define_moodboard_order
 MoodboardOrder = define_moodboard_order(db)
+from income_report import define_model as define_income_receipt
+IncomeReceipt = define_income_receipt(db)
+
+from client_email_change import define_model as define_email_change, register as register_email_change
+ClientEmailChange = define_email_change(db)
 
 with app.app_context():
     db.create_all()
@@ -654,6 +663,11 @@ with app.app_context():
         if 'content_digest' not in {column['name'] for column in schema.get_columns('moodboard_image')}:
             connection.exec_driver_sql('ALTER TABLE moodboard_image ADD COLUMN content_digest VARCHAR(64)')
             connection.exec_driver_sql('CREATE UNIQUE INDEX IF NOT EXISTS ix_moodboard_digest ON moodboard_image (content_digest)')
+        if 'responsible_account_id' not in {column['name'] for column in schema.get_columns('waiver')}:
+            connection.exec_driver_sql('ALTER TABLE waiver ADD COLUMN responsible_account_id INTEGER REFERENCES client_account(id)')
+            connection.exec_driver_sql('CREATE INDEX IF NOT EXISTS ix_waiver_responsible_account_id ON waiver (responsible_account_id)')
+        if 'email_changed_at' not in {column['name'] for column in schema.get_columns('client_account')}:
+            connection.exec_driver_sql('ALTER TABLE client_account ADD COLUMN email_changed_at TIMESTAMP')
     ensure_notification_schema(db)
     from pos import ensure_schema as ensure_pos_schema
     ensure_pos_schema(db)
@@ -930,11 +944,13 @@ def admin_event_account_qr(event_id):
 @admin_required
 def admin_event_moodboard_print(event_id):
     event = db.get_or_404(Event, event_id)
-    sign_only = request.args.get('layout') == 'sign'
+    layout = request.args.get('layout')
+    sign_only = layout == 'sign'
     groups = []
     if not sign_only:
         groups = event_design_groups(EventMoodboardImage, event_id, get_moodboard_prices(), include_ids=True)
-    return render_template('admin_moodboard_printable.html', event=event, sign_only=sign_only, groups=groups)
+    template = 'admin_moodboard_photo_print.html' if layout == 'photos' else 'admin_moodboard_printable.html'
+    return render_template(template, event=event, sign_only=sign_only, groups=groups)
 
 
 @app.post("/admin/moodboard/upload")
@@ -1368,6 +1384,7 @@ def create_waiver(event_id=None):
             responsible_first_name=data["responsible_first_name"],
             responsible_last_name=data["responsible_last_name"],
             responsible_email=data["responsible_email"],
+            responsible_account_id=account.id if account else None,
             signed_date=now,
             expiry_date=expiry,
             status="Valid",
@@ -1508,6 +1525,7 @@ def admin_owner_login():
             session.clear()
             session["admin_authenticated"] = True
             session['admin_last_activity'] = datetime.utcnow().timestamp()
+            session['admin_signed_in_at'] = session['admin_last_activity']
             return redirect(url_for("admin_dashboard"))
         else:
             app.extensions['admin_login_record_failure']()
@@ -2907,9 +2925,10 @@ def delete_waiver(waiver_id):
         return jsonify({"error": "This waiver has loyalty or transfer history. Archive it instead to preserve member records."}), 409
 
     try:
-        for photo in ParticipantPhoto.query.filter(ParticipantPhoto.participant_id.in_(member_ids)).all():
+        photos = ParticipantPhoto.query.filter(ParticipantPhoto.participant_id.in_(member_ids))
+        for photo in lock_photo_query(db, ParticipantPhoto, photos).order_by(ParticipantPhoto.id).all():
             app.extensions['participant_photo_withdraw'](photo)
-        ParticipantPhoto.query.filter(ParticipantPhoto.participant_id.in_(member_ids)).delete(synchronize_session=False)
+        photos.delete(synchronize_session=False)
         for person in waiver.participants:
             db.session.delete(person)
 
@@ -3132,7 +3151,7 @@ from rewards_transfer import register_transfer
 register_transfer(app, rewards_module.engine, admin_required)
 
 from reports import register_reports
-register_reports(app, db, Booking, Waiver, Participant, ReportLocation, booking_schedule_events, admin_required)
+register_reports(app, db, Booking, Waiver, Participant, ReportLocation, booking_schedule_events, admin_required, BusinessSetting)
 
 
 from business_settings import register_settings
@@ -3196,6 +3215,9 @@ register_event_day(app, db, Event, Booking, Waiver, BusinessSetting, loyalty_mod
 from client_portal import register_client_portal
 get_current_client = register_client_portal(app, db, ClientAccount, ClientLoginCode, ClientRewardOwner, ClientEnquiry,
     Booking, get_business_settings, lambda *args: send_client_email(*args), booking_schedule_events, admin_required)
+register_email_change(app, db, ClientEmailChange, ClientAccount, ClientLoginCode, Waiver,
+    [(Booking, Booking.email), (notification_models[1], notification_models[1].email),
+     (creates_models[0], creates_models[0].email)], get_current_client, lambda *args: send_client_email(*args))
 
 from loyalty import register_loyalty
 register_loyalty(app, db, loyalty_models, ClientAccount, Waiver, Participant, Event, Booking,
@@ -3225,6 +3247,8 @@ from pos_staff import PosAccess
 pos_access = PosAccess(app, db, pos_staff_models, admin_required)
 app.extensions['pos_access'] = pos_access
 pos_access.register()
+from portal_passkeys import register as register_passkeys
+register_passkeys(app, db, PortalPasskey, PasskeyChallenge, ClientAccount, ClientLoginEvent, pos_staff_models[0], get_current_client)
 register_pos(app, db, PosSale, Waiver, Participant, pos_access.required, PosProduct, send_client_email, pos_loyalty)
 from pos import reader_transaction as pos_reader_transaction
 register_refunds(app, db, PosSale, PosRefund, pos_access.required, pos_reader_transaction, send_client_email)
@@ -3335,6 +3359,9 @@ from cl_creates import register as register_creates
 from creates_collection import register as register_creates_collection
 register_creates_collection(app, db, CreatesCollectionSlot, creates_models[0], admin_required)
 register_creates(app, db, creates_models, BusinessSetting, admin_required, lambda *args: send_client_email(*args), get_current_client, get_business_settings)
+from income_report import register as register_income_report
+register_income_report(app, db, IncomeReceipt, Booking, tool_models[1], PosSale, PosRefund, BookingCashup,
+                       creates_models[0], MoodboardOrder, admin_required)
 from shared_calendar import register as register_shared_calendar
 register_shared_calendar(app, db, BusinessSetting, Booking, tool_models[2], CreatesCollectionSlot,
     creates_models[0], booking_schedule_events, get_business_settings, admin_required)

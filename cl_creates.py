@@ -50,7 +50,8 @@ def ensure_schema(db):
         upgrades = {'checkout_token':'VARCHAR(64)', 'submission_token':'VARCHAR(64)', 'provider_id':'VARCHAR(100)',
             'payment_url':'TEXT', 'merchant':'VARCHAR(100)', 'confirmation_dispatched':'BOOLEAN NOT NULL DEFAULT FALSE',
             'collection_slot_id':'INTEGER', 'collection_snapshot':"TEXT NOT NULL DEFAULT ''", 'checkout_started':'BOOLEAN NOT NULL DEFAULT FALSE',
-            'return_path':"TEXT NOT NULL DEFAULT '/'", 'archived_at':'TIMESTAMP', 'automation_claimed_at':'TIMESTAMP'}
+            'return_path':"TEXT NOT NULL DEFAULT '/'", 'archived_at':'TIMESTAMP', 'automation_claimed_at':'TIMESTAMP',
+            'paid_date':'DATE'}
         for name, definition in upgrades.items():
             if name not in columns:
                 connection.execute(text(f'ALTER TABLE creates_order ADD COLUMN {name} {definition}'))
@@ -79,6 +80,7 @@ def define_models(db):
         items_json = db.Column(db.Text, nullable=False)
         total = db.Column(db.Numeric(10, 2), nullable=False)
         paid = db.Column(db.Numeric(10, 2), default=0, nullable=False)
+        paid_date = db.Column(db.Date, nullable=True)
         status = db.Column(db.String(40), default='Under review', nullable=False)
         invoice_url = db.Column(db.Text, default='', nullable=False)
         invoice_reference = db.Column(db.String(100), default='', nullable=False)
@@ -643,13 +645,21 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
     @admin_required
     def creates_order(order_id):
         token = csrf()
-        order = Order.query.filter_by(id=order_id).with_for_update().first_or_404()
+        orders = Order.query.filter_by(id=order_id)
+        allocated_income = app.extensions.get('income_allocated_creates')
+        action = request.form.get('action') if request.method == 'POST' else None
+        if request.method == 'POST':
+            if allocated_income and action not in ('delete', 'message') and db.engine.dialect.name == 'sqlite':
+                # Match the report's write lock before checking or changing a receipt balance.
+                db.session.execute(db.update(Order).where(Order.id == order_id).values(paid=Order.paid))
+            orders = orders.with_for_update()
+        order = orders.first_or_404()
         if request.method == 'GET':
             app.extensions['creates_sync_payments']([order])
         error = None
         if request.method == 'POST':
             try:
-                if request.form.get('action') == 'delete':
+                if action == 'delete':
                     if order.status not in ('Under review', 'Awaiting payment') or order.paid != 0:
                         raise ValueError('Only unpaid orders under review or awaiting payment can be deleted.')
                     if order.invoice_url or order.invoice_reference:
@@ -664,7 +674,7 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     db.session.delete(order)
                     db.session.commit()
                     return redirect(url_for('creates_admin', deleted='1'))
-                elif request.form.get('action') == 'message':
+                elif action == 'message':
                     subject, body = (request.form.get(k, '').strip() for k in ('subject', 'body'))
                     if not subject or not body or len(subject) > 200 or len(body) > 10000:
                         raise ValueError('Enter a subject and message (maximum 200 / 10,000 characters).')
@@ -674,6 +684,8 @@ def register(app, db, models, Setting, admin_required, send_email, get_current_c
                     paid = money(request.form.get('paid', str(order.paid)))
                     if order.checkout_token and paid != order.paid:
                         raise ValueError('Online payments must be verified with SumUp; the received amount cannot be edited manually.')
+                    if allocated_income and paid < order.paid and paid < allocated_income(order.id):
+                        raise ValueError('The received amount cannot be less than receipts dated in Income records.')
                     invoice = request.form.get('invoice_url', order.invoice_url).strip()
                     if invoice:
                         parsed = urlparse(invoice)

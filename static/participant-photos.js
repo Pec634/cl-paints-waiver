@@ -10,6 +10,7 @@
       const preview = control.querySelector('[data-photo-preview]');
       const status = control.querySelector('[data-photo-status]');
       const save = control.querySelector('[data-photo-save]');
+      const saveLabel = save.textContent;
       const opener = control.querySelector('[data-photo-open]');
       let previewUrl;
       function clearPreview() {
@@ -47,7 +48,7 @@
         input.setCustomValidity('');
         status.textContent = '';
         save.disabled = false;
-        save.textContent = 'Save photo';
+        save.textContent = saveLabel;
         opener.focus();
       });
       control.querySelector('[data-photo-device]').addEventListener('click', () => input.click());
@@ -72,6 +73,23 @@
         save.disabled = true;
         save.textContent = 'Saving photo…';
         status.textContent = 'Uploading your photograph. Please keep this page open.';
+      });
+    });
+    document.querySelectorAll('[data-photo-permission-request]').forEach(request => {
+      const button = request.querySelector('[data-photo-copy-link]');
+      if (!button.hidden) return;
+      const link = request.querySelector('[data-photo-permission-link]');
+      const status = request.querySelector('[data-photo-copy-status]');
+      button.hidden = false;
+      button.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(link.value);
+          status.textContent = 'Permission link copied.';
+        } catch (_) {
+          link.focus();
+          link.select();
+          status.textContent = 'Copy the selected permission link.';
+        }
       });
     });
   }

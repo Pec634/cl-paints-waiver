@@ -1,7 +1,9 @@
-"""Participant/account isolation, safe image storage and mobile upload controls."""
-from datetime import datetime
+"""Private participant images and signed permissions for individual uses."""
+from datetime import datetime, timedelta
+from hashlib import sha256
 from io import BytesIO
 import json
+import re
 import unittest
 from PIL import Image
 import test_loyalty as fixtures
@@ -39,6 +41,7 @@ class ParticipantPhotosTest(unittest.TestCase):
         response = self.upload()
         self.assertEqual(response.status_code, 302)
         photo = main.ParticipantPhoto.query.one()
+        self.assertEqual(response.location, f'/client/photos?participant_photo={photo.id}')
         self.assertEqual((photo.participant_id, photo.client_id, photo.uploaded_by),
                          (self.person.id, self.account.id, 'client'))
         with Image.open(BytesIO(photo.content)) as image:
@@ -55,11 +58,16 @@ class ParticipantPhotosTest(unittest.TestCase):
         self.assertIn('no-store', self.client.get(self.path).headers['Cache-Control'])
         self.assertIn(b'YOUR CLIENT PORTAL', self.client.get(self.path).data)
         self.assertEqual(main.app.test_client().get(path).status_code, 401)
+        self.assertEqual(main.native_form_models[1].query.count(), 0)
         self.assertEqual(main.photo_library_models[0].query.count(), 0)
 
     def test_admin_upload_and_entry_points(self):
-        self.assertEqual(self.upload(self.admin, self.admin_path).status_code, 302)
+        response = self.upload(self.admin, self.admin_path, terms_version='2', authority='yes',
+                               social='yes', website='yes', publications='yes')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, self.admin_path)
         self.assertEqual(main.ParticipantPhoto.query.one().uploaded_by, 'admin')
+        self.assertEqual(main.native_form_models[1].query.count(), 0)
         for path in ('/admin/participants', f'/admin/waivers/{self.person.waiver_id}',
                      f'/admin/clients/{self.account.id}?tab=rewards'):
             page = self.admin.get(path)
@@ -159,31 +167,41 @@ class ParticipantPhotosTest(unittest.TestCase):
         self.assertEqual(self.admin.post(f'/admin/waivers/{self.person.waiver_id}/delete').status_code, 200)
         self.assertEqual(main.ParticipantPhoto.query.count(), 0)
 
-    def share(self, photo, **changes):
+    def share(self, photo, purposes=('website',), **changes):
         path = f'/client/photos?participant_photo={photo.id}'
         self.assertEqual(self.client.get(path).status_code, 200)
         with self.client.session_transaction() as session:
             token, csrf = session['photo_upload_token'], session['client_csrf']
         name = self.account.first_name + ' ' + self.account.last_name
-        data = dict(csrf_token=csrf, submission_token=token, terms_version='1', responsible_name=name,
-                    agree='yes', authority='yes', portfolio='yes', website='yes', social='yes',
+        data = dict(csrf_token=csrf, submission_token=token, terms_version='2', responsible_name=name,
+                    agree='yes', authority='yes',
                     custom_0=json.dumps(dict(name=name, strokes=[[[0.1, 0.2], [0.8, 0.5]]])),
                     people_count_0='1', people_0='Alex Client | Butterfly face paint')
+        data.update(dict.fromkeys(purposes, 'yes'))
         data.update(changes)
         return self.client.post(path, data=data)
 
     def test_send_saved_photo_through_signed_release_review_and_withdrawal(self):
         self.upload()
         source = main.ParticipantPhoto.query.one()
-        self.assertIn(b'Send to image library', self.client.get(self.path).data)
+        self.assertIn(b'Choose photo permissions', self.client.get(self.path).data)
         permission_page = self.client.get(f'/client/photos?participant_photo={source.id}').data
         self.assertIn(f'/participant-photos/{source.id}/image'.encode(), permission_page)
         self.assertNotIn(b'name="photo_0"', permission_page)
+        for name in (b'social', b'website', b'publications'):
+            field = re.search(rb'<input[^>]*name="' + name + rb'"[^>]*>', permission_page).group()
+            self.assertNotIn(b'checked', field)
+            self.assertNotIn(b'required', field)
+        self.assertIn(b'Keep photo private', permission_page)
         self.assertEqual(self.share(source).status_code, 302)
         Form, Submission, Media = main.native_form_models
         item, media = Submission.query.one(), Media.query.one()
         website_photo = main.photo_library_models[0].query.one()
-        self.assertEqual(json.loads(item.answers_json)['participant_photo_id'], source.id)
+        release = json.loads(item.answers_json)
+        self.assertEqual(release['participant_photo_id'], source.id)
+        self.assertEqual(release['participant_photo_sha256'], sha256(source.content).hexdigest())
+        self.assertEqual(release['permissions'], ['website'])
+        self.assertEqual((item.client_id, item.email), (self.account.id, self.account.email))
         self.assertEqual(media.submission_id, item.id)
         self.assertEqual(website_photo.status, 'pending')
         self.assertIsNotNone(main.app.extensions['native_form_records']['submission_record'](item))
@@ -211,9 +229,11 @@ class ParticipantPhotosTest(unittest.TestCase):
     def test_library_requires_photo_specific_signed_permission_and_ownership(self):
         self.upload()
         source = main.ParticipantPhoto.query.one()
-        for invalid in (dict(authority=''), dict(website=''), dict(custom_0='')):
-            self.assertEqual(self.share(source, **invalid).status_code, 200)
-            self.assertEqual(main.native_form_models[1].query.count(), 0)
+        for invalid in (dict(authority=''), dict(agree=''), dict(purposes=()), dict(custom_0=''),
+                        dict(terms_version='1'), dict(responsible_name='Someone Other')):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(self.share(source, **invalid).status_code, 200)
+                self.assertEqual(main.native_form_models[1].query.count(), 0)
         self.admin.post(self.admin_path, data=dict(csrf_token='admin-token',
             action='send_library', photo_id=source.id))
         self.assertEqual(main.photo_library_models[0].query.count(), 0)
@@ -230,6 +250,75 @@ class ParticipantPhotosTest(unittest.TestCase):
         main.db.session.commit()
         self.assertEqual(self.client.get(f'/client/photos?participant_photo={foreign.id}').status_code, 404)
         self.assertEqual(self.client.post(f'/client/photos?participant_photo={foreign.id}').status_code, 404)
+
+    def test_social_and_publications_permissions_do_not_allow_website_use(self):
+        _, Submission, Media = main.native_form_models
+        WebsitePhoto = main.photo_library_models[0]
+        guest = main.app.test_client()
+        for purpose in ('social', 'publications'):
+            with self.subTest(purpose=purpose):
+                self.upload()
+                source = main.ParticipantPhoto.query.order_by(main.ParticipantPhoto.id.desc()).first()
+                self.assertEqual(self.share(source, purposes=(purpose,)).status_code, 302)
+                item = Submission.query.order_by(Submission.id.desc()).first()
+                self.assertEqual(json.loads(item.answers_json)['permissions'], [purpose])
+                self.assertEqual(self.client.get(f'/client/photos?participant_photo={source.id}').status_code, 302)
+                media = Media.query.filter_by(submission_id=item.id).one()
+                photo = WebsitePhoto.query.filter_by(media_id=media.id).one()
+                self.assertEqual(self.admin.post('/admin/photo-library', data=dict(csrf_token='admin-token',
+                    media_id=media.id, status='approved', reviewed_permissions='yes', alt='Face paint',
+                    gallery='yes')).status_code, 302)
+                self.assertEqual(photo.status, 'pending')
+                self.assertFalse(photo.gallery)
+                self.admin.post(self.admin_path, data=dict(csrf_token='admin-token', action='send_library',
+                                                          photo_id=source.id))
+                self.assertEqual(photo.status, 'pending')
+                public_path = f'/website/photos/{photo.id}.jpg'
+                self.assertEqual(guest.get(public_path).status_code, 404)
+                # Public requests must still enforce the signed selection if a placement was saved previously.
+                photo.status, photo.gallery = 'approved', True
+                main.db.session.commit()
+                self.assertEqual(guest.get(public_path).status_code, 404)
+                self.assertNotIn(public_path.encode(), guest.get('/gallery').data)
+
+    def test_existing_signed_release_retains_the_channels_it_recorded(self):
+        from photo_library import PHOTO_TERMS
+
+        self.upload()
+        source = main.ParticipantPhoto.query.one()
+        self.assertEqual(self.share(source).status_code, 302)
+        _, Submission, Media = main.native_form_models
+        item = Submission.query.one()
+        old_release = dict(json.loads(item.answers_json), terms_version='1',
+                           permissions=['portfolio', 'website', 'social'])
+        item.terms_snapshot = PHOTO_TERMS
+        item.answers_json = json.dumps(old_release)
+        main.db.session.commit()
+        media = Media.query.one()
+        photo = main.photo_library_models[0].query.one()
+        self.assertEqual(self.admin.post('/admin/photo-library', data=dict(csrf_token='admin-token',
+            media_id=media.id, status='approved', reviewed_permissions='yes', alt='Face paint',
+            gallery='yes')).status_code, 302)
+        self.assertEqual(main.app.test_client().get(f'/website/photos/{photo.id}.jpg').status_code, 200)
+        self.assertEqual(json.loads(item.answers_json)['permissions'], ['portfolio', 'website', 'social'])
+
+    def test_permission_link_resumes_after_responsible_adult_signs_in(self):
+        self.upload(self.admin, self.admin_path)
+        source = main.ParticipantPhoto.query.one()
+        path = f'/client/photos?participant_photo={source.id}'
+        guest = main.app.test_client()
+        self.assertIn(path, self.admin.get(self.admin_path).text)
+        self.assertIn('/client/login', guest.get(path).location)
+        # The fixture requested a code when it created the account. Let the resend cooldown pass.
+        original_login = main.ClientLoginCode.query.filter_by(email=self.account.email).one()
+        original_login.created_at = datetime.now() - timedelta(seconds=61)
+        main.db.session.commit()
+        code = self.fixture.fixture.request_code(guest, email=self.account.email, signup=False)
+        self.assertEqual(self.fixture.fixture.verify(code, guest).location, path)
+        permission_page = guest.get(path)
+        self.assertEqual(permission_page.status_code, 200)
+        self.assertIn(f'/participant-photos/{source.id}/image'.encode(), permission_page.data)
+        self.assertEqual(main.native_form_models[1].query.count(), 0)
 
     def test_deleting_private_photo_withdraws_linked_public_copy(self):
         self.upload()

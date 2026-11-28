@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Print moodboard photos | CL Paints{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static', filename='moodboard-photo-print.css') }}">
+<div class="admin moodboard-photo-editor">
+    {% include '_admin_sidebar.html' %}
+    <main id="portal-main">
+        <header class="top">
+            <div><h1>Print moodboard photos</h1><p>{{ event.name }} · 7 × 5 in prints</p></div>
+            <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id) }}">Back to A4 sheets</a>
+        </header>
+        <section class="panel moodboard-photo-tools">
+            <p>Choose the designs and adjust their framing below. In the print dialog, match the paper size shown here, choose actual size (100%), and turn off headers and footers.</p>
+            <p>Use the centre crosshair to position the image. The inner outline marks the image limit and appears on the print.</p>
+            <label>Photo orientation <select data-print-orientation><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label>
+            <label>Paper layout <select data-print-layout><option value="single">One photo per 7 × 5 in page</option><option value="a4">2 per A4</option></select></label>
+            <div class="client-action-row">
+                <button type="button" class="btn" data-photo-select="all">Select all</button>
+                <button type="button" class="btn" data-photo-select="none">Clear selection</button>
+                <button type="button" class="btn" data-preview-photos aria-pressed="false" disabled>Print preview</button>
+                <button type="button" class="btn primary" data-print-photos disabled>Print selected</button>
+            </div>
+            <p role="status" data-photo-print-status></p>
+        </section>
+        <div class="moodboard-photo-grid">
+            {% for group in groups %}{% for design in group.images %}
+            <article class="panel moodboard-photo-card">
+                <label class="moodboard-photo-choice"><input type="checkbox" data-print-choice> Include {{ group.title }} · {{ design.label }}</label>
+                <div class="moodboard-photo-frame">
+                    <div class="moodboard-photo-border">
+                        <div class="moodboard-photo-window">
+                            <img src="{{ design.url }}" alt="{{ group.title }} {{ design.label }}" decoding="async">
+                        </div>
+                    </div>
+                </div>
+                <form class="client-form moodboard-photo-adjust">
+                    <label>Framing <select name="fit"><option value="contain">Fit whole image</option><option value="cover">Fill the print</option></select></label>
+                    <label>Zoom <input name="zoom" type="range" min="50" max="300" value="100"></label>
+                    <label>Horizontal position <input name="x" type="range" min="-100" max="100" value="0"></label>
+                    <label>Vertical position <input name="y" type="range" min="-100" max="100" value="0"></label>
+                    <button type="reset" class="btn">Reset framing</button>
+                </form>
+            </article>
+            {% endfor %}{% endfor %}
+        </div>
+        <div class="moodboard-photo-a4" aria-label="A4 sheets"></div>
+        {% if not groups|sum(attribute='images', start=[]) %}<p>No active designs are assigned to this moodboard.</p>{% endif %}
+    </main>
+</div>
+<script src="{{ url_for('static', filename='moodboard-photo-print.js') }}" defer></script>
+{% endblock %}

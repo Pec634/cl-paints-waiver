@@ -1,0 +1,81 @@
+@media screen {
+  .report-dashboard .report-related { position: relative; }
+  .report-dashboard .report-related > div {
+    position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 70;
+    display: grid; gap: 6px; padding: 8px; min-width: 190px;
+    background: #302237; border: 1px solid #866780; border-radius: 12px;
+  }
+  .report-dashboard .report-related:not([open]) > div { display: none; }
+  .report-dashboard .report-controls.panel { padding: clamp(12px, 2vw, 20px); }
+  .report-dashboard .report-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 18px; }
+  .report-dashboard .report-toolbar .report-view-nav {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 0;
+  }
+  .report-dashboard .report-period-chip { color: #36253f; font-weight: 700; font-size: .875rem; }
+  .report-dashboard .report-period-chip span { display: inline-block; margin-inline-start: 8px; color: #672247; background: #f5e1ec; border-radius: 20px; padding: 3px 9px; }
+  .report-dashboard .report-filter-panel { margin-top: 12px; border-top: 1px solid #e5dce8; padding-top: 9px; }
+  .report-dashboard .report-method > summary { font-weight: 700; }
+  .report-dashboard .report-topic > summary {
+    color: #36253f;
+    font-size: 1.1rem;
+    font-weight: 750;
+  }
+  .report-dashboard .report-topic[open] > summary {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5dce8;
+  }
+  .report-dashboard .report-topic > .report-grid { margin: 16px 0 0; }
+  .report-dashboard .report-topic .report-loyalty { grid-column: 1 / -1; }
+  .report-dashboard .report-loyalty .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .report-dashboard .report-target-cards {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  }
+  .report-dashboard .report-overview-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: clamp(12px, 2vw, 22px);
+  }
+  .report-dashboard .report-overview-grid > section { grid-column: span 3; }
+  .report-dashboard .report-overview-grid > .report-trend-card { grid-column: span 4; }
+  .report-dashboard .report-overview-grid > .report-outcome-card { grid-column: span 2; }
+  .report-dashboard :is(.report-chart, .report-summary > article, .report-target-card) {
+    --muted: #e2cedf;
+    --border: #ffffff36;
+    color: #fbf0f8;
+    background: radial-gradient(ellipse at 0 0, #553249, transparent 68%),
+                linear-gradient(135deg, #2c2035, #211c2e 70%, #26354e);
+    border: 1px solid #685269;
+  }
+  .report-dashboard .report-chart :is(h2, h3, p, small, strong, summary),
+  .report-dashboard :is(.report-summary, .report-target-card) strong { color: inherit; }
+  .report-dashboard .report-chart svg text { fill: #f5e6f4; }
+  .report-dashboard .report-summary > article { border-top: 3px solid #ff87bd; }
+  .report-dashboard .report-summary > article:nth-child(2) { border-top-color: #75ddba; }
+  .report-dashboard .report-summary > article:nth-child(3) { border-top-color: #ffd084; }
+  .report-dashboard .report-summary > article:nth-child(4) { border-top-color: #92c7ff; }
+  .report-dashboard .report-trend-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .report-dashboard .report-trend-heading select {
+    color: #251b2b; background: #fff; padding: 6px 10px; margin-inline-start: 6px;
+  }
+  .report-dashboard [data-trend-panel] > p { margin: 0 0 8px; }
+  .report-dashboard .report-bar-track { background: #ffffff22; }
+  .report-dashboard .report-bar-track > div { background: linear-gradient(90deg, #d75899, #ffa7cb); }
+  .report-dashboard .report-donut-layout { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .report-dashboard .report-outcome-card .report-donut-layout { flex-direction: column; align-items: stretch; }
+  .report-dashboard .report-outcome-card .report-donut-layout svg { align-self: center; width: min(100%, 150px); }
+  .report-dashboard .report-donut-layout svg { max-width: 175px; justify-self: center; }
+  .report-dashboard .report-chart-legend { gap: 5px; }
+  .report-dashboard .report-exact { margin-top: 16px; }
+  .report-dashboard .report-comparison-table { background: #fff; color: #251b2b; --muted: #594962; --border: #ddd2df; }
+  .report-dashboard .report-chart :is(.report-flow, .report-referral-flow) > div,
+  .report-dashboard .report-outcomes > div { background: #211725; border-color: #765b76; }
+  @media (max-width: 1150px) {
+    .report-dashboard .report-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .report-dashboard .report-overview-grid > :is(section, .report-outcome-card) { grid-column: span 1; }
+    .report-dashboard .report-overview-grid > .report-trend-card { grid-column: 1 / -1; }
+  }
+  @media (max-width: 640px) {
+    .report-dashboard .report-overview-grid { grid-template-columns: minmax(0, 1fr); }
+    .report-dashboard .report-related > div { inset-inline-start: 0; inset-inline-end: auto; }
+    .report-dashboard .report-loyalty .stats { grid-template-columns: minmax(0, 1fr); }
+  }
+}

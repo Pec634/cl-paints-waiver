@@ -3,6 +3,17 @@
     document.querySelectorAll('.reports-filters input[type="date"]').forEach(input => {
         input.addEventListener('change', () => { period.value = 'custom'; });
     });
+    const category = document.querySelector('.reports-filters select[name="event_category"]');
+    const type = document.querySelector('.reports-filters select[name="event_type"]');
+    const limitTypes = () => {
+        for (const group of type.querySelectorAll('optgroup')) {
+            group.disabled = Boolean(category.value && group.label !== category.value);
+            group.hidden = group.disabled;
+        }
+        if (type.selectedOptions[0]?.parentElement.disabled) type.value = '';
+    };
+    category.addEventListener('change', limitTypes);
+    limitTypes();
     const markers = JSON.parse(document.getElementById('reportMapData').textContent);
     const status = document.getElementById('reportMapStatus');
     if (!window.L) {

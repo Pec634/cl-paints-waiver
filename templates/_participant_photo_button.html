@@ -6,7 +6,11 @@
   <dialog class="participant-photo-dialog" aria-labelledby="photo-title-{{ person.id }}">
     <form method="post" enctype="multipart/form-data" action="{{ url_for(endpoint, participant_id=person.id) }}" class="client-form" data-photo-form>
       <h2 id="photo-title-{{ person.id }}">Add image for {{ person.first_name }} {{ person.last_name }}</h2>
-      <p>Private to this participant's responsible account and CL Paints admins. This does not grant permission for website or social media use.</p>
+      {% if admin %}
+      <p>Save the image to the private profile, then ask the responsible adult to sign permission for any public use.</p>
+      {% else %}
+      <p>The image is saved to the private profile. You can choose whether to give permission for any public use on the next screen.</p>
+      {% endif %}
       <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
       <input type="hidden" name="action" value="upload">
       <div class="client-action-row"><button type="button" class="btn" data-photo-camera>Take photo</button><button type="button" class="btn" data-photo-device>Choose from device</button></div>
@@ -15,7 +19,7 @@
       <p>On phones without camera support, choose an existing photo. Export HEIC photos as JPG first.</p>
       <img data-photo-preview class="participant-photo-preview" alt="Selected photograph preview" hidden>
       <p data-photo-status role="status" aria-live="polite"></p>
-      <div class="client-action-row"><button class="btn primary" type="submit" data-photo-save>Save photo</button><button class="btn" type="button" data-photo-close>Cancel</button></div>
+      <div class="client-action-row"><button class="btn primary" type="submit" data-photo-save>{{ 'Save private photo' if admin else 'Save photo and continue' }}</button><button class="btn" type="button" data-photo-close>Cancel</button></div>
     </form>
   </dialog>
   <noscript><a href="{{ url_for(endpoint, participant_id=person.id, upload=1) }}">Upload a participant photo</a></noscript>

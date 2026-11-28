@@ -2,8 +2,10 @@
 
 The portal is the CL Paints website where you manage bookings and clients, and
 where clients sign in to view their bookings. Its existing SumUp integration
-supports client-authorised GBP deposit and outstanding-balance payments using
-SumUp Hosted Checkout. It does not charge cards automatically.
+supports client-authorised GBP deposit and outstanding-balance payments.
+Clients with a booking marked Awaiting Payment can pay through the embedded
+SumUp Payment Widget. Admin payment links and payments on confirmed bookings
+use SumUp Hosted Checkout.
 
 ## 1. Prepare a test account
 
@@ -59,8 +61,9 @@ Opening an invoice or returning to the portal does not itself confirm payment.
    Under Review cannot start an online checkout.
 2. Sign in as that booking's client and open the booking.
 3. Under Online payments, choose Pay remaining deposit or Pay outstanding balance.
-4. Complete payment on SumUp using a sandbox test card from the official testing
-   guide. Test successful, declined, and 3D Secure challenge scenarios.
+4. Enter a sandbox test card into the SumUp form on the booking checkout page.
+   Test successful, declined, and 3D Secure challenge scenarios. A bank
+   challenge may redirect away and return to the portal.
 5. Confirm the verified payment appears once in the booking ledger and the
    outstanding balance updates. Repeating a callback must not duplicate it.
 6. Once the deposit is recorded (or the full total if no deposit is set), use
@@ -70,11 +73,13 @@ Opening an invoice or returning to the portal does not itself confirm payment.
 7. If the callback has not arrived, use Check payment status. If a checkout
    creation timed out, reconcile its status before attempting another payment.
 
-Hosted Checkout sessions currently last 30 minutes. An old saved payment URL
-may therefore expire. Before launch, include expiration and retry behaviour in
-the end-to-end checks.
+Booking widget and Hosted Checkout sessions last up to 30 minutes. A pending
+SumUp checkout can be reused for the same payment. It must finish or expire
+before another checkout can collect a different amount for that booking.
+An existing admin link for the same payment opens SumUp's hosted page.
 
-Official Hosted Checkout guide:
+Official SumUp checkout guides:
+https://developer.sumup.com/online-payments/checkouts/card-widget/
 https://developer.sumup.com/online-payments/checkouts/hosted-checkout
 
 Automated tests mock SumUp responses; they do not establish that the merchant

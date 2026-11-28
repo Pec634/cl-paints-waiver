@@ -9,32 +9,56 @@
 {% else %}<p class="report-empty">No records in this period.</p>{% endif %}</section>
 {% endmacro %}
 {% block body %}
-<div class="admin">{% include '_admin_sidebar.html' %}<main class="reports-main">
-<a class="btn primary" href="{{ url_for('admin_website_report') }}">Website report</a>
-<a class="btn" href="{{ url_for('admin_qr_analytics') }}">QR code analytics</a>
-<header class="top"><div><small>CL PAINTS MANAGEMENT SYSTEM</small><h1>Reports</h1><p>Understand your bookings, participants, referrals and client locations.</p></div><a class="btn" href="{{ url_for('export_reports', period=period, start=start.isoformat(), end=end.isoformat(), location=location_source, setting=setting) }}">Export CSV</a></header>
+<link rel="stylesheet" href="{{ url_for('static', filename='report-dashboard.css') }}">
+<div class="admin">{% include '_admin_sidebar.html' %}<main class="reports-main report-dashboard" id="portal-main">
+<header class="top">
+  <div><h1>Reports</h1><p>Bookings, participants, referrals and client locations.</p></div>
+  <div class="client-action-row">
+    <details class="report-related"><summary class="btn">Related reports</summary>
+      <div>
+        <a class="btn" href="{{ url_for('admin_website_report') }}">Website report</a>
+        <a class="btn" href="{{ url_for('admin_qr_analytics') }}">QR code analytics</a>
+        {% if not staff_portal %}<a class="btn" href="{{ url_for('admin_income') }}">Income records</a>{% endif %}
+      </div>
+    </details>
+    <a class="btn" href="{{ url_for('export_reports', period=period, start=start.isoformat(), end=end.isoformat(), location=location_source, setting=setting, event_category=event_category_filter, event_type=event_type_filter) }}">Export CSV</a>
+  </div>
+</header>
 {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
 {% for category, message in get_flashed_messages(with_categories=true) %}<p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="status">{{ message }}</p>{% endfor %}
-<details class="panel report-filter-panel"><summary>Report filters · {{ start.strftime('%d %b %Y') }} to {{ end.strftime('%d %b %Y') }} · {{ 'All events' if setting == 'all' else setting ~ ' events' }}</summary>
+<div class="report-controls panel">
+<div class="report-toolbar">
+  <nav class="report-view-nav" aria-label="Report views">
+    {% for key, label in [('overview','Overview'),('targets','Targets & financial years'),('details','Detailed reports'),('locations','Locations')] %}
+    <button class="btn{% if key == 'overview' %} primary{% endif %}" type="button" data-report-tab="{{ key }}" aria-pressed="{{ 'true' if key == 'overview' else 'false' }}">{{ label }}</button>
+    {% endfor %}
+  </nav>
+  <div class="report-period-chip">{{ start.strftime('%d %b %Y') }} – {{ end.strftime('%d %b %Y') }} <span>{{ 'All events' if setting == 'all' else setting ~ ' events' }}</span>{% if event_category_filter %}<span>{{ event_category_filter }}</span>{% endif %}{% if event_type_filter %}<span>{{ event_type_filter }}</span>{% endif %}</div>
+</div>
+<details class="report-filter-panel"{% if booking_filters_active %} open{% endif %}><summary>Report filters</summary>
 <form method="get" class="reports-filters">
 <input type="hidden" name="view" value="{{ request.args.get('view', 'overview') }}" id="report-view-input">
 <label>Period<select name="period" id="reportPeriod"><option value="month" {% if period == 'month' %}selected{% endif %}>This month</option><option value="quarter" {% if period == 'quarter' %}selected{% endif %}>Last 3 months</option><option value="year" {% if period == 'year' %}selected{% endif %}>This year</option><option value="custom" {% if period == 'custom' %}selected{% endif %}>Custom dates</option></select></label>
 <label>Start date<input type="date" name="start" value="{{ start.isoformat() }}" required></label><label>End date<input type="date" name="end" value="{{ end.isoformat() }}" required></label>
-<label>Event setting<select name="setting"><option value="all" {% if setting == 'all' %}selected{% endif %}>All events</option><option value="Private" {% if setting == 'Private' %}selected{% endif %}>Private events</option><option value="Public" {% if setting == 'Public' %}selected{% endif %}>Public events</option></select></label><label>Location view<select name="location"><option value="client" {% if location_source == 'client' %}selected{% endif %}>Client addresses</option><option value="venue" {% if location_source == 'venue' %}selected{% endif %}>Event venues</option></select></label><button class="btn primary" type="submit">Apply filters</button>
+<label>Event setting<select name="setting"><option value="all" {% if setting == 'all' %}selected{% endif %}>All events</option><option value="Private" {% if setting == 'Private' %}selected{% endif %}>Private events</option><option value="Public" {% if setting == 'Public' %}selected{% endif %}>Public events</option></select></label><label>Location view<select name="location"><option value="client" {% if location_source == 'client' %}selected{% endif %}>Client addresses</option><option value="venue" {% if location_source == 'venue' %}selected{% endif %}>Event venues</option></select></label>
+<label>Event category<select name="event_category"><option value="">All categories</option>{% for category in categories %}<option{% if category == event_category_filter %} selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
+<label>Event type<select name="event_type"><option value="">All types</option>{% for group, options in event_type_options|groupby(1) %}<optgroup label="{{ group }}">{% for label, _ in options %}<option{% if label == event_type_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</optgroup>{% endfor %}{% if event_type_filter and event_type_filter not in event_type_options|map(attribute=0)|list %}<option selected>{{ event_type_filter }}</option>{% endif %}</select></label>
+<button class="btn primary" type="submit">Apply filters</button>
 </form>
 </details>
-<p class="report-period">{{ start.strftime('%d %B %Y') }} – {{ end.strftime('%d %B %Y') }}. Booking reports use request submission dates; {% if setting != 'Private' %}waiver reports use signing dates.{% endif %} Outcomes reflect current booking status.</p>
+</div>
 {% include '_reports_overview.html' %}
 <section id="report-targets" class="report-view" data-report-view="targets" hidden>
 {% include '_report_targets.html' %}
 </section>
 <section class="report-view" data-report-view="details" hidden>
 {% include '_reports_details.html' %}
+{% include '_report_event_label_review.html' %}
 </section>
 <section class="report-view" data-report-view="locations" hidden>
 <section class="panel report-location">
 <div class="panel-heading"><div><h2>{{ 'Client locations' if location_source == 'client' else 'Event locations' }}</h2><p>Grouped by postcode district. Larger circles show {{ 'more clients' if location_source == 'client' else 'more booking requests' }}.</p></div>
-<form method="post" action="{{ url_for('refresh_report_locations') }}"><input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="start" value="{{ start.isoformat() }}"><input type="hidden" name="end" value="{{ end.isoformat() }}"><input type="hidden" name="setting" value="{{ setting }}"><input type="hidden" name="location" value="{{ location_source }}"><button class="btn" type="submit" {% if not unmapped_areas %}disabled{% endif %}>Map new postcode districts</button></form></div>
+<form method="post" action="{{ url_for('refresh_report_locations') }}"><input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="start" value="{{ start.isoformat() }}"><input type="hidden" name="end" value="{{ end.isoformat() }}"><input type="hidden" name="setting" value="{{ setting }}"><input type="hidden" name="location" value="{{ location_source }}"><input type="hidden" name="event_category" value="{{ event_category_filter }}"><input type="hidden" name="event_type" value="{{ event_type_filter }}"><button class="btn" type="submit" {% if not unmapped_areas %}disabled{% endif %}>Map new postcode districts</button></form></div>
 <p>{{ missing_addresses }} booking request{{ 's' if missing_addresses != 1 }} have an address without a recognised UK postcode. {{ unmapped_areas }} district{{ 's' if unmapped_areas != 1 }} await map coordinates.</p>
 <div class="report-location-grid"><div><div id="reportMap" class="report-map" aria-label="Map of postcode districts"></div><p id="reportMapStatus" role="status">{% if markers %}Loading location map…{% else %}No mapped locations yet. Use “Map new postcode districts” to locate recorded postcode districts.{% endif %}</p></div>
 <div class="report-area-list"><h3>Top postcode districts</h3>{% for area in areas %}<article><div><strong>{{ area.outcode }}</strong><span>{{ area.town or 'Postcode district' }}</span></div><dl><div><dt>Clients</dt><dd>{{ area.clients }}</dd></div><div><dt>Requests</dt><dd>{{ area.bookings }}</dd></div><div><dt>Accepted</dt><dd>{{ area.accepted }}</dd></div></dl></article>{% else %}<p>No usable postcodes found in this period.</p>{% endfor %}</div></div>
@@ -42,6 +66,10 @@
 </section>
 
 </section>
+<details class="panel report-method"><summary>How these figures are counted</summary>
+<p>Booking reports use request submission dates. {% if show_attendance %}Waiver reports use signing dates. {% endif %}Booking outcomes reflect each request’s current status.</p>
+{% if booking_filters_active %}<p>Type and category use the first matching event on each request. Waiver and referral figures are hidden because they are counted separately from booking categories.</p>{% endif %}
+</details>
 <script type="application/json" id="reportMapData">{{ markers|tojson }}</script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>

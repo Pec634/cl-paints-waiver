@@ -1,0 +1,19 @@
+{% extends 'client/base.html' if role == 'client' else 'base.html' %}
+{% from '_passkey_button.html' import passkey_button with context %}
+{% macro management() %}
+<section class="panel">
+  <h1>Passkeys</h1>
+  <p>Use your device’s face recognition, fingerprint or screen lock to sign in. Staff should use a personal device or a security key.</p>
+  {% if recent %}{{ passkey_button(role, 'enrol') }}{% else %}<p>Sign in again to add or remove a passkey.</p>{% endif %}
+  <ul>
+    {% for key in keys %}
+    <li>{{ key.name }} · added {{ key.created_at.strftime('%d %b %Y') }}
+      {% if recent %}<form method="post"><input type="hidden" name="csrf_token" value="{{ passkey_csrf }}"><button name="key" value="{{ key.id }}" class="btn">Remove</button></form>{% endif %}
+    </li>
+    {% else %}<li>No passkeys added yet.</li>{% endfor %}
+  </ul>
+  <a class="btn" href="{{ url_for('client.account' if role == 'client' else 'staff_portal_home' if role == 'staff' else 'admin_dashboard') }}">Back to portal</a>
+</section>
+{% endmacro %}
+{% block content %}{{ management() }}{% endblock %}
+{% block body %}{% if role == 'client' %}{{ super() }}{% else %}<main class="client-main">{{ management() }}</main>{% endif %}{% endblock %}

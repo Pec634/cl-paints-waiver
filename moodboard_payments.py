@@ -7,7 +7,7 @@ from urllib.parse import quote, urlsplit
 from flask import abort, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy.exc import IntegrityError
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from sumup_checkout import provider_request
+from sumup_checkout import payment_date, provider_request
 from sumup_invoices import validate_link
 
 
@@ -22,6 +22,7 @@ def define_model(db):
         provider_id = db.Column(db.String(100), unique=True)
         payment_url = db.Column(db.String(1000))
         paid = db.Column(db.Boolean, nullable=False, default=False)
+        paid_date = db.Column(db.Date, nullable=True)
         fulfilment = db.Column(db.String(20), nullable=False, default='Waiting')
         fulfilment_updated_at = db.Column(db.DateTime)
         created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -36,6 +37,8 @@ def ensure_schema(db):
             connection.execute(text("ALTER TABLE moodboard_order ADD COLUMN fulfilment VARCHAR(20) NOT NULL DEFAULT 'Waiting'"))
         if 'fulfilment_updated_at' not in columns:
             connection.execute(text('ALTER TABLE moodboard_order ADD COLUMN fulfilment_updated_at TIMESTAMP'))
+        if 'paid_date' not in columns:
+            connection.execute(text('ALTER TABLE moodboard_order ADD COLUMN paid_date DATE'))
 
 
 def register(app, db, Order, Event, Assignment, prices, settings, admin_required, Setting):
@@ -89,6 +92,9 @@ def register(app, db, Order, Event, Assignment, prices, settings, admin_required
             order.payment_url = validate_link(data['hosted_checkout_url'])
         if data.get('status') == 'PAID':
             order.paid = True
+            paid_on = payment_date(data, fallback=False)
+            if paid_on is not None:
+                order.paid_date = paid_on
         db.session.commit()
         return data.get('status', 'PENDING')
 

@@ -5,8 +5,8 @@ import hmac
 import secrets
 from functools import wraps
 from io import BytesIO
+from client_email_change import waiver_owner_filter
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for, send_file
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 
@@ -78,7 +78,11 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
     def valid_waiver(waiver):
         return waiver and not waiver.is_archived and waiver.status != 'Superseded' and waiver.expiry_date.date() >= today()
     def owns_waiver(account, waiver):
-        return waiver and waiver.responsible_email.strip().casefold() == account.email.casefold()
+        if not waiver:
+            return False
+        if waiver.responsible_account_id is not None:
+            return waiver.responsible_account_id == account.id
+        return waiver.responsible_email.strip().casefold() == account.email.casefold()
     def owns_member(account, person):
         owner = db.session.get(Custodian, person.id)
         return owner.client_id == account.id if owner else owns_waiver(account, person.waiver)
@@ -86,7 +90,7 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
         owner = db.session.get(Custodian, person.id)
         return db.session.get(Waiver, owner.waiver_id) if owner else person.waiver
     def members(account):
-        original = Participant.query.join(Waiver).filter(func.lower(func.trim(Waiver.responsible_email)) == account.email).all()
+        original = Participant.query.join(Waiver).filter(waiver_owner_filter(db, Waiver, account)).all()
         transferred = Participant.query.join(Custodian, Custodian.participant_id == Participant.id).filter(Custodian.client_id == account.id).all()
         return [p for p in {p.id: p for p in original + transferred}.values() if owns_member(account, p)]
     def public_event(event):
@@ -144,7 +148,7 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
             people = members(account) if account else []
             result = dict(client_account=account, loyalty_members=people, loyalty_balances={p.id: (db.session.get(Balance, p.id).points if db.session.get(Balance, p.id) else 0) for p in people}, client_csrf=csrf())
             if request.endpoint == 'client.dashboard' and account:
-                result['dashboard_waivers'] = Waiver.query.filter(func.lower(func.trim(Waiver.responsible_email)) == account.email.casefold()).order_by(Waiver.signed_date.desc(), Waiver.id.desc()).all()
+                result['dashboard_waivers'] = Waiver.query.filter(waiver_owner_filter(db, Waiver, account)).order_by(Waiver.signed_date.desc(), Waiver.id.desc()).all()
                 result['dashboard_reference_now'] = now()
             return result
         return {}
@@ -152,7 +156,7 @@ def register_loyalty(app, db, models, Account, Waiver, Participant, Event, Booki
     @bp.get('/client/waivers')
     @client_required
     def waivers(account):
-        records = Waiver.query.filter(func.lower(func.trim(Waiver.responsible_email)) == account.email).order_by(Waiver.signed_date.desc()).all()
+        records = Waiver.query.filter(waiver_owner_filter(db, Waiver, account)).order_by(Waiver.signed_date.desc()).all()
         return render_template('client/waivers.html', waivers=records, transfers=Transfer.query.filter_by(to_client_id=account.id, completed_at=None).filter(Transfer.expires_at > now()).all())
 
     @bp.get('/client/waivers/new')

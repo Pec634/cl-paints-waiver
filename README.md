@@ -46,7 +46,7 @@ For the remaining portal features and how to use them, see
 - admin Open / Closing Soon / Closed control
 
 ## Data handling
-The app uses `DATABASE_URL` when configured and otherwise uses a local SQLite database. Booking and waiver submissions store personal information, signatures, and event details; protect database access and backups accordingly. Configured online payments use SumUp-hosted checkout, with successful payments verified and recorded by the app. Card details are entered on SumUp rather than in this app.
+The app uses `DATABASE_URL` when configured and otherwise uses a local SQLite database. Booking and waiver submissions store personal information, signatures, and event details. Protect database access and backups accordingly. SumUp collects card details through its hosted checkout or embedded payment widget. The app verifies successful payments before recording them.
 
 ## Run it in VS Code
 1. Open this folder in VS Code.
@@ -59,6 +59,7 @@ The app uses `DATABASE_URL` when configured and otherwise uses a local SQLite da
 
 ## Reports
 
+- Open **Sales & finance → Income records** to review receipts and refunds by UK tax year, compare them with statements, and export the filtered transactions. Use **Record income or refund** for transactions recorded outside the app. The **Needs a date** view lets you match older order receipts to dated evidence, including instalments.
 - Open Reports in the admin navigation for booking trends and outcomes, event types, waiver and participant trends, participant age bands, referral milestones, booked hours and estimated accepted booking value.
 - Filters support this month, the last three calendar months, this year or custom dates. Requests are grouped by submission date; waivers by signing date; workload by accepted event date. Referral cohorts use the original attended event date, with milestones counted through the selected end date.
 - CSV exports contain aggregate totals without client names, emails or street addresses. Participant counts describe records on waivers, including repeat attendance, rather than unique people.
@@ -300,6 +301,12 @@ template rather than a transcription of the original form. Historical submission
 stay in Cognito Forms and are not imported automatically. Older external form
 definitions are retained, but client seasonal links now use native forms.
 
+Participant profile photos stay private when saved. The responsible adult can
+sign a release for each image and choose social media, the CL Paints website,
+and promotional publications independently. Staff can copy a permission link
+from the photo gallery. Website placement requires website permission and admin
+approval. Clients can withdraw a release from **Upload photos** in the portal.
+
 Scheduled hourly discounts apply to new internal booking requests submitted
 within the configured UK-time start-inclusive, end-exclusive interval. The
 largest active saving wins; discounts do not stack and rates never fall below
@@ -539,3 +546,11 @@ financial correction records also protect a booking from deletion.
 ### Client portal notifications
 
 Booking edits under review and admin booking messages send automatic email notifications even if optional booking emails are disabled. Message notifications use a No-reply subject and direct clients to sign in to their booking conversation. Failed sends preserve the booking/message and report the failure to the admin.
+
+### Passkey sign-in
+
+Set `PASSKEY_ORIGIN` to the portal's public HTTPS origin (scheme and hostname, plus a port if needed). Install the Python dependencies in `requirements.txt` and restart the app. Passkeys are bound to that origin. Keep the production hostname stable so enrolled credentials remain usable.
+
+Clients can enrol in Account settings. Named staff and the owner can enrol under Manage passkeys after signing in. Enrolment and removal require a recent sign-in. Face recognition, fingerprints and device PINs are handled by the device. The portal stores public-key credentials. Existing email code, staff PIN and owner sign-in methods remain available.
+
+Clients can change their sign-in email in Account settings by verifying both inboxes. The account ID and signed waiver details are retained, and older client sessions are invalidated. Clients who have lost access to their old inbox should contact CL Paints for identity verification and recovery.

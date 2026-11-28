@@ -5,23 +5,37 @@
 <h1>Photos of {{ person.first_name }} {{ person.last_name }}</h1>
 {% if is_admin %}{% if photo_account %}<p><a href="{{ url_for('admin_client_profile', client_id=photo_account.id, tab='rewards') }}">Back to account {{ photo_account.account_number }}</a></p>{% else %}<p>Create a client account for the current responsible person before adding photographs.</p>{% endif %}
 {% else %}<p><a href="{{ url_for('loyalty.waivers') }}">Back to my waivers &amp; members</a></p>{% endif %}
-<p>These photographs stay private until signed photo permission is provided and an admin approves website use.</p>
+<p>These photographs are stored privately. A responsible adult can give permission for social media, website use or publications for each photo.</p>
 {% if error %}<p role="alert">{{ error }}</p>{% endif %}
 {% if photo_account %}{{ photo_button(person, is_admin) }}
 <details {% if error or request.args.get('upload') %}open{% endif %}><summary>Standard upload form</summary>
-<form method="post" enctype="multipart/form-data" class="client-form"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="action" value="upload"><label>Choose image<input type="file" name="image" accept="image/jpeg,image/png,image/webp" required></label><button class="btn">Save photo</button></form></details>{% endif %}
+<form method="post" enctype="multipart/form-data" class="client-form"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="action" value="upload"><label>Choose image<input type="file" name="image" accept="image/jpeg,image/png,image/webp" required></label><button class="btn">{{ 'Save private photo' if is_admin else 'Save photo and continue' }}</button></form></details>{% endif %}
 <div class="participant-photo-grid">{% for photo in pagination.items %}<article class="panel">
 <a href="{{ url_for('participant_photo_image', photo_id=photo.id) }}"><img src="{{ url_for('participant_photo_image', photo_id=photo.id) }}" alt="Photograph of {{ person.first_name }} {{ person.last_name }}" loading="lazy"></a>
 <p>Added {{ photo.created_at.strftime('%d/%m/%Y %H:%M') }} UTC{% if is_admin %} &middot; Account {{ photo.client_id }}{% endif %}</p>
 {% set release = photo_releases[photo.id] %}
-{% if is_admin %}
-{% if release %}<p>Signed photo permission recorded: F-{{ release.id }}.</p><form method="post"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="action" value="send_library"><input type="hidden" name="photo_id" value="{{ photo.id }}"><button class="btn primary">Send to image library</button></form>
-{% else %}<p>Awaiting signed photo permission for this image. General waiver consent does not replace a photo release.</p><p><a href="{{ url_for('client_photos', participant_photo=photo.id) }}">Client permission form</a> &mdash; the responsible account must sign in and complete this form.</p>{% endif %}
-{% else %}
-{% if release %}<p>Sent to image library &middot; signed permission F-{{ release.id }}. Publication requires admin approval.</p><a class="btn" href="{{ url_for('client_photos') }}">View or withdraw permission</a>
-{% else %}<a class="btn primary" href="{{ url_for('client_photos', participant_photo=photo.id) }}">Send to image library</a>{% endif %}
+{% if release %}
+<p>Signed photo permission recorded &middot; F-{{ release.id }}.</p>
+<p>Allowed uses &middot; {{ photo_permission_labels(release)|join(', ') }}.</p>
 {% endif %}
-<p>Deleting this photo also withdraws linked website permission and removes linked website images.</p>
+{% if is_admin %}
+{% if release and photo_website_allowed(release) %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="action" value="send_library"><input type="hidden" name="photo_id" value="{{ photo.id }}"><button class="btn primary">Send to image library</button></form>
+{% elif not release %}
+<p>Private &middot; Awaiting signed photo permission.</p>
+<details class="participant-photo-request" data-photo-permission-request>
+<summary>Ask the responsible adult to sign</summary>
+<p>Send the link to the responsible adult. They sign in to review this image and choose which uses to allow.</p>
+<label>Permission link <input type="url" value="{{ url_for('client_photos', participant_photo=photo.id, _external=True) }}" readonly data-photo-permission-link></label>
+<div class="client-action-row"><button class="btn" type="button" data-photo-copy-link hidden>Copy permission link</button><a class="btn" href="{{ url_for('client_photos', participant_photo=photo.id) }}">Open permission form</a></div>
+<p data-photo-copy-status role="status"></p>
+</details>
+{% endif %}
+{% else %}
+{% if release %}<a class="btn" href="{{ url_for('client_photos') }}">View or withdraw permission</a>
+{% else %}<p>Private photo</p><a class="btn" href="{{ url_for('client_photos', participant_photo=photo.id) }}">Choose photo permissions</a>{% endif %}
+{% endif %}
+<p>Deleting this photo also withdraws its permissions and removes any linked website images.</p>
 <form method="post"><input type="hidden" name="csrf_token" value="{{ client_csrf }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="photo_id" value="{{ photo.id }}"><button class="btn" type="submit">Delete photo</button></form>
 </article>{% else %}<p>No photos added yet.</p>{% endfor %}</div>
 {% if pagination.pages > 1 %}<nav aria-label="Photo pages">{% if pagination.has_prev %}<a class="btn" href="{{ url_for(gallery_endpoint, participant_id=person.id, page=pagination.prev_num) }}">Previous</a>{% endif %} Page {{ pagination.page }} of {{ pagination.pages }} {% if pagination.has_next %}<a class="btn" href="{{ url_for(gallery_endpoint, participant_id=person.id, page=pagination.next_num) }}">Next</a>{% endif %}</nav>{% endif %}

@@ -48,6 +48,7 @@
             ('Website & marketing', 'marketing_dashboard', 'Email campaigns', current in ['marketing_dashboard','marketing_campaign','marketing_email_preview']),
             ('Sales & finance', 'creates_admin', 'CL Creates', current.startswith('creates_')),
             ('Sales & finance', 'payments_overview', 'Payments, deposits & invoices', current in ['payments_overview','admin_payments','admin_booking_invoices']),
+            ('Sales & finance', 'admin_income', 'Income records', current == 'admin_income' or current.startswith('admin_income_')),
             ('Sales & finance', 'admin_cash_movements', 'Cash movements & history', current == 'admin_cash_movements'),
             ('Sales & finance', 'pos_reconcile', 'Till reconciliation', current == 'pos_reconcile'),
             ('Reports & analytics', 'admin_reports', 'Business reports', current == 'admin_reports'),
@@ -66,6 +67,7 @@
         {% endif %}
         <hr class="admin-nav-divider">
         {% if staff_portal %}
+        {% if passkeys_enabled %}<a href="{{ url_for('portal_passkeys', role='staff') }}">Manage passkeys</a>{% endif %}
         <form method="post" action="{{ url_for('pos_staff_logout') }}"><input type="hidden" name="csrf_token" value="{{ session.client_csrf }}"><button class="btn">Sign out</button></form>
         {% else %}
         <a href="{{ url_for('admin_logout') }}">Logout</a>

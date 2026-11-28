@@ -40,6 +40,7 @@ class PosLibraryTest(unittest.TestCase):
             id = self.db.Column(self.db.Integer, primary_key=True)
             waiver_reference = self.db.Column(self.db.String(100))
             responsible_email = self.db.Column(self.db.String(100))
+            responsible_account_id = self.db.Column(self.db.Integer)
             responsible_first_name = self.db.Column(self.db.String(100))
             responsible_last_name = self.db.Column(self.db.String(100))
             is_archived = self.db.Column(self.db.Boolean, default=False)

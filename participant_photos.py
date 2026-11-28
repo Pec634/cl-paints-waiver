@@ -1,4 +1,4 @@
-"""Private participant photographs, separate from marketing photo releases."""
+"""Private participant photographs and access to their signed photo permissions."""
 from datetime import datetime
 from io import BytesIO
 import secrets
@@ -20,6 +20,13 @@ def define_model(db):
     return ParticipantPhoto
 
 
+def lock_photo_query(db, Photo, query):
+    if db.engine.dialect.name == 'sqlite':
+        # Serialize signing and deletion where SELECT FOR UPDATE is unavailable.
+        query.update({Photo.uploaded_by: Photo.uploaded_by}, synchronize_session=False)
+    return query.populate_existing().with_for_update()
+
+
 def register(app, db, Photo, Participant, Account, Custodian, current_client, admin_required):
     @app.context_processor
     def photo_context():
@@ -31,6 +38,8 @@ def register(app, db, Photo, Participant, Account, Custodian, current_client, ad
         custodian = db.session.get(Custodian, person.id)
         if custodian:
             return db.session.get(Account, custodian.client_id)
+        if person.waiver.responsible_account_id is not None:
+            return db.session.get(Account, person.waiver.responsible_account_id)
         return Account.query.filter(db.func.lower(db.func.trim(Account.email)) ==
                                     person.waiver.responsible_email.strip().casefold()).first()
 
@@ -44,14 +53,24 @@ def register(app, db, Photo, Participant, Account, Custodian, current_client, ad
             abort(404)
         return person, owner
 
-    def release_source(photo_id, account):
-        photo = db.get_or_404(Photo, photo_id)
+    def release_source(photo_id, account, *, lock=False):
+        query = Photo.query.filter_by(id=photo_id)
+        photo = (lock_photo_query(db, Photo, query) if lock else query).first_or_404()
         person, owner = client_person(photo.participant_id)
         if owner.id != account.id or photo.client_id != account.id:
             abort(404)
         return photo, person
 
+    def release_current(photo_id, client_id):
+        photo = db.session.get(Photo, photo_id, options=[defer(Photo.content)])
+        if photo is None or photo.client_id != client_id:
+            return False
+        person = db.session.get(Participant, photo.participant_id)
+        owner = account_for(person) if person else None
+        return owner is not None and owner.id == client_id
+
     app.extensions['participant_photo_release_source'] = release_source
+    app.extensions['participant_photo_release_current'] = release_current
 
     def private(response):
         response.headers['Cache-Control'] = 'private, no-store'
@@ -75,7 +94,8 @@ def register(app, db, Photo, Participant, Account, Custodian, current_client, ad
             if not owner:
                 abort(409, description='Create a client account for the responsible person before adding photographs.')
             if request.form.get('action') == 'delete':
-                photo = Photo.query.filter_by(id=request.form.get('photo_id', type=int), participant_id=person.id).first_or_404()
+                query = Photo.query.filter_by(id=request.form.get('photo_id', type=int), participant_id=person.id)
+                photo = lock_photo_query(db, Photo, query).first_or_404()
                 if not admin and photo.client_id != owner.id:
                     abort(404)
                 app.extensions['participant_photo_withdraw'](photo)
@@ -90,6 +110,9 @@ def register(app, db, Photo, Participant, Account, Custodian, current_client, ad
                 release = app.extensions['participant_photo_release'](photo)
                 if not release:
                     flash('The responsible account must sign photo permission for this image before it can enter the library.', 'error')
+                    return redirect(target)
+                if not app.extensions['participant_photo_website_allowed'](release):
+                    flash('Website use requires a separate permission from the responsible adult.', 'error')
                     return redirect(target)
                 return redirect(url_for('admin_photo_library', q=release.email))
             if request.form.get('action') != 'upload':
@@ -119,11 +142,12 @@ def register(app, db, Photo, Participant, Account, Custodian, current_client, ad
                             clean.paste(image.convert('RGB'))
                         output = BytesIO()
                         clean.save(output, 'JPEG', quality=88, optimize=True)
-                db.session.add(Photo(participant_id=person.id, client_id=owner.id,
-                                     content=output.getvalue(), uploaded_by='admin' if admin else 'client'))
+                photo = Photo(participant_id=person.id, client_id=owner.id, content=output.getvalue(),
+                              uploaded_by='admin' if admin else 'client')
+                db.session.add(photo)
                 db.session.commit()
-                flash('Photograph saved to this participant and account.', 'success')
-                return redirect(target)
+                flash('Photograph saved to the private participant profile.', 'success')
+                return redirect(target if admin else url_for('client_photos', participant_photo=photo.id))
             except (ValueError, UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning) as problem:
                 db.session.rollback()
                 error = str(problem) if isinstance(problem, ValueError) else 'This photograph could not be read. Choose a JPG, PNG or WebP image.'

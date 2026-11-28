@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Record income | CL Paints{% endblock %}
+{% block body %}
+<div class="admin">
+    {% include '_admin_sidebar.html' %}
+    <main class="reports-main" id="portal-main">
+        <header class="top">
+            <div>
+                <h1>{{ 'Add a payment date' if order_id else 'Record income or refund' }}</h1>
+                {% if order_id %}
+                <p>{{ source }} order #{{ order_id }} · £{{ '{:,.2f}'.format(remaining|abs if remaining > 0 else 0) }} left to match to a payment date.</p>
+                {% else %}
+                <p>Add a payment or refund made outside the booking, till, cash-up and order records.</p>
+                {% endif %}
+            </div>
+            <a class="btn" href="{{ url_for('admin_income', tax_year='undated' if order_id else none) }}">Back to income records</a>
+        </header>
+        {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
+        {% if order_id and remaining <= 0 %}
+        <p class="panel">The full recorded amount has a payment date.</p>
+        {% else %}
+        <form method="post" class="panel client-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <input type="hidden" name="entry_token" value="{{ entry_token }}">
+            {% if order_id %}
+            <input type="hidden" name="kind" value="payment">
+            <p>Use your bank or payment provider statement to confirm when the money was received. If the order was paid in instalments, record each instalment using its own date and amount.</p>
+            {% else %}
+            <label>Type <select name="kind" required>
+                <option value="payment" {% if fields.kind == 'payment' %}selected{% endif %}>Payment received</option>
+                <option value="refund" {% if fields.kind == 'refund' %}selected{% endif %}>Refund issued</option>
+            </select></label>
+            {% endif %}
+            <label>Date <input type="date" name="paid_date" value="{{ fields.paid_date }}" max="{{ today }}" required></label>
+            <label>Amount (£) <input type="number" name="amount" value="{{ fields.amount }}" min="0.01" max="{{ remaining if order_id else '9999999999.99' }}" step="0.01" required></label>
+            <label>Method <select name="method" required>
+                <option value="">Choose a method</option>
+                {% for method in methods %}<option {% if fields.method == method %}selected{% endif %}>{{ method }}</option>{% endfor %}
+            </select></label>
+            <label>Evidence reference <input name="reference" value="{{ fields.reference }}" maxlength="120" required></label>
+            <label>Description <input name="description" value="{{ fields.description }}" maxlength="300" required></label>
+            <button type="submit" class="btn primary">Save record</button>
+        </form>
+        {% endif %}
+        {% if recent %}
+        <section class="panel">
+            <h2>Recently added records</h2>
+            <ul>
+                {% for item in recent %}
+                <li><a href="{{ url_for('admin_income_receipt', receipt_id=item.id) }}">{{ item.reference }}</a> · {{ item.paid_date.strftime('%d %b %Y') }} · £{{ '{:,.2f}'.format(item.amount) }}{% if item.voided_at %} · Voided{% endif %}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

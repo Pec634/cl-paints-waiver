@@ -1,0 +1,115 @@
+﻿.booking-payment-approved {
+  text-align: center;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  background: radial-gradient(ellipse at 50% 0%, #edf9f0 0%, #fff 66%);
+}
+
+.booking-payment-approved p {
+  max-width: 38ch;
+  margin: .75rem auto 1.5rem;
+}
+
+.booking-payment-approved .booking-payment-booking-status {
+  padding: .75rem 1rem;
+  border: 1px solid #60987b;
+  border-radius: .75rem;
+  background: #edf8f1;
+  color: #194a32;
+}
+
+.booking-payment-checkmark {
+  position: relative;
+  width: 6rem;
+  height: 6rem;
+  margin: .75rem auto 1.25rem;
+  border-radius: 50%;
+  background: #e2f6e9;
+  box-shadow: inset 0 0 0 1px #33875b35, 0 8px 24px #155d4026;
+}
+
+.booking-payment-stroke {
+  position: absolute;
+  height: .59rem;
+  border-radius: 1rem;
+  background: linear-gradient(#229458, #087342);
+  transform-origin: .29rem 50%;
+  transform: rotate(var(--stroke-angle));
+}
+
+.booking-payment-stroke-first {
+  left: 1.23rem;
+  top: 2.74rem;
+  width: 2.04rem;
+  --stroke-angle: 44deg;
+  --stroke-time: .22s;
+  --stroke-start: .25s;
+}
+
+.booking-payment-stroke-second {
+  left: 2.28rem;
+  top: 3.74rem;
+  width: 3.55rem;
+  --stroke-angle: -46deg;
+  --stroke-time: .42s;
+  --stroke-start: .47s;
+}
+
+.booking-payment-brush, .booking-payment-firework { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not(.portal-reduced-motion) .booking-payment-stroke {
+    animation: booking-paint-stroke var(--stroke-time) var(--stroke-start) linear both;
+  }
+
+  :root:not(.portal-reduced-motion) .booking-payment-brush {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    display: block;
+    width: 3.5rem;
+    height: .69rem;
+    margin-top: -.345rem;
+    transform-origin: 0 50%;
+    background: linear-gradient(90deg, #159355 0 11%, #493541 11% 25%, #f7ecf2 25% 34%,
+      #aeb0be 34% 42%, #a82e72 42% 85%, #e17cbb 85%);
+    clip-path: polygon(0 50%, 12% 7%, 33% 4%, 96% 29%, 100% 50%, 96% 72%, 33% 96%, 12% 93%);
+    animation: booking-paint-brush 1.11s linear both;
+  }
+
+  :root:not(.portal-reduced-motion) .booking-payment-firework {
+    position: absolute;
+    display: block;
+    width: .32rem;
+    height: .32rem;
+    border-radius: 50%;
+    box-shadow: 0 -2.2rem #ec5c9d, 1.6rem -1.6rem #f3ad45, 2.2rem 0 #51a8ef,
+      1.6rem 1.6rem #ba80ee, 0 2.2rem #ef709d, -1.6rem 1.6rem #43a776,
+      -2.2rem 0 #f3ad45, -1.6rem -1.6rem #51a8ef;
+    animation: booking-paint-firework .66s var(--burst-delay) ease-out both;
+  }
+
+  .booking-payment-firework-left { top: 39%; left: -23%; --burst-delay: .91s; }
+  .booking-payment-firework-right { top: 27%; left: 120%; --burst-delay: 1.02s; }
+  .booking-payment-firework-top { top: 2%; left: 70%; --burst-delay: 1.13s; }
+}
+
+@keyframes booking-paint-stroke {
+  from { transform: rotate(var(--stroke-angle)) scaleX(0); }
+  to { transform: rotate(var(--stroke-angle)) scaleX(1); }
+}
+
+@keyframes booking-paint-brush {
+  0% { opacity: 0; transform: translate(4.1rem, .45rem) rotate(-30deg); }
+  22.5% { opacity: 1; transform: translate(1.52rem, 3rem) rotate(-29deg); }
+  42.3% { opacity: 1; transform: translate(2.57rem, 4rem) rotate(-32deg); }
+  80.2% { opacity: 1; transform: translate(4.68rem, 1.83rem) rotate(-36deg); }
+  100% { opacity: 0; transform: translate(5.43rem, .75rem) rotate(-52deg); }
+}
+
+@keyframes booking-paint-firework {
+  0% { opacity: 0; transform: rotate(-18deg) scale(.05); }
+  15% { opacity: 1; }
+  65% { opacity: .85; }
+  100% { opacity: 0; transform: rotate(10deg) scale(1.1); }
+}

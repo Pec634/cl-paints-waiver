@@ -1,0 +1,22 @@
+﻿{% extends 'client/base.html' %}
+{% block content %}
+<section class="panel">
+  <h1>Change sign-in email</h1>
+  <p>Current email <strong>{{ client_account.email }}</strong></p>
+  {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+  <form method="post" class="client-form">
+    <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+    {% if change %}
+      <p>Enter the two codes sent to {{ change.old_email }} and {{ change.new_email }}. They expire after 10 minutes.</p>
+      <label>Code from your current email<input name="old_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label>
+      <label>Code from your new email<input name="new_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label>
+      <button class="btn primary" name="action" value="confirm">Confirm email change</button>
+    {% else %}
+      <label>New email address<input type="email" name="new_email" autocomplete="email" maxlength="255" required></label>
+      <button class="btn primary" name="action" value="start">Send verification codes</button>
+    {% endif %}
+  </form>
+  <p>Contact CL Paints if you no longer have access to your current email.</p>
+  <a class="btn" href="{{ url_for('client.account') }}">Back to account</a>
+</section>
+{% endblock %}

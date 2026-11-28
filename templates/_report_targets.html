@@ -1,25 +1,25 @@
 {% macro number(value, money) %}{% if money %}£{{ '{:,.2f}'.format(value) }}{% else %}{{ '{:,.0f}'.format(value) }}{% endif %}{% endmacro %}
 <header class="top"><div><h2>Targets &amp; financial years</h2><p>Financial year {{ targets.start.strftime('%d %B %Y') }} to {{ targets.finish.strftime('%d %B %Y') }}.</p></div></header>
 <p class="report-note">Company-wide figures through {{ targets.today.strftime('%d %B %Y') }}, independent of the date and event filters above. Last year compares {{ targets.previous_start.strftime('%d %B %Y') }} to {{ targets.previous_end.strftime('%d %B %Y') }}. Financial years start on 1 April.</p>
+<section class="panel report-chart">
+<h3>Actuals and targets</h3>
+<p>The graph shows each metric as a percentage of its largest absolute value across the comparisons, so counts and pounds can share one scale. The table shows the exact figures.</p>
+<div id="report-target-line" hidden></div>
+<script type="application/json" id="report-target-line-data">{{ {'labels': targets.comparison_labels, 'metrics': targets.metrics}|tojson }}</script>
+<details class="report-exact"><summary>View exact comparison figures</summary><div class="report-comparison-table">
+<table aria-label="Exact report figures and targets">
+<thead><tr><th scope="col">Measure</th>{% for label in targets.comparison_labels %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
+<tbody>{% for metric in targets.metrics %}<tr><th scope="row">{{ metric.label }}</th>{% for value in metric.comparison %}<td>{{ number(value, metric.money) if value is not none else '—' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table>
+</div></details>
+</section>
 <div class="report-target-cards">
 {% for metric in targets.metrics %}
 <article class="panel report-target-card"><h3>{{ metric.label }}</h3><strong class="report-target-value">{{ number(metric.current, metric.money) }}</strong><p>Last year to the same date: <strong>{{ number(metric.previous, metric.money) }}</strong>{% if metric.change is not none %} <span>{{ '+' if metric.change > 0 else '' }}{{ metric.change }}%</span>{% else %} <span>No percentage baseline</span>{% endif %}</p>
 {% if metric.target is not none %}<div class="report-target-status">{{ metric.status }}</div><progress max="100" value="{{ [100, [0, metric.percent]|max]|min }}" aria-label="{{ metric.label }} annual target progress"></progress><p>{{ metric.percent }}% of {{ number(metric.target, metric.money) }} annual target</p><small>Expected by today at an even pace: {{ number(metric.expected, metric.money) }}</small>{% else %}<p>No target set. Set an annual goal below.</p>{% endif %}</article>
 {% endfor %}
 </div>
-<section class="panel">
-<h3>Actuals and targets</h3>
-<p>The graph shows each metric as a percentage of its largest absolute value across the comparisons, so counts and pounds can share one scale. The table shows the exact figures.</p>
-<div id="report-target-line" hidden></div>
-<script type="application/json" id="report-target-line-data">{{ {'labels': targets.comparison_labels, 'metrics': targets.metrics}|tojson }}</script>
-<div class="report-comparison-table">
-<table aria-label="Exact report figures and targets">
-<thead><tr><th scope="col">Measure</th>{% for label in targets.comparison_labels %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
-<tbody>{% for metric in targets.metrics %}<tr><th scope="row">{{ metric.label }}</th>{% for value in metric.comparison %}<td>{{ number(value, metric.money) if value is not none else '—' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
-</table>
-</div>
-</section>
-<details class="panel" open><summary>Set annual targets</summary>
+<details class="panel"><summary>Set annual targets</summary>
 <p>Use the comparisons below to choose goals for {{ targets.start.year }}/{{ targets.finish.strftime('%y') }}. Leave a field blank to remove its target.</p>
 <form class="client-form" method="post" action="{{ url_for('save_report_targets') }}">
 <input type="hidden" name="csrf_token" value="{{ targets.csrf }}"><input type="hidden" name="year" value="{{ targets.start.year }}">

@@ -8,6 +8,7 @@
     <div><h1>Moodboard sign editor</h1><p>{{ event.name }}</p></div>
     <div class="paint-actions">
         <a class="btn" href="{{ url_for('admin_event_moodboard', event_id=event.id) }}">Manage event designs</a>
+        <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id, layout='photos') }}">Print individual 7 × 5 photos</a>
         <a class="btn" href="{{ url_for('admin_event_moodboard_print', event_id=event.id, layout='sign') }}">Standalone QR sign</a>
         <button type="button" class="btn" id="toggle-print-preview" aria-pressed="false">Clean print preview</button>
         <button type="button" class="btn primary" id="print-from-preview" disabled hidden>Print / save as PDF</button>

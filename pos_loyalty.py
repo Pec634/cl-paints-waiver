@@ -12,6 +12,13 @@ class PosLoyalty:
         _, self.Balance, self.Visit, self.Custodian, _ = models
         self.Account, self.Participant, self.Waiver, self.Event = Account, Participant, Waiver, Event
 
+    def waiver_account(self, waiver, custodian):
+        account_id = custodian.client_id if custodian else waiver.responsible_account_id
+        if account_id is not None:
+            return self.db.session.get(self.Account, account_id)
+        return self.Account.query.filter(func.lower(func.trim(self.Account.email)) ==
+                                         waiver.responsible_email.strip().lower()).first()
+
     def events(self):
         today = datetime.now(ZoneInfo('Europe/London')).date()
         public = self.app.extensions['kiosk_public_event']
@@ -48,8 +55,7 @@ class PosLoyalty:
             waiver = self.db.session.get(self.Waiver, sale.waiver_id)
             owner = self.db.session.get(self.Custodian, person_id)
             email = waiver.responsible_email.strip().lower()
-            account = self.db.session.get(self.Account, owner.client_id) if owner else self.Account.query.filter(
-                func.lower(func.trim(self.Account.email)) == email).first()
+            account = self.waiver_account(waiver, owner)
             if not account:
                 account = self.Account(email=email, first_name=waiver.responsible_first_name,
                     last_name=waiver.responsible_last_name)
@@ -97,8 +103,7 @@ class PosLoyalty:
                     points = balance.points if balance else 0
                     if points >= 3:
                         raise ValueError('3/3 points — free paint ready; no extra point added')
-                    account = self.db.session.get(self.Account, owner.client_id) if owner else self.Account.query.filter(
-                        func.lower(func.trim(self.Account.email)) == waiver.responsible_email.strip().lower()).first()
+                    account = self.waiver_account(waiver, owner)
                     if not account:
                         account = self.Account(email=waiver.responsible_email.strip().lower(),
                             first_name=waiver.responsible_first_name, last_name=waiver.responsible_last_name)

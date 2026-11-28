@@ -1,0 +1,43 @@
+{% extends 'client/base.html' %}
+{% block title %}{{ 'Payment approved' if payment_approved else 'Pay online' }} | {{ business_settings.business_name }}{% endblock %}
+{% block content %}
+{% if payment_approved %}
+<link rel="stylesheet" href="{{ url_for('static', filename='booking-checkout.css') }}">
+<section class="panel booking-payment-approved" aria-labelledby="booking-payment-approved-title">
+  <div class="booking-payment-checkmark" aria-hidden="true">
+    <span class="booking-payment-stroke booking-payment-stroke-first"></span>
+    <span class="booking-payment-stroke booking-payment-stroke-second"></span>
+    <span class="booking-payment-brush"></span>
+    <span class="booking-payment-firework booking-payment-firework-left"></span>
+    <span class="booking-payment-firework booking-payment-firework-right"></span>
+    <span class="booking-payment-firework booking-payment-firework-top"></span>
+  </div>
+  <h1 id="booking-payment-approved-title">Payment approved</h1>
+  <p>Your {{ 'deposit' if checkout.purpose == 'Deposit' else 'balance payment' }} of <strong>£{{ '%.2f'|format(checkout.amount) }}</strong> has been received for booking {{ booking.public_reference }}.</p>
+  {% if booking.status == 'Accepted' %}
+  <p class="booking-payment-booking-status"><strong>Your booking is confirmed.</strong> You&#8217;re booked in with CL Paints.</p>
+  {% elif booking.status == 'Awaiting Payment' %}
+  <p class="booking-payment-booking-status">CL Paints will confirm your booking after reviewing your payment.</p>
+  {% endif %}
+  <a class="btn primary" href="{{ url_for('client.booking_detail', booking_id=booking.id) }}">Back to booking</a>
+</section>
+{% else %}
+<a class="client-text-link" href="{{ url_for('client.booking_detail', booking_id=booking.id) }}">Back to booking {{ booking.public_reference }}</a>
+<h1>{{ 'Pay remaining deposit' if checkout.purpose == 'Deposit' else 'Pay outstanding balance' }}</h1>
+<section class="panel" aria-labelledby="booking-card-payment">
+  <h2 id="booking-card-payment">Card payment</h2>
+  <p><strong>£{{ '%.2f'|format(checkout.amount) }}</strong> for booking {{ booking.public_reference }}</p>
+  <p>SumUp processes your card payment. Your bank may ask you to verify it.</p>
+  <p id="booking-payment-status" role="status">Loading the secure card form…</p>
+  <div id="sumup-card" data-checkout-id="{{ checkout.provider_id }}" data-amount="{{ '%.2f'|format(checkout.amount) }}"></div>
+  <noscript><p>Enable JavaScript to use this card form. Contact CL Paints if you need another way to pay.</p></noscript>
+  <form id="booking-payment-refresh" method="post" action="{{ url_for('sumup_payment_refresh', booking_id=booking.id, checkout_id=checkout.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ client_csrf }}">
+    <input type="hidden" name="return_to_checkout" value="yes">
+    <button class="btn">Check payment status</button>
+  </form>
+</section>
+<script src="https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js" defer></script>
+<script src="{{ url_for('static', filename='booking-checkout.js') }}" defer></script>
+{% endif %}
+{% endblock %}

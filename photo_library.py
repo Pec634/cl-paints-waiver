@@ -21,6 +21,20 @@ Images published online may be viewed, downloaded or shared by other people. CL 
 You can withdraw permission from Upload photos in your client portal, or contact CL Paints. We will stop new use and remove the selected photographs from this website. Contact us so we can also remove copies from social accounts and other materials we control. We cannot guarantee removal of copies already made by others.
 We review each submission before publication. We store uploads and release records privately while reviewing them and while needed to record the authorised use. Contact us about deletion or other privacy requests. See our privacy policy for contact details.'''
 
+PARTICIPANT_PHOTO_TERMS = '''Giving permission is optional. Your choices apply to this photograph and do not affect your bookings or services.
+CL Paints may use this photograph to showcase and promote its face painting work in the channels you select. Choose separately for CL Paints’ social media accounts, the CL Paints website, and CL Paints’ printed and digital publications, including brochures and leaflets.
+You confirm you are an adult with authority to give these permissions. For a child, you must be their parent or legal guardian or have permission from their parent or legal guardian, and take the child’s wishes into account. You must also have permission from the photographer and everyone else shown, with parent or guardian authority for other children.
+We privately retain your name, verified account email, signature, people shown and identifying descriptions, your choices, the terms you signed, and the date. We review each photograph before use. People who see an image online or in print may copy or share it.
+Withdraw your permission in the client portal under Upload photos, or contact CL Paints. We will stop future use and remove the photograph from the website. Contact us about copies on social media or in publications.'''
+
+SOCIAL_PERMISSION = ('social', 'Social media', 'CL Paints’ own social media accounts')
+WEBSITE_PERMISSION = ('website', 'Website', 'CL Paints’ public website')
+PUBLICATIONS_PERMISSION = ('publications', 'Publications', 'CL Paints’ printed and digital publications, such as brochures and leaflets')
+PORTFOLIO_PERMISSION = ('portfolio', 'Portfolio', 'CL Paints’ portfolio')
+PARTICIPANT_PERMISSION_CHOICES = (SOCIAL_PERMISSION, WEBSITE_PERMISSION, PUBLICATIONS_PERMISSION)
+UPLOAD_PERMISSION_CHOICES = (PORTFOLIO_PERMISSION, WEBSITE_PERMISSION, SOCIAL_PERMISSION)
+PERMISSION_LABELS = {key: label for key, label, _ in (*PARTICIPANT_PERMISSION_CHOICES, PORTFOLIO_PERMISSION)}
+
 
 def download_drive_photo(link):
     """Download a shared file, allowing redirects only to Google's download hosts."""
@@ -146,10 +160,31 @@ def register(app, db, models, native_models, current_client, admin_required):
         if not secrets.compare_digest(csrf(), request.form.get('csrf_token', '')):
             abort(400, 'Reload the page and try again.')
 
-    def evidence(item):
-        data = json.loads(item.answers_json)
+    def evidence(item, data=None):
+        if data is None:
+            data = json.loads(item.answers_json)
         signed = data.get('signature') or next((v for k, v in data.items() if k.lower().startswith('signature') and v), None)
         return bool(item.terms_snapshot and data.get('authority_confirmed') and signed and not data.get('withdrawn_at'))
+
+    def photo_permission_labels(item):
+        data = json.loads(item.answers_json)
+        return [label for key, label in PERMISSION_LABELS.items() if key in data.get('permissions', [])]
+
+    def photo_website_allowed(item):
+        if not item:
+            return False
+        data = json.loads(item.answers_json)
+        if not evidence(item, data):
+            return False
+        if 'participant_photo_id' not in data:
+            return True
+        current = app.extensions.get('participant_photo_release_current')
+        return bool('website' in data.get('permissions', []) and current
+                    and current(data['participant_photo_id'], item.client_id))
+
+    app.jinja_env.globals.update(photo_permission_labels=photo_permission_labels,
+                                 photo_website_allowed=photo_website_allowed)
+    app.extensions['participant_photo_website_allowed'] = photo_website_allowed
 
     def participant_releases(source):
         items = Submission.query.join(Form).filter(Submission.client_id == source.client_id, Form.kind == 'photo').order_by(Submission.id.desc()).all()
@@ -157,12 +192,13 @@ def register(app, db, models, native_models, current_client, admin_required):
 
     def participant_release(source):
         items = participant_releases(source)
-        if not items:
+        current = app.extensions.get('participant_photo_release_current')
+        if not items or not current or not current(source.id, source.client_id):
             return None
         digest = hashlib.sha256(source.content).hexdigest()
         for item in items:
             data = json.loads(item.answers_json)
-            if (evidence(item) and 'website' in data.get('permissions', [])
+            if (evidence(item, data) and any(key in PERMISSION_LABELS for key in data.get('permissions', []))
                     and data.get('participant_photo_sha256') == digest):
                 return item
         return None
@@ -191,7 +227,7 @@ def register(app, db, models, native_models, current_client, admin_required):
             return False
         media = Media.query.options(defer(Media.content)).filter_by(id=photo.media_id).first()
         item = db.session.get(Submission, media.submission_id) if media else None
-        return bool(item and media.mime.startswith('image/') and evidence(item))
+        return bool(item and media.mime.startswith('image/') and photo_website_allowed(item))
 
     def image_url(photo):
         if isinstance(photo, Asset):
@@ -352,21 +388,32 @@ def register(app, db, models, native_models, current_client, admin_required):
 
     @app.route('/client/photos', methods=['GET', 'POST'])
     def client_photos():
+        source_id = request.args.get('participant_photo', type=int)
+        if 'participant_photo' in request.args and (not source_id or not 0 < source_id < 2**31):
+            abort(404)
         account = current_client()
         if not account:
+            if source_id and request.method == 'GET':
+                session['client_pending_participant_photo'] = source_id
             return redirect(url_for('client.login'))
         source, source_person = None, None
-        if 'participant_photo' in request.args:
-            source_id = request.args.get('participant_photo', type=int)
-            if not source_id:
-                abort(404)
-            source, source_person = app.extensions['participant_photo_release_source'](source_id, account)
-            if participant_release(source):
-                flash('This photograph is already in the image library. You can view or withdraw its permission below.', 'success')
-                return redirect(url_for('client_photos'))
+        if source_id:
+            release_source = app.extensions['participant_photo_release_source']
+            source, source_person = release_source(source_id, account)
+        if request.method == 'POST':
+            if request.content_length and request.content_length > 32_000_000:
+                abort(413)
+            check()
+            if source_id:
+                source, source_person = release_source(source_id, account, lock=True)
+        if source and participant_release(source):
+            flash('Signed permission is already recorded for this photograph. You can view or withdraw it below.', 'success')
+            return redirect(url_for('client_photos'))
+        terms = PARTICIPANT_PHOTO_TERMS if source else PHOTO_TERMS
+        terms_version = '2' if source else '1'
+        permission_choices = PARTICIPANT_PERMISSION_CHOICES if source else UPLOAD_PERMISSION_CHOICES
         error = None
         if request.method == 'POST':
-            check()
             try:
                 if request.form.get('action') == 'withdraw':
                     item = db.get_or_404(Submission, request.form.get('submission_id', type=int))
@@ -376,11 +423,9 @@ def register(app, db, models, native_models, current_client, admin_required):
                     db.session.commit()
                     flash('Permission withdrawn. Website images have been removed. Contact us about any social media or printed copies.', 'success')
                     return redirect(url_for('client_photos'))
-                if request.content_length and request.content_length > 32_000_000:
-                    abort(413)
                 if request.form.get('contact_website'):
                     raise ValueError('We could not accept this request. Please contact CL Paints directly.')
-                if request.form.get('terms_version') != '1':
+                if request.form.get('terms_version') != terms_version:
                     raise ValueError('Reload this form to see the current permissions.')
                 name = request.form.get('responsible_name', '').strip()
                 if not name or len(name) > 150:
@@ -388,7 +433,11 @@ def register(app, db, models, native_models, current_client, admin_required):
                 signed = signature(request.form.get('custom_0', ''), True)
                 if signed['name'].casefold() != name.casefold():
                     raise ValueError('The signature name must match the responsible person.')
-                if any(request.form.get(key) != 'yes' for key in ('agree', 'authority', 'portfolio', 'website', 'social')):
+                permissions = [key for key, _, _ in permission_choices if request.form.get(key) == 'yes']
+                if source and not permissions:
+                    raise ValueError('Choose at least one use to grant permission, or return to the participant’s photos to keep this image private.')
+                if (any(request.form.get(key) != 'yes' for key in ('agree', 'authority'))
+                        or (not source and len(permissions) != len(permission_choices))):
                     raise ValueError('Confirm the permissions, authority and terms before uploading.')
                 token = session.get('photo_upload_token')
                 if not token or not secrets.compare_digest(token, request.form.get('submission_token', '')):
@@ -436,9 +485,9 @@ def register(app, db, models, native_models, current_client, admin_required):
                     db.session.add(form)
                     db.session.flush()
                 item = Submission(form_id=form.id, client_id=account.id, token=token, email=account.email,
-                    name=name, title_snapshot=form.title, terms_snapshot=PHOTO_TERMS,
+                    name=name, title_snapshot=form.title, terms_snapshot=terms,
                     answers_json=json.dumps(dict(signature=signed, authority_confirmed=True,
-                        permissions=['portfolio', 'website', 'social'], terms_version='1',
+                        permissions=permissions, terms_version=terms_version,
                         photo_people=[people for _, people in uploads], account_number=account.account_number)))
                 if source:
                     data = json.loads(item.answers_json)
@@ -458,7 +507,10 @@ def register(app, db, models, native_models, current_client, admin_required):
                     db.session.add(Photo(media_id=media.id))
                 db.session.commit()
                 session.pop('photo_upload_token', None)
-                flash(f'Photographs received. Reference F-{item.id}. They will be reviewed before publication.', 'success')
+                if source:
+                    flash(f'Photo permission recorded. Reference F-{item.id}. CL Paints will review the image for the uses you selected.', 'success')
+                else:
+                    flash(f'Photographs received. Reference F-{item.id}. They will be reviewed before publication.', 'success')
                 return redirect(url_for('client_photos'))
             except ValueError as exc:
                 db.session.rollback()
@@ -466,7 +518,8 @@ def register(app, db, models, native_models, current_client, admin_required):
         entries = Submission.query.join(Form).filter(Submission.client_id == account.id, Form.kind == 'photo').order_by(Submission.id.desc()).all()
         return render_template('client/photos.html', client_account=account, client_csrf=csrf(), error=error,
             source_photo=source, source_person=source_person,
-            terms=PHOTO_TERMS, token=session.setdefault('photo_upload_token', secrets.token_urlsafe(32)),
+            terms=terms, terms_version=terms_version, permission_choices=permission_choices,
+            token=session.setdefault('photo_upload_token', secrets.token_urlsafe(32)),
             fields=[dict(type='signature', label='Signature', required=True)], entries=entries,
             photo_answers=lambda item: json.loads(item.answers_json))
 
@@ -487,7 +540,7 @@ def register(app, db, models, native_models, current_client, admin_required):
                 status = request.form.get('status')
                 if status not in ('pending', 'approved', 'rejected'):
                     raise ValueError('Choose a review status.')
-                if status == 'approved' and (not evidence(item) or request.form.get('reviewed_permissions') != 'yes'):
+                if status == 'approved' and (not photo_website_allowed(item) or request.form.get('reviewed_permissions') != 'yes'):
                     raise ValueError('Check the signed release and confirm it permits the selected website use. Unsigned or withdrawn releases cannot be published.')
                 if status == 'approved':
                     try:

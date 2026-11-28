@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import secrets
 import os
+from client_email_change import waiver_owner_filter
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -175,7 +176,7 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
         if tab in ('bookings','payments'):
             query=booking_query.order_by(Booking.submitted_at.desc(),Booking.id.desc())
         elif tab=='waivers':
-            query=Waiver.query.filter(db.func.lower(db.func.trim(Waiver.responsible_email))==email).order_by(Waiver.signed_date.desc(),Waiver.id.desc())
+            query=Waiver.query.filter(waiver_owner_filter(db, Waiver, account)).order_by(Waiver.signed_date.desc(),Waiver.id.desc())
         elif tab=='messages':
             query=Message.query.filter(Message.booking_id.in_(ids)).order_by(Message.created_at.desc(),Message.id.desc())
         elif tab=='notes':
@@ -184,7 +185,7 @@ def register(app, db, Note, Account, Booking, Waiver, Participant, Message, Enqu
             query=login_query.order_by(LoginEvent.signed_in_at.desc(), LoginEvent.id.desc())
         members=[]
         if tab=='rewards':
-            legacy_ids=Waiver.query.filter(db.func.lower(db.func.trim(Waiver.responsible_email))==email).with_entities(Waiver.id)
+            legacy_ids=Waiver.query.filter(waiver_owner_filter(db, Waiver, account)).with_entities(Waiver.id)
             people=Participant.query.filter(or_(Participant.id.in_(Custodian.query.filter_by(client_id=account.id).with_entities(Custodian.participant_id)),
                 db.and_(Participant.waiver_id.in_(legacy_ids),~Participant.id.in_(Custodian.query.with_entities(Custodian.participant_id)))))
             query=people.order_by(Participant.first_name,Participant.id)

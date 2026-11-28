@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Income record | CL Paints{% endblock %}
+{% block body %}
+<div class="admin">
+    {% include '_admin_sidebar.html' %}
+    <main class="reports-main" id="portal-main">
+        <header class="top">
+            <div>
+                <h1>Income record</h1>
+                <p>{{ source }} · {{ record.reference }}</p>
+            </div>
+            <a class="btn" href="{{ url_for('admin_income') }}">Back to income records</a>
+        </header>
+        <section class="panel">
+            <h2>{{ kind }} · £{{ '{:,.2f}'.format(record.amount) }}</h2>
+            <p>{{ record.paid_date.strftime('%d %b %Y') }} · {{ record.method }}</p>
+            <p>{{ record.description }}</p>
+            <p>Recorded by {{ record.recorded_by }} on {{ record.recorded_at.strftime('%d %b %Y') }}.</p>
+        </section>
+        <section class="panel">
+            {% if record.voided_at %}
+            <h2>Voided record</h2>
+            <p>{{ record.void_reason }}</p>
+            <p>Voided by {{ record.voided_by }} on {{ record.voided_at.strftime('%d %b %Y') }}.</p>
+            <a class="btn" href="{{ url_for('admin_income_record', source=record.source, order_id=record.order_id) }}">Record the corrected payment</a>
+            {% else %}
+            <h2>Correct a recording error</h2>
+            <p>Voiding removes this entry from totals and retains it in your records. To record a refund the customer received, add a refund entry.</p>
+            {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
+            <form method="post" class="client-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                <label>Reason for correction <input name="reason" maxlength="300" required></label>
+                <button type="submit" class="btn">Void recording error</button>
+            </form>
+            {% endif %}
+        </section>
+    </main>
+</div>
+{% endblock %}

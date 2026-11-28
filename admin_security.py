@@ -74,6 +74,7 @@ def register(app,db,models,send_email,email_address):
                 claimed=Challenge.query.filter_by(id=item.id,consumed=False).update({'consumed':True},synchronize_session=False);db.session.commit()
                 if claimed:
                     session.clear();session['admin_authenticated']=True;session['admin_last_activity']=datetime.utcnow().timestamp()
+                    session['admin_signed_in_at'] = session['admin_last_activity']
                     return redirect(url_for('admin_dashboard'))
             error='Code incorrect or unavailable. Try again.'
         return render_template('admin_verify.html',csrf=token,error=error)

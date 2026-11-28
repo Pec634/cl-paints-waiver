@@ -6,6 +6,7 @@ import secrets
 import re
 from zoneinfo import ZoneInfo
 from email_validator import validate_email, EmailNotValidError
+from client_email_change import waiver_owner_filter
 from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import func
 
@@ -143,8 +144,12 @@ def register(app, db, Waiver, Participant, Account, Code, Custodian, active, cle
         if not consumed:
             abort(409)
         email = challenge.email
-        waivers = Waiver.query.filter(func.lower(func.trim(Waiver.responsible_email)) == email).all()
         account = Account.query.filter_by(email=email).first()
+        if account:
+            waivers = Waiver.query.filter(waiver_owner_filter(db, Waiver, account)).all()
+        else:
+            waivers = Waiver.query.filter(Waiver.responsible_account_id.is_(None),
+                func.lower(func.trim(Waiver.responsible_email)) == email).all()
         if account:
             waivers += Waiver.query.join(Custodian, Custodian.waiver_id == Waiver.id).filter(Custodian.client_id == account.id).all()
         waivers = [w for w in {w.id:w for w in waivers}.values() if valid(w) and people(w, email)]

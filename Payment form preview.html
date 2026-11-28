@@ -1,0 +1,131 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="manifest" href="/portal.webmanifest"><link rel="apple-touch-icon" href="static/cl-paints-logo.jpg"><title>Pay online | CL Paints</title><link rel="stylesheet" href="static/styles.css"><link rel="stylesheet" href="static/portal-experience.css"><link rel="stylesheet" href="static/admin-workspace.css"></head><body><a class="portal-skip-link" href="#portal-main">Skip to content</a>
+<div class="client-shell">
+<header class="client-header"><a class="client-brand" href="/client/"><img src="static/cl-paints-logo.jpg" alt="" width="48" height="48"><strong>CL Paints</strong></a><small>YOUR CLIENT PORTAL</small>
+<p class="client-slogan">Bringing colour to life - One face at time</p>
+
+<button class="client-menu-toggle" type="button" aria-expanded="false" aria-controls="client-navigation" hidden>Menu <span aria-hidden="true">☰</span></button>
+<nav id="client-navigation" class="client-navigation" aria-label="Client navigation">
+  <div class="client-nav-main">
+    <a href="/client/" >Dashboard</a>
+    <details class="client-nav-group">
+      <summary>My events</summary>
+      <div class="client-nav-dropdown">
+        <a href="/client/bookings" >Bookings</a>
+        <a href="/client/payments" >Payments &amp; invoices</a>
+        <a href="/client/waivers" >My waivers</a>
+        <a href="/client/photos" >Upload photos</a>
+      </div>
+    </details>
+
+    <a href="/client/rewards" >Rewards</a>
+
+  </div>
+    <a href="/cl-creates?return_to=/client/bookings/1/pay/1" >CL Creates</a>
+  <div class="client-nav-tools">
+    <a class="client-nav-updates" href="/client/notifications">Notifications </a>
+    <details class="client-nav-group">
+      <summary>Account</summary>
+      <div class="client-nav-dropdown">
+        <a href="/client/account" >Account settings</a>
+        <a href="/client/contact" >Contact us</a>
+        <a href="#portal-text-size" data-open-display>Display settings</a>
+        <form method="post" action="/client/logout"><input type="hidden" name="csrf_token" value="3qMLRKWvGdFXX1umnvKPcST9V6umdKQvca1tYBRqUIM"><button class="client-nav-signout" type="submit">Sign out</button></form>
+      </div>
+    </details>
+  </div>
+</nav></header>
+
+<main class="client-main">
+
+
+
+
+<a class="client-text-link" href="Payment form preview.html">Sample booking 27/11/2026 - B - 0001</a>
+<h1>Pay remaining deposit</h1>
+<p class="preview-notice"><strong>Payment preview</strong> · Sample booking and card fields. Payments are simulated.</p><section class="panel" aria-labelledby="booking-card-payment">
+  <h2 id="booking-card-payment">Card payment</h2>
+  <p><strong>£50.00</strong> for booking 27/11/2026 - B - 0001</p>
+  <p>SumUp processes your card payment. Your bank may ask you to verify it.</p>
+  <p id="booking-payment-status" role="status">Loading the secure card form…</p>
+  <div id="sumup-card" data-checkout-id="abc123" data-amount="50.00"></div>
+  <noscript><p>Enable JavaScript to use this card form. Contact CL Paints if you need another way to pay.</p></noscript>
+  <form id="booking-payment-refresh" method="post" action="/bookings/1/online-payment/1/refresh">
+    <input type="hidden" name="csrf_token" value="3qMLRKWvGdFXX1umnvKPcST9V6umdKQvca1tYBRqUIM">
+    <input type="hidden" name="return_to_checkout" value="yes">
+    <button class="btn">Check payment status</button>
+  </form>
+</section>
+
+<style>
+.preview-notice { margin: 0 0 1rem; padding: .8rem 1rem; border-radius: .65rem; background: #e8f2fd; color: #173555; }
+.preview-card-fields { margin: 1rem 0; }
+.preview-card-fields input[readonly] { color: #39506b; background: #f5f7fa; }
+.preview-card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.preview-card-submit { align-self: start; }
+</style>
+<script>
+window.SumUpCard = {
+  mount({ id, amount, onLoad }) {
+    const card = document.getElementById(id);
+    card.innerHTML = '<div class="client-form preview-card-fields"><label>Name on card <input value="Sample Customer" readonly></label><label>Card number <input value="•••• •••• •••• 4242" readonly></label><div class="preview-card-row"><label>Expiry date <input value="12 / 30" readonly></label><label>Security code <input value="•••" readonly></label></div><button type="button" class="btn primary preview-card-submit">Pay £' + amount + '</button></div>';
+    let paid = false;
+    const show = () => {
+      document.getElementById('booking-payment-status').textContent = paid
+        ? 'Sample payment confirmed.'
+        : 'Your sample payment is awaiting confirmation.';
+    };
+    card.querySelector('button').addEventListener('click', () => {
+      window.location.assign('Payment approved preview.html');
+    });
+    document.getElementById('booking-payment-refresh').addEventListener('submit', (event) => {
+      event.preventDefault();
+      show();
+    });
+    onLoad();
+  }
+};
+</script>
+
+<script src="static/booking-checkout.js" defer></script>
+
+
+</main>
+<footer class="client-footer">
+  <div class="client-footer-inner">
+    <section class="client-business-details" aria-labelledby="client-footer-company">
+      <div class="client-footer-brand">
+        <img src="static/cl-paints-logo.jpg" alt="CL Paints logo" width="64" height="64" loading="lazy">
+        <h2 id="client-footer-company">CL Paints LTD</h2>
+      </div>
+      <span>Company number: 16615959</span>
+      <div class="client-footer-address">
+        <span class="client-footer-label">Business address</span>
+        <address>Suite 53c Abbey Road<br>London, England<br>NW10 7TR</address>
+      </div>
+    </section>
+    <section class="client-footer-contact" aria-labelledby="client-footer-contact">
+      <h2 id="client-footer-contact">Get in touch</h2>
+      <a href="mailto:info@clpaints.com">info@clpaints.com</a>
+    </section>
+
+    <section class="client-footer-social" aria-labelledby="client-footer-social">
+      <h2 id="client-footer-social">Follow &amp; reviews</h2>
+      <nav class="client-social-links" aria-label="CL Paints social media and reviews">
+<a class="btn" href="https://www.facebook.com/profile.php?id=61578784131483&amp;locale=en_GB" target="_blank" rel="noopener noreferrer">Facebook</a><a class="btn" href="https://www.instagram.com/cl.paints_/" target="_blank" rel="noopener noreferrer">Instagram</a><a class="btn" href="https://uk.trustpilot.com/review/clpaints.com" target="_blank" rel="noopener noreferrer">Read our Trustpilot reviews</a>
+</nav>
+    </section>
+
+    <div class="client-footer-bottom">
+      <p>Bringing colour to life - One face at time</p>
+      <nav class="client-footer-links" aria-label="Help and policies">
+      <a href="/client/help" >Help &amp; aftercare</a>
+      <a href="/privacy">Privacy policy</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+</div>
+
+<link rel="stylesheet" href="static/client-motion.css">
+<details class="portal-display-controls"><summary>Display settings</summary><div><label for="portal-text-size">Text size</label><select id="portal-text-size"><option value="100">Standard</option><option value="112">Larger</option><option value="125">Largest</option></select><label class="portal-control-check"><input id="portal-reduce-motion" type="checkbox"> Reduce animation</label><label class="portal-control-check"><input id="portal-high-contrast" type="checkbox"> Higher contrast</label><button class="btn" type="button" id="portal-reset-display">Reset settings</button><p>Saved on this browser for both portals.</p><span id="portal-display-status" role="status"></span></div></details>
+<template id="portal-admin-toolbar"><nav class="portal-admin-toolbar" aria-label="Admin tools"><button type="button" class="btn" data-quick-actions>Quick actions</button><a class="btn" href="/admin/notifications">Notifications</a><a class="btn" href="/admin/search">Search all records</a><a class="btn" href="/admin/calendar">Calendar</a></nav><dialog id="admin-quick-actions" aria-labelledby="admin-quick-actions-title"><h2 id="admin-quick-actions-title">Quick actions</h2><nav aria-label="Quick actions"><a class="btn" href="/booking">Open booking form</a><a class="btn" href="/admin/clients">Find a client</a><a class="btn" href="/cl-creates?return_to=/client/bookings/1/pay/1">Create a headband order</a><a class="btn" href="/admin/website-builder">Edit website</a><a class="btn" href="/admin/payments">Payments &amp; invoices</a></nav><button type="button" class="btn" data-close-actions>Close</button></dialog></template><link rel="stylesheet" href="static/admin-navigation.css"><link rel="stylesheet" href="static/participant-photos.css"><link rel="stylesheet" href="static/admin-polish.css"></body></html>

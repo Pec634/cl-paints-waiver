@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote, urlsplit
 from flask import abort, jsonify, redirect, render_template, request, session, url_for, make_response
-from sumup_checkout import provider_request
+from sumup_checkout import payment_date, provider_request
 from sumup_invoices import validate_link
 from creates_automation import unpaid_deadline
 
@@ -52,7 +52,8 @@ def register(app, db, Order, notify, business_settings, admin_required):
             db.session.commit(); return False
         # Claim the receipt once, including simultaneous callback and customer refresh.
         changed = Order.query.filter_by(id=order.id, confirmation_dispatched=False).update(
-            dict(paid=order.total, status='Paid', confirmation_dispatched=True), synchronize_session=False)
+            dict(paid=order.total, paid_date=payment_date(data, fallback=False), status='Paid',
+                 confirmation_dispatched=True), synchronize_session=False)
         db.session.commit(); db.session.refresh(order)
         if changed:
             notify(order)

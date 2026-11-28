@@ -28,7 +28,7 @@
     });
   });
   const data = JSON.parse(document.getElementById('reportChartData').textContent);
-  const colours = ['#f52f83', '#10213f', '#18a566', '#6478d2', '#e7a33b', '#16a4af', '#9853aa'];
+  const colours = ['#ff87bd', '#92c7ff', '#75ddba', '#b9acff', '#ffd084', '#77dce9', '#e8a8ec'];
   const svgNS = 'http://www.w3.org/2000/svg';
   function svgElement(tag, attrs, text) {
     const element = document.createElementNS(svgNS, tag);
@@ -49,7 +49,7 @@
     legend.className = 'report-target-legend';
     for (let percent = min; percent <= 100; percent += 50) {
       chart.append(svgElement('line', {x1: 54, x2: 814, y1: y(percent), y2: y(percent),
-        stroke: percent === 0 ? '#667189' : '#e1e6ef'}));
+        stroke: percent === 0 ? '#a58ba8' : '#ffffff24'}));
       chart.append(svgElement('text', {x: 47, y: y(percent) + 4, 'text-anchor': 'end', 'font-size': 13}, `${percent}%`));
     }
     labels.forEach((label, index) => {
@@ -113,29 +113,49 @@
       item.append(swatch, document.createTextNode(`${row.label}: ${row.value} (${(fraction * 100).toFixed(1)}%)`));
       legend.append(item);
     });
-    chart.append(svgElement('text', {x: 100, y: 106, 'text-anchor': 'middle', 'font-size': 26, fill: '#10213f'}, total));
+    chart.append(svgElement('text', {x: 100, y: 106, 'text-anchor': 'middle', 'font-size': 26}, total));
     layout.append(chart, legend); container.append(layout);
   });
   document.querySelectorAll('[data-line-chart]').forEach(container => {
     const rows = data[container.dataset.lineChart];
     if (!rows.length || !rows.some(row => row.value)) { container.textContent = 'No records in this period.'; return; }
     const width = 600, height = 230, max = Math.max(1, ...rows.map(row => row.value));
-    const chart = svgElement('svg', {viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': 'Monthly booking requests; exact values available below'});
+    const colour = colours[['bookings', 'waivers', 'participants', 'workload'].indexOf(container.dataset.lineChart)];
+    const chart = svgElement('svg', {viewBox: `0 0 ${width} ${height}`, role: 'img',
+      'aria-label': `${container.dataset.chartLabel} by month. Exact figures below.`});
     [0, 0.5, 1].forEach(fraction => {
       const y = 185 - fraction * 150;
-      chart.append(svgElement('line', {x1: 45, y1: y, x2: 565, y2: y, stroke: '#e1e6ef'}));
+      chart.append(svgElement('line', {x1: 45, y1: y, x2: 565, y2: y, stroke: '#ffffff24'}));
       chart.append(svgElement('text', {x: 35, y: y + 5, 'text-anchor': 'end', 'font-size': 13}, (max * fraction).toFixed(max < 2 ? 1 : 0)));
     });
     const points = rows.map((row, index) => [rows.length === 1 ? 305 : 45 + index / (rows.length - 1) * 520, 185 - row.value / max * 150]);
-    chart.append(svgElement('polyline', {points: points.map(point => point.join(',')).join(' '), fill: 'none', stroke: '#f52f83', 'stroke-width': 3}));
+    const coordinates = points.map(point => point.join(',')).join(' ');
+    const gradientId = `report-area-${container.dataset.lineChart}`;
+    const gradient = svgElement('linearGradient', {id: gradientId, x2: '0%', y2: '100%'});
+    gradient.append(svgElement('stop', {offset: '0%', 'stop-color': colour, 'stop-opacity': .55}),
+      svgElement('stop', {offset: '100%', 'stop-color': colour, 'stop-opacity': .08}));
+    const defs = svgElement('defs', {});
+    defs.append(gradient);
+    chart.append(defs);
+    if (points.length > 1) chart.append(svgElement('polygon', {
+      points: `${points[0][0]},185 ${coordinates} ${points.at(-1)[0]},185`, fill: `url(#${gradientId})`}));
+    chart.append(svgElement('polyline', {points: coordinates, fill: 'none', stroke: colour, 'stroke-width': 3, 'stroke-linejoin': 'round'}));
     rows.forEach((row, index) => {
       const [x, y] = points[index];
-      const point = svgElement('circle', {cx: x, cy: y, r: 4, fill: '#f52f83'});
-      point.append(svgElement('title', {}, `${row.label}: ${row.value}`)); chart.append(point);
+      const point = svgElement('circle', {cx: x, cy: y, r: 4, fill: colour});
+      point.append(svgElement('title', {}, `${row.label}: ${row.value}${container.dataset.chartUnit}`)); chart.append(point);
       if (index === 0 || index === rows.length - 1 || (rows.length <= 12 && index % Math.ceil(rows.length / 6) === 0)) {
         chart.append(svgElement('text', {x, y: 215, 'text-anchor': 'middle', 'font-size': 12}, row.label));
       }
     });
     container.append(chart);
   });
+  const measure = document.getElementById('report-trend-measure');
+  if (measure) {
+    const showTrend = () => document.querySelectorAll('[data-trend-panel]').forEach(panel => {
+      panel.hidden = panel.dataset.trendPanel !== measure.value;
+    });
+    measure.addEventListener('change', showTrend);
+    showTrend();
+  }
 })();

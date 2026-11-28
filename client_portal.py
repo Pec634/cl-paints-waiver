@@ -1,5 +1,5 @@
 """Email-code authentication and client-scoped views of management records."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from functools import wraps
 import hashlib
@@ -45,12 +45,14 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 return account
         account_id = session.get('client_id')
         issued = session.get('client_signed_in', 0)
-        if not account_id or datetime.now().timestamp() - issued >= client_session_seconds():
+        account = db.session.get(Account, account_id) if account_id else None
+        if (not account or datetime.now().timestamp() - issued >= client_session_seconds()
+                or (account.email_changed_at and account.email_changed_at.replace(tzinfo=timezone.utc).timestamp() > issued)):
             session.pop('client_id', None)
             session.pop('client_signed_in', None)
             session.pop('client_remember', None)
             return None
-        return db.session.get(Account, account_id)
+        return account
     def client_required(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
@@ -203,12 +205,15 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
                 session.permanent = session['client_remember']
                 session['client_csrf'] = secrets.token_urlsafe(32)
                 flash('You’re signed in. Welcome to your colourful corner of CL Paints!', 'client_login_success')
+                photo_id = session.pop('client_pending_participant_photo', None)
                 scan_token = session.pop('loyalty_scan_token', None)
                 if scan_token:
                     return redirect(url_for('loyalty.scan', token=scan_token))
                 native_form_id = session.pop('native_return_form', None)
                 if native_form_id:
                     return redirect(url_for('native_form_open', form_id=native_form_id))
+                if type(photo_id) is int and photo_id > 0:
+                    return redirect(url_for('client_photos', participant_photo=photo_id))
                 return redirect(url_for('client.account' if not account.phone or not account.address else 'client.dashboard'))
             except ValueError as problem:
                 db.session.rollback()
@@ -255,7 +260,8 @@ def register_client_portal(app, db, Account, Code, Owner, Enquiry, Booking, sett
     @portal.post('/logout')
     def logout():
         check_csrf()
-        for key in ['client_id', 'client_signed_in', 'client_challenge', 'client_csrf', 'client_remember', 'client_pending_remember']:
+        for key in ['client_id', 'client_signed_in', 'client_challenge', 'client_csrf', 'client_remember',
+                    'client_pending_remember', 'client_pending_participant_photo']:
             session.pop(key, None)
         return redirect(url_for('client.login'))
 

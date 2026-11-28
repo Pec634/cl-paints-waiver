@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}Income records | CL Paints{% endblock %}
+
+{% macro filter_select(name, label, choices) %}
+<label>{{ label }}
+    <select name="{{ name }}">
+        {% for value, text in choices %}
+        <option value="{{ value }}" {% if filters[name] == value|string %}selected{% endif %}>{{ text }}</option>
+        {% endfor %}
+    </select>
+</label>
+{% endmacro %}
+
+{% macro money(amount) %}{{ '−' if amount < 0 else '' }}£{{ '{:,.2f}'.format(amount|abs) }}{% endmacro %}
+
+{% block body %}
+<div class="admin">
+    {% include '_admin_sidebar.html' %}
+    <main class="reports-main" id="portal-main">
+        <header class="top">
+            <div>
+                <h1>Income records</h1>
+                <p>Review business payments received and refunds issued.</p>
+            </div>
+            <div class="client-action-row">
+                {% if manual_url %}<a class="btn" href="{{ manual_url }}">Record income or refund</a>{% endif %}
+                {% if export_url and not error %}<a class="btn primary" href="{{ export_url }}">Export filtered CSV</a>{% endif %}
+            </div>
+        </header>
+
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="{{ 'booking-admin-error' if category == 'error' else 'booking-admin-notice' }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+        {% if error %}<p class="booking-admin-error" role="alert">{{ error }}</p>{% endif %}
+
+        <section class="panel" aria-labelledby="income-filters-heading">
+            <div class="panel-heading">
+                <div>
+                    <h2 id="income-filters-heading">Filter and sort</h2>
+                    <p>UK personal tax years run from 6 April to 5 April. Use Custom dates for a company accounting period or other date range.</p>
+                </div>
+            </div>
+            <form method="get" action="{{ url_for('admin_income') }}" class="reports-filters">
+                {{ filter_select('tax_year', 'Tax year or date range', tax_years) }}
+                <label>From date <input type="date" name="start" value="{{ filters.start if filters.tax_year == 'custom' else '' }}"></label>
+                <label>To date <input type="date" name="end" value="{{ filters.end if filters.tax_year == 'custom' else '' }}"></label>
+                {{ filter_select('source', 'Source', sources) }}
+                {{ filter_select('method', 'Payment method', methods) }}
+                {{ filter_select('kind', 'Transaction type', kinds) }}
+                <label>Search <input type="search" name="q" value="{{ filters.q }}" maxlength="120" placeholder="Reference or description"></label>
+                {{ filter_select('sort', 'Sort by', sorts) }}
+                <div class="client-action-row">
+                    <button type="submit" class="btn primary">Apply filters</button>
+                    <a class="btn" href="{{ url_for('admin_income') }}">Reset</a>
+                </div>
+            </form>
+        </section>
+
+        {% if undated_count and filters.tax_year != 'undated' %}
+        <section class="panel" aria-labelledby="income-undated-heading">
+            <h2 id="income-undated-heading">Receipts missing a payment date</h2>
+            <p>{{ undated_count }} receipt{{ '' if undated_count == 1 else 's' }} totalling {{ money(undated_total) }} need a payment date before they can appear in a tax year.</p>
+            <a class="btn" href="{{ undated_url }}">Review undated receipts</a>
+        </section>
+        {% endif %}
+
+        {% if not error %}
+        <section class="stats" aria-label="Filtered income totals">
+            <article><span>{{ 'Undated receipts' if filters.tax_year == 'undated' else 'Gross receipts' }}</span><strong>{{ money(totals.received) }}</strong></article>
+            <article><span>Refunds issued</span><strong>{{ money(totals.refunds) }}</strong></article>
+            <article><span>Income after refunds</span><strong>{{ money(totals.net) }}</strong></article>
+            <article><span>Transactions</span><strong>{{ '{:,}'.format(totals.count) }}</strong></article>
+        </section>
+
+        <section class="panel" aria-labelledby="income-transactions-heading">
+            <div class="panel-heading">
+                <div>
+                    <h2 id="income-transactions-heading">Transactions</h2>
+                    {% if filters.start and filters.end %}
+                    <p><time datetime="{{ filters.start }}">{{ filters.start[8:10] }}/{{ filters.start[5:7] }}/{{ filters.start[:4] }}</time> to <time datetime="{{ filters.end }}">{{ filters.end[8:10] }}/{{ filters.end[5:7] }}/{{ filters.end[:4] }}</time></p>
+                    {% elif filters.start %}
+                    <p>From <time datetime="{{ filters.start }}">{{ filters.start[8:10] }}/{{ filters.start[5:7] }}/{{ filters.start[:4] }}</time></p>
+                    {% elif filters.end %}
+                    <p>Through <time datetime="{{ filters.end }}">{{ filters.end[8:10] }}/{{ filters.end[5:7] }}/{{ filters.end[:4] }}</time></p>
+                    {% elif filters.tax_year == 'undated' %}
+                    <p>Receipts awaiting a payment date.</p>
+                    {% else %}
+                    <p>All recorded dates.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% if rows %}
+            <div class="admin-table-scroll" role="region" tabindex="0" aria-label="Income transactions table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Reference and details</th>
+                            <th scope="col">Source</th>
+                            <th scope="col">Method</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Amount (GBP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td>{% if row.date %}<time datetime="{{ row.date.isoformat() }}">{{ row.date.strftime('%d %b %Y') }}</time>{% else %}Undated{% endif %}</td>
+                            <td>
+                                {% if row.url %}<a href="{{ row.url }}"><strong><u>{{ row.reference }}</u></strong></a>{% else %}<strong>{{ row.reference }}</strong>{% endif %}
+                                {% if row.description %}<br><small class="muted">{{ row.description }}</small>{% endif %}
+                                {% if row.reconcile_url %}<br><a class="btn" href="{{ row.reconcile_url }}">Add payment date</a>{% endif %}
+                            </td>
+                            <td>{{ row.source }}</td>
+                            <td>{{ row.method }}</td>
+                            <td><span class="workspace-badge" data-tone="{{ 'warning' if row.kind == 'Refund' else 'success' }}">{{ row.kind }}</span></td>
+                            <td><strong>{{ money(-row.amount if row.kind == 'Refund' else row.amount) }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if page_count > 1 %}
+            <nav class="workspace-pagination client-action-row" aria-label="Income transaction pages">
+                <span aria-current="page">Page {{ page }} of {{ page_count }}</span>
+                {% if previous_url %}<a class="btn" href="{{ previous_url }}" rel="prev">Previous</a>{% endif %}
+                {% if next_url %}<a class="btn" href="{{ next_url }}" rel="next">Next</a>{% endif %}
+            </nav>
+            {% endif %}
+            {% else %}
+            <p class="workspace-empty">No transactions match these filters.</p>
+            {% endif %}
+            <p class="report-note">This report uses recorded payment and refund dates. Keep processor fees and other business expenses in your expense records, and reconcile receipts with your bank, till and provider statements.</p>
+        </section>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

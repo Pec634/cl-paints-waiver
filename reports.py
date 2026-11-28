@@ -4,13 +4,56 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from io import StringIO
 import csv
+import hashlib
 import json
 import re
+import secrets
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
-from flask import request, render_template, Response, redirect, url_for, flash
+from flask import abort, request, render_template, Response, redirect, url_for, flash, session
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.exc import SQLAlchemyError
+
+
+EVENT_LABELS = {
+    'birthday': ('Birthday', 'Celebrations'),
+    'birthday party': ('Birthday', 'Celebrations'),
+    'wedding': ('Wedding', 'Celebrations'),
+    'wedding reception': ('Wedding', 'Celebrations'),
+    'christening': ('Christening', 'Celebrations'),
+    'christening party': ('Christening', 'Celebrations'),
+    'school fair': ('School fair', 'Schools & education'),
+    'school fete': ('School fair', 'Schools & education'),
+    'school fête': ('School fair', 'Schools & education'),
+    'school event': ('School event', 'Schools & education'),
+    'festival': ('Festival', 'Community events'),
+    'community festival': ('Community festival', 'Community events'),
+    'community event': ('Community event', 'Community events'),
+    'village fete': ('Village fête', 'Community events'),
+    'village fête': ('Village fête', 'Community events'),
+    'corporate': ('Corporate event', 'Business events'),
+    'corporate event': ('Corporate event', 'Business events'),
+    'corporate party': ('Corporate event', 'Business events'),
+}
+
+
+EVENT_CATEGORIES = sorted({category for _, category in EVENT_LABELS.values()} | {'Other events', 'Unspecified'})
+ALIAS_PREFIX = 'report-event:'
+
+
+def event_label_key(value):
+    key = ' '.join(re.sub(r'[^\w\s]', ' ', str(value or '').casefold()).split())
+    if re.fullmatch(r'\d+(?:st|nd|rd|th)? birthday(?: party)?', key):
+        return 'birthday'
+    return key
+
+
+def report_event_labels(value, aliases=None):
+    label = ' '.join(str(value or '').split())
+    key = event_label_key(label)
+    if not key:
+        return 'Unspecified', 'Unspecified'
+    return (aliases or {}).get(key) or EVENT_LABELS.get(key) or (label, 'Other events')
 
 
 def extract_outcode(address):
@@ -73,7 +116,15 @@ def lookup_outcode(outcode):
             'town': ', '.join(result.get('admin_district') or [])}
 
 
-def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_events, admin_required):
+def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_events, admin_required, Setting):
+    def event_aliases():
+        aliases = {}
+        for setting in Setting.query.filter(Setting.key.startswith(ALIAS_PREFIX)):
+            key, label, category = json.loads(setting.value)
+            aliases[key] = (label, category)
+            aliases[event_label_key(label)] = (label, category)
+        return aliases
+
     def build_data(args):
         period, start, end = date_range(args)
         lower = datetime.combine(start, datetime.min.time())
@@ -81,13 +132,46 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
         setting = args.get('setting', 'all')
         if setting not in {'all', 'Public', 'Private'}:
             raise ValueError('Choose All, Public or Private events.')
+        category_filter = args.get('event_category', '')
+        type_filter = args.get('event_type', '')
+        if (category_filter and category_filter not in EVENT_CATEGORIES) or len(type_filter) > 150:
+            raise ValueError('Choose a valid event category and type.')
+        aliases = event_aliases()
+        unknown_types = {}
+
+        def labels(booking, event):
+            raw = event.get('event_type', booking.event_type)
+            label, category = report_event_labels(raw, aliases)
+            key = event_label_key(raw)
+            if key and key not in aliases and key not in EVENT_LABELS:
+                label = unknown_types.setdefault(key, label)
+            return label, category
+
+        def matches_type(booking, event):
+            event_type, category = labels(booking, event)
+            return (not category_filter or category == category_filter) and (not type_filter or event_type == type_filter)
+
         def matching_events(booking):
-            return [event for event in schedule_events(booking)
-                    if setting == 'all' or event.get('publicity_type', booking.publicity_type) == setting]
+            events = [event for event in schedule_events(booking)
+                      if setting == 'all' or event.get('publicity_type', booking.publicity_type) == setting]
+            return events if events and matches_type(booking, events[0]) else []
         bookings = Booking.query.filter(Booking.submitted_at >= lower, Booking.submitted_at < upper).order_by(Booking.submitted_at.desc()).all()
         setting_counts = Counter()
+        type_options = set(EVENT_LABELS.values()) | set(aliases.values())
+        unmapped_labels = {}
         for booking in bookings:
-            settings = {event.get('publicity_type', booking.publicity_type) for event in schedule_events(booking)}
+            schedule = schedule_events(booking)
+            candidates = [event for event in schedule if setting == 'all' or event.get('publicity_type', booking.publicity_type) == setting]
+            if candidates:
+                raw = candidates[0].get('event_type', booking.event_type)
+                key = event_label_key(raw)
+                type_options.add(labels(booking, candidates[0]))
+                if key and key not in aliases and key not in EVENT_LABELS:
+                    item = unmapped_labels.setdefault(key, {'label': ' '.join(str(raw).split()), 'count': 0})
+                    item['count'] += 1
+            if (category_filter or type_filter) and not matching_events(booking):
+                continue
+            settings = {event.get('publicity_type', booking.publicity_type) for event in schedule}
             label = 'Mixed public/private' if {'Public', 'Private'} <= settings else next(iter(settings), 'Unspecified')
             setting_counts[label] += 1
         bookings = [booking for booking in bookings if matching_events(booking)]
@@ -111,7 +195,9 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
             first_requests.get(booking.email.strip().casefold()) != booking.id for booking in bookings)
         waivers = Waiver.query.filter(Waiver.signed_date >= lower, Waiver.signed_date < upper, Waiver.status != 'Superseded').all()
         participants = Participant.query.join(Waiver).filter(Waiver.signed_date >= lower, Waiver.signed_date < upper, Waiver.status != 'Superseded').all()
-        if setting == 'Private':
+        booking_filters_active = bool(category_filter or type_filter)
+        show_attendance = setting != 'Private' and not booking_filters_active
+        if not show_attendance:
             waivers = []
             participants = []
         keys = month_keys(start, end)
@@ -119,7 +205,11 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
         waiver_trend = Counter(w.signed_date.strftime('%Y-%m') for w in waivers)
         participant_trend = Counter(p.waiver.signed_date.strftime('%Y-%m') for p in participants)
         outcomes = Counter(b.status for b in bookings)
-        event_types = Counter(str(matching_events(b)[0].get('event_type', b.event_type)).strip() or 'Unspecified' for b in bookings)
+        event_types, event_categories = Counter(), Counter()
+        for booking in bookings:
+            event_type, category = labels(booking, matching_events(booking)[0])
+            event_types[event_type] += 1
+            event_categories[category] += 1
         ages = [p.age for p in participants if p.age is not None and 0 <= p.age <= 120]
         bands = Counter({'0–4': 0, '5–9': 0, '10–15': 0, '16–17': 0, '18+': 0})
         for age in ages:
@@ -179,13 +269,19 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
         areas.sort(key=lambda item: (-item['clients'], -item['bookings'], item['outcode']))
         estimated_value = sum((Decimal(b.total_event_cost or 0) + Decimal(b.travel_charge or 0) for b in bookings if b.status == 'Accepted'), Decimal(0))
         return dict(period=period, start=start, end=end, location_source=source, setting=setting,
+                    event_category_filter=category_filter, event_type_filter=type_filter,
+                    categories=EVENT_CATEGORIES, event_type_options=sorted(type_options, key=lambda option: (option[1], option[0].casefold())),
+                    mapping_types=sorted(set(EVENT_LABELS.values()) | set(aliases.values())),
+                    unmapped_labels=sorted(unmapped_labels.values(), key=lambda item: (-item['count'], item['label'].casefold())),
+                    booking_filters_active=booking_filters_active, show_attendance=show_attendance,
                     setting_comparison=chart_rows(setting_counts),
                     booking_count=len(bookings), waiver_count=len(waivers), participant_count=len(participants),
                     average_age=round(sum(ages) / len(ages), 1) if ages else None,
                     age_sample=len(ages), estimated_value=f'{estimated_value:.2f}',
                     booking_trend=chart_rows(booking_trend, keys), waiver_trend=chart_rows(waiver_trend, keys),
                     participant_trend=chart_rows(participant_trend, keys), outcomes=chart_rows(outcomes),
-                    event_types=chart_rows(event_types), ages=chart_rows(bands, list(bands)),
+                    event_types=chart_rows(event_types), event_categories=chart_rows(event_categories),
+                    ages=chart_rows(bands, list(bands)),
                     workload=chart_rows(workload, keys), referral_flow=referral_flow,
                     areas=areas, markers=[area for area in areas if area['latitude'] is not None],
                     missing_addresses=len(missing_bookings), unmapped_areas=sum(area['latitude'] is None for area in areas),
@@ -202,7 +298,35 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
             error = str(problem)
             data = build_data({})
         return render_template('admin_reports.html', **data, error=error,
+                               alias_csrf=session.setdefault('report_alias_csrf', secrets.token_urlsafe(32)),
                                targets=app.extensions['report_targets_data']())
+
+    @app.post('/admin/reports/event-labels')
+    @admin_required
+    def save_report_event_label():
+        token = session.get('report_alias_csrf')
+        if not token or not secrets.compare_digest(token.encode(), request.form.get('csrf_token', '').encode()):
+            abort(400)
+        raw = request.form.get('label', '').strip()
+        target = request.form.get('target', '').strip()
+        new_type = ' '.join(request.form.get('new_type', '').split())
+        category = request.form.get('category', '')
+        key = event_label_key(raw)
+        aliases = event_aliases()
+        mapping_types = {event_label_key(label): (label, group) for label, group in set(EVENT_LABELS.values()) | set(aliases.values())}
+        destination = mapping_types.get(event_label_key(target)) if target else None
+        new_key = event_label_key(new_type)
+        if new_key and new_key != 'unspecified' and not target and category in EVENT_CATEGORIES and category != 'Unspecified':
+            destination = aliases.get(new_key) or EVENT_LABELS.get(new_key) or (new_type, category)
+        if not key or len(raw) > 150 or len(new_type) > 150 or key in EVENT_LABELS or key in aliases or not destination:
+            flash('Choose an unrecognised label and an existing type, or enter a new type and its category.', 'error')
+        else:
+            setting_key = ALIAS_PREFIX + hashlib.sha256(key.encode()).hexdigest()[:32]
+            db.session.merge(Setting(key=setting_key, value=json.dumps([key, *destination])))
+            db.session.commit()
+            flash(f'“{raw}” will count as {destination[0]}.', 'success')
+        filters = {name: request.form[name] for name in ('period', 'start', 'end', 'setting', 'location', 'event_category', 'event_type') if name in request.form}
+        return redirect(url_for('admin_reports', view='details', _anchor='report-label-review', **filters))
 
     @app.get('/admin/reports/export')
     @admin_required
@@ -220,12 +344,16 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
         def row(report, label, value):
             writer.writerow([safe(report), safe(label), safe(value), data['start'], data['end']])
         for field in ['booking_count', 'waiver_count', 'participant_count', 'average_age', 'estimated_value', 'unique_clients', 'missing_addresses', 'repeat_clients', 'loyal_clients', 'repeat_requests']:
-            if data['setting'] == 'Private' and field in {'waiver_count', 'participant_count', 'average_age'}:
+            if not data['show_attendance'] and field in {'waiver_count', 'participant_count', 'average_age'}:
                 continue
             row('Summary', field, data[field] if data[field] is not None else '')
         row('Filters', 'Event setting', data['setting'])
-        for field in ['booking_trend', 'waiver_trend', 'participant_trend', 'outcomes', 'event_types', 'ages', 'workload', 'referral_flow', 'setting_comparison']:
-            if data['setting'] == 'Private' and field in {'waiver_trend', 'participant_trend', 'ages'}:
+        row('Filters', 'Event category', data['event_category_filter'] or 'All')
+        row('Filters', 'Event type', data['event_type_filter'] or 'All')
+        for field in ['booking_trend', 'waiver_trend', 'participant_trend', 'outcomes', 'event_categories', 'event_types', 'ages', 'workload', 'referral_flow', 'setting_comparison']:
+            if not data['show_attendance'] and field in {'waiver_trend', 'participant_trend', 'ages'}:
+                continue
+            if data['booking_filters_active'] and field == 'referral_flow':
                 continue
             for item in data[field]:
                 row(field, item['label'], item['value'])
@@ -261,4 +389,4 @@ def register_reports(app, db, Booking, Waiver, Participant, Location, schedule_e
                 db.session.rollback()
                 failed += 1
         flash(f'Mapped {saved} postcode districts. {failed} could not be located. Each refresh handles up to 10 new districts.', 'error' if failed else 'success')
-        return redirect(url_for('admin_reports', period=data['period'], start=data['start'].isoformat(), end=data['end'].isoformat(), location=data['location_source'], setting=data['setting']))
+        return redirect(url_for('admin_reports', period=data['period'], start=data['start'].isoformat(), end=data['end'].isoformat(), location=data['location_source'], setting=data['setting'], event_category=data['event_category_filter'], event_type=data['event_type_filter'], view='locations'))

@@ -1,0 +1,25 @@
+<details id="report-label-review" class="panel report-topic"{% if request.args.get('review_labels') or request.args.get('view') == 'details' %} open{% endif %}>
+  <summary>Review event labels ({{ unmapped_labels|length }})</summary>
+  <p>These labels appear in Other events for the selected dates and event setting. A mapping updates the reports for past and future bookings with that wording.</p>
+  {% if unmapped_labels %}
+  <form method="post" action="{{ url_for('save_report_event_label') }}" class="client-form">
+    <input type="hidden" name="csrf_token" value="{{ alias_csrf }}">
+    {% for key, value in [('period', period), ('start', start.isoformat()), ('end', end.isoformat()), ('setting', setting), ('location', location_source), ('event_category', event_category_filter), ('event_type', event_type_filter)] %}
+    <input type="hidden" name="{{ key }}" value="{{ value }}">
+    {% endfor %}
+    <label>Label to review
+      <select name="label" required>{% for item in unmapped_labels %}<option value="{{ item.label }}">{{ item.label }} ({{ item.count }})</option>{% endfor %}</select>
+    </label>
+    <label>Map to an existing type
+      <select name="target"><option value="">Choose a type or create one below</option>{% for label, category in mapping_types %}<option value="{{ label }}">{{ label }} · {{ category }}</option>{% endfor %}</select>
+    </label>
+    <details><summary>Create a new event type</summary>
+      <div class="client-form">
+        <label>New type name <input name="new_type" maxlength="150"></label>
+        <label>Category <select name="category"><option value="">Choose a category</option>{% for category in categories if category != 'Unspecified' %}<option>{{ category }}</option>{% endfor %}</select></label>
+      </div>
+    </details>
+    <button class="btn primary">Save mapping</button>
+  </form>
+  {% else %}<p>All event labels in this view have been recognised.</p>{% endif %}
+</details>
